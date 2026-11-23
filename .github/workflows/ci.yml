@@ -47,8 +47,12 @@ jobs:
           path: dist
       - name: Deploy hosting (kp.web.app) and Firestore rules
         env:
-          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
         run: |
+          if [ -z "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
+            echo "::error::Add the repository secret FIREBASE_SERVICE_ACCOUNT (the github-deploy service account JSON key)."
+            exit 1
+          fi
           echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           npx --yes firebase-tools@14 deploy --only hosting:kp,firestore:rules --project akhila-vrutta --non-interactive --force
