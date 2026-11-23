@@ -1,0 +1,10 @@
+rules_version = '2';
+// Milestone 1: nothing is stored yet, so nobody can read or write.
+// Milestone 3 replaces this with owner-only rules over encrypted records.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "akhila-vrutta",
+  "private": true,
+  "type": "module",
+  "description": "KP's personal life platform: money, household, health and documents",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node --test \"tests/unit/*.test.ts\"",
+    "test:e2e": "node tests/e2e/smoke.mjs",
+    "check": "npm run typecheck && npm run test:unit && npm run build && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "0.28.2",
+    "playwright": "1.63.0",
+    "typescript": "7.0.2"
+  }
+}
