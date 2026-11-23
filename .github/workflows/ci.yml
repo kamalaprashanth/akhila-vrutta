@@ -45,13 +45,6 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: Where is the deploy key?
-        env:
-          S1: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          S2: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
-          V1: ${{ vars.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          for n in S1 S2 V1; do v="${!n}"; echo "$n: ${#v} characters"; done
       - name: Deploy hosting (kp.web.app) and Firestore rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
