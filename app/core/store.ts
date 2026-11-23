@@ -28,7 +28,18 @@ interface Doc extends Sealed {
   del?: true;
 }
 
-type Listener = () => void;
+/** What changed: the records, and whether this device made the change. */
+export interface Changes {
+  keys: { c: string; id: string }[];
+  local: boolean;
+}
+type Listener = (ch: Changes) => void;
+export interface WriteOp {
+  c: string;
+  id: string;
+  /** null moves the record to the trash */
+  r: Rec | null;
+}
 
 export class Store {
   private data = new Map<string, Map<string, Rec>>();
@@ -96,12 +107,13 @@ export class Store {
       const q = fs.query!(this.col(c), fs.where!("at", ">", since));
       first.push(new Promise((res) => {
         let done = false;
-        this.unsubs.push(fs.onSnapshot!(q, async (snap: { docChanges(): { type: string; doc: { id: string; data(): Doc } }[] }) => {
-          let changed = false;
+        this.unsubs.push(fs.onSnapshot!(q, async (snap: { docChanges(): { type: string; doc: { id: string; data(): Doc; metadata?: { hasPendingWrites: boolean } } }[] }) => {
+          const keys: { c: string; id: string }[] = [];
           for (const ch of snap.docChanges()) {
-            if (await this.apply(c, ch.doc.id, ch.type === "removed" ? null : ch.doc.data())) changed = true;
+            if (ch.doc.metadata?.hasPendingWrites) continue; // our own write, already applied in memory
+            if (await this.apply(c, ch.doc.id, ch.type === "removed" ? null : ch.doc.data())) keys.push({ c, id: ch.doc.id });
           }
-          if (changed && done) this.emit();
+          if (keys.length && done) this.emit({ keys, local: false });
           if (!done) { done = true; res(); }
         }, () => { if (!done) { done = true; res(); } }));
       }));
@@ -120,8 +132,8 @@ export class Store {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
   }
-  private emit(): void {
-    this.listeners.forEach((fn) => fn());
+  private emit(ch: Changes = { keys: [], local: true }): void {
+    this.listeners.forEach((fn) => fn(ch));
   }
 
   all<T extends Rec = Rec>(c: string): T[] {
@@ -152,7 +164,7 @@ export class Store {
     const { fs, db } = this.fb;
     const d = await this.docFor(c, r);
     this.data.get(c)!.set(r.id, structuredClone(r));
-    this.emit();
+    this.emit({ keys: [{ c, id: r.id }], local: true });
     this.track(fs.setDoc!(fs.doc!(db, "homes", this.home, c, r.id), d));
   }
 
@@ -160,8 +172,39 @@ export class Store {
   async remove(c: string, id: string): Promise<void> {
     const { fs, db } = this.fb;
     this.data.get(c)!.delete(id);
-    this.emit();
+    this.emit({ keys: [{ c, id }], local: true });
     this.track(fs.updateDoc!(fs.doc!(db, "homes", this.home, c, id), { del: true, at: fs.serverTimestamp!(), by: this.uid }));
+  }
+
+  /** Writes many records in batches; memory is updated batch by batch as each is sealed. */
+  private async commit(ops: WriteOp[], onProgress?: (done: number, total: number) => void): Promise<void> {
+    const { fs, db } = this.fb;
+    onProgress?.(0, ops.length);
+    const inFlight: Promise<unknown>[] = [];
+    for (let i = 0; i < ops.length; i += 400) {
+      const slice = ops.slice(i, i + 400);
+      const b = fs.writeBatch!(db);
+      for (const op of slice) {
+        const ref = fs.doc!(db, "homes", this.home, op.c, op.id);
+        if (op.r) b.set(ref, await this.docFor(op.c, op.r));
+        else b.update(ref, { del: true, at: fs.serverTimestamp!(), by: this.uid });
+      }
+      for (const op of slice) {
+        if (op.r) this.data.get(op.c)!.set(op.id, structuredClone(op.r));
+        else this.data.get(op.c)!.delete(op.id);
+      }
+      this.emit({ keys: slice.map(({ c, id }) => ({ c, id })), local: true });
+      // With progress (imports) wait for each batch; otherwise queue them all (works offline too).
+      if (onProgress) { await b.commit(); onProgress(Math.min(ops.length, i + 400), ops.length); }
+      else inFlight.push(b.commit());
+    }
+    await Promise.all(inFlight);
+  }
+
+  /** Saves a set of changes in the background (batched); returns once they are on this device. */
+  writeMany(ops: WriteOp[]): void {
+    for (const op of ops) if (!this.data.has(op.c)) throw new Error(`Unknown collection ${op.c}`);
+    if (ops.length) this.track(this.commit(ops));
   }
 
   /**
@@ -180,24 +223,7 @@ export class Store {
       }
       for (const id of cur.keys()) if (!next.has(id)) ops.push({ c, id, r: null });
     }
-    let done = 0;
-    onProgress?.(0, ops.length);
-    for (let i = 0; i < ops.length; i += 400) {
-      const b = fs.writeBatch!(db);
-      for (const op of ops.slice(i, i + 400)) {
-        const ref = fs.doc!(db, "homes", this.home, op.c, op.id);
-        if (op.r) b.set(ref, await this.docFor(op.c, op.r));
-        else b.update(ref, { del: true, at: fs.serverTimestamp!(), by: this.uid });
-      }
-      await b.commit();
-      for (const op of ops.slice(i, i + 400)) {
-        if (op.r) this.data.get(op.c)!.set(op.id, structuredClone(op.r));
-        else this.data.get(op.c)!.delete(op.id);
-      }
-      done = Math.min(ops.length, i + 400);
-      onProgress?.(done, ops.length);
-    }
-    this.emit();
+    await this.commit(ops, onProgress);
     return { written: ops.filter((o) => o.r).length, removed: ops.filter((o) => !o.r).length };
   }
 }

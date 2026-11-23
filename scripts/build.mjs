@@ -2,7 +2,7 @@
 // and writes dist/config.js from the FIREBASE_WEB_CONFIG variable (the firebaseConfig
 // object copied from the Firebase console; JS object syntax is fine).
 import { build } from "esbuild";
-import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 
 const out = "dist";
@@ -16,6 +16,12 @@ await build({
   outdir: out, logLevel: "info",
 });
 await build({ entryPoints: { app: "app/styles.css" }, bundle: true, minify: true, outdir: out, logLevel: "info" });
+
+// The money planner, moved over as-is: its script parts run as one classic script in its own frame.
+const LEG = "app/modules/money/legacy";
+const parts = readdirSync(LEG).filter((f) => f.endsWith(".js")).sort();
+writeFileSync(`${out}/money/legacy.js`, parts.map((f) => `/* ${f} */\n${readFileSync(`${LEG}/${f}`, "utf8")}`).join("\n"));
+writeFileSync(`${out}/money/money.css`, readFileSync(`${LEG}/money.css`, "utf8") + "\n" + readFileSync(`${LEG}/embed.css`, "utf8"));
 
 /** Reads `key: "value"` pairs out of a pasted firebaseConfig snippet. */
 function parseConfig(text) {

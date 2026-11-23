@@ -2,6 +2,7 @@ import type { Module } from "./types.ts";
 import { html, raw } from "../core/dom.ts";
 import { ctx } from "../core/app.ts";
 import { settings } from "./settings.ts";
+import { money } from "./money/index.ts";
 
 const ICONS = {
   home: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
@@ -54,20 +55,6 @@ export const home: Module = {
         <p>Until the switch-over in Milestone 3, keep using the current app.</p>
         <a class="btn" href="https://kp-money-planner.web.app" rel="noopener">Open KP Money Planner</a>
       </section>`;
-  },
-};
-
-export const money: Module = {
-  id: "money",
-  label: "Money",
-  icon: ICONS.money,
-  render(root) {
-    const s = ctx.store;
-    const n = (c: string) => (s ? s.count(c) : 0).toLocaleString("en-IN");
-    root.innerHTML = html`${raw(s ? html`<section class="card"><h2>Your money data</h2>
-        <p>${n("txns")} transactions · ${n("accounts")} accounts · ${n("holdings")} investments · ${n("recurring")} regular payments</p>
-        <p class="note">Stored encrypted in your cloud. ${s.count("meta") ? "" : "Import it from Settings."}</p></section>` : "")}
-      ${raw(soon("Money", 2, "Home, Transactions, Plan, Insights, Accounts and the Advisor move here unchanged, rebuilt as modules."))}`;
   },
 };
 

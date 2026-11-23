@@ -5,6 +5,7 @@ import { config } from "./core/firebase.ts";
 import { ctx } from "./core/app.ts";
 import { closeLock, lockProgress, unlock } from "./core/lock.ts";
 import { Store } from "./core/store.ts";
+import { hideMoney } from "./modules/money/index.ts";
 
 const AUTO_LOCK_MS = 2 * 60 * 1000;
 
@@ -24,6 +25,8 @@ function render(): void {
   const main = $("#main");
   const title = $("#title");
   if (nav) nav.innerHTML = renderNav(mod.id);
+  document.body.dataset.mod = mod.id;
+  if (mod.id !== "money") hideMoney();
   if (title) title.textContent = mod.id === "home" ? "Akhila Vrutta" : mod.label;
   if (main) {
     mod.render(main);
@@ -47,7 +50,7 @@ async function boot(): Promise<void> {
   ctx.session = session;
   let queued = false;
   ctx.store.subscribe(() => {
-    if (queued) return;
+    if (queued || document.body.dataset.mod === "money") return; // the planner redraws itself
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
