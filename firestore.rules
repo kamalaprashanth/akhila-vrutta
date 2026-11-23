@@ -1,10 +1,65 @@
 rules_version = '2';
-// Milestone 1: nothing is stored yet, so nobody can read or write.
-// Milestone 3 replaces this with owner-only rules over encrypted records.
+// Only listed Google accounts can use this project. Every record is ciphertext;
+// these rules refuse anything that isn't shaped like an encrypted record.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+
+    function signedIn() { return request.auth != null; }
+    // Accounts allowed to create a home. Family members will be added here later.
+    function allowed() { return signedIn() && request.auth.uid in ['Qc1qDKgHAJgWaYnppeUni1hPxXr1']; }
+    function homeDoc(home) { return get(/databases/$(database)/documents/homes/$(home)); }
+    function member(home) { return allowed() && request.auth.uid in homeDoc(home).data.members; }
+    function owner(home) { return member(home) && homeDoc(home).data.members[request.auth.uid] == 'owner'; }
+
+    function sealed(d) {
+      return d.iv is string && d.iv.size() == 16
+        && d.ct is string && d.ct.size() > 0 && d.ct.size() < 900000
+        && (!('z' in d) || d.z in [0, 1]);
+    }
+
+    // Which home an account belongs to.
+    match /users/{uid} {
+      allow read: if allowed() && request.auth.uid == uid;
+      allow create: if allowed() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['home']) && request.resource.data.home is string;
+    }
+
+    match /homes/{home} {
+      allow read: if member(home);
+      allow create: if allowed()
+        && request.resource.data.keys().hasOnly(['members', 'schema', 'created'])
+        && request.resource.data.members == { (request.auth.uid): 'owner' }
+        && request.resource.data.created == request.time;
+      allow update: if owner(home)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'schema']);
+
+      // Each member's passphrase-wrapped data key.
+      match /keys/{uid} {
+        allow read: if member(home) && request.auth.uid == uid;
+        // Creating your own key at the same time as the home (batch) or later.
+        allow create: if allowed() && request.auth.uid == uid
+          && (member(home) || getAfter(/databases/$(database)/documents/homes/$(home)).data.members[uid] == 'owner')
+          && request.resource.data.keys().hasOnly(['salt', 'iter', 'check', 'dek'])
+          && sealed(request.resource.data.check) && sealed(request.resource.data.dek);
+        allow update: if member(home) && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['salt', 'iter', 'check', 'dek'])
+          && sealed(request.resource.data.check) && sealed(request.resource.data.dek);
+      }
+
+      // Encrypted records.
+      match /{coll}/{id} {
+        allow read: if member(home) && coll != 'keys';
+        allow create, update: if member(home) && coll != 'keys'
+          && coll in ['accounts', 'categories', 'txns', 'recurring', 'loans', 'holdings', 'payers',
+                      'snaps', 'goals', 'views', 'trades', 'props', 'propItems', 'settings', 'meta']
+          && request.resource.data.keys().hasOnly(['iv', 'ct', 'z', 'at', 'by', 'del'])
+          && sealed(request.resource.data)
+          && request.resource.data.at == request.time
+          && request.resource.data.by == request.auth.uid
+          && (!('del' in request.resource.data) || request.resource.data.del == true);
+        // Emptying the trash.
+        allow delete: if member(home) && coll != 'keys' && resource.data.get('del', false) == true;
+      }
     }
   }
 }

@@ -1,6 +1,7 @@
 import type { Module } from "./types.ts";
-import { html, raw, toast } from "../core/dom.ts";
-import { config, onUser, signIn, signOutNow } from "../core/firebase.ts";
+import { html, raw } from "../core/dom.ts";
+import { ctx } from "../core/app.ts";
+import { settings } from "./settings.ts";
 
 const ICONS = {
   home: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
@@ -14,7 +15,7 @@ const ICONS = {
 /** Milestones as planned; `done` flips as each one ships. */
 const MILESTONES: { n: number; name: string; done: boolean }[] = [
   { n: 1, name: "Foundation: repository, build, checks, deploys", done: true },
-  { n: 2, name: "Money planner ported", done: false },
+  { n: 2, name: "Money planner moved over", done: false },
   { n: 3, name: "Shared core, your data moved, switch-over", done: false },
   { n: 4, name: "Android app", done: false },
   { n: 5, name: "Household", done: false },
@@ -61,7 +62,12 @@ export const money: Module = {
   label: "Money",
   icon: ICONS.money,
   render(root) {
-    root.innerHTML = soon("Money", 2, "Home, Transactions, Plan, Insights, Accounts and the Advisor move here unchanged, rebuilt as modules.");
+    const s = ctx.store;
+    const n = (c: string) => (s ? s.count(c) : 0).toLocaleString("en-IN");
+    root.innerHTML = html`${raw(s ? html`<section class="card"><h2>Your money data</h2>
+        <p>${n("txns")} transactions · ${n("accounts")} accounts · ${n("holdings")} investments · ${n("recurring")} regular payments</p>
+        <p class="note">Stored encrypted in your cloud. ${s.count("meta") ? "" : "Import it from Settings."}</p></section>` : "")}
+      ${raw(soon("Money", 2, "Home, Transactions, Plan, Insights, Accounts and the Advisor move here unchanged, rebuilt as modules."))}`;
   },
 };
 
@@ -89,51 +95,6 @@ export const docs: Module = {
   icon: ICONS.docs,
   render(root) {
     root.innerHTML = soon("Documents", 7, "Passport, licence and policies, encrypted in your Drive, with expiry reminders.");
-  },
-};
-
-export const settings: Module = {
-  id: "settings",
-  label: "Settings",
-  icon: ICONS.settings,
-  render(root) {
-    const cfg = config();
-    root.innerHTML = html`
-      <section class="card">
-        <h2>Sign-in</h2>
-        <div id="who" class="note">Checking…</div>
-        <div class="btns" id="authBtns"></div>
-      </section>
-      <section class="card">
-        <h2>About this build</h2>
-        <dl class="kv">
-          <dt>Firebase project</dt><dd>${cfg.firebase?.projectId ?? "not configured"}</dd>
-          <dt>Build</dt><dd>${cfg.build}</dd>
-        </dl>
-      </section>`;
-    const who = root.querySelector<HTMLElement>("#who");
-    const btns = root.querySelector<HTMLElement>("#authBtns");
-    if (!who || !btns) return;
-    if (!cfg.firebase) {
-      who.textContent = "Firebase isn't configured in this build (local or test run).";
-      return;
-    }
-    void onUser((u) => {
-      if (u) {
-        who.innerHTML = html`Signed in. Your user ID: <code id="uid">${u.uid}</code>`;
-        btns.innerHTML = html`<button class="btn" id="copyUid" type="button">Copy user ID</button><button class="btn ghost" id="out" type="button">Sign out</button>`;
-        btns.querySelector("#copyUid")?.addEventListener("click", () => {
-          void navigator.clipboard.writeText(u.uid).then(() => toast("User ID copied"));
-        });
-        btns.querySelector("#out")?.addEventListener("click", () => void signOutNow());
-      } else {
-        who.textContent = "Not signed in.";
-        btns.innerHTML = html`<button class="btn pri" id="in" type="button">Sign in with Google</button>`;
-        btns.querySelector("#in")?.addEventListener("click", () => {
-          signIn().catch((e: unknown) => toast(e instanceof Error ? e.message : "Sign-in failed"));
-        });
-      }
-    });
   },
 };
 

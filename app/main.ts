@@ -1,19 +1,24 @@
-/** The shell: header, tab bar, routing between modules. */
+/** The shell: unlock, then header, tab bar and routing between modules. */
 import { MODULES } from "./modules/pages.ts";
 import { html, raw, $ } from "./core/dom.ts";
+import { config } from "./core/firebase.ts";
+import { ctx } from "./core/app.ts";
+import { closeLock, lockProgress, unlock } from "./core/lock.ts";
+import { Store } from "./core/store.ts";
+
+const AUTO_LOCK_MS = 2 * 60 * 1000;
 
 const routeId = (): string => location.hash.replace(/^#\/?/, "").split("/")[0] || "home";
 
 function renderNav(active: string): string {
   return MODULES.map((m) =>
-    raw(html`<a href="#/${m.id}" class="tab${m.id === active ? " on" : ""}" ${raw(m.id === active ? 'aria-current="page"' : "")}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${m.icon}"/></svg><span>${m.label}</span></a>`),
-  ).map((r) => r.__raw).join("");
+    html`<a href="#/${m.id}" class="tab${m.id === active ? " on" : ""}" ${raw(m.id === active ? 'aria-current="page"' : "")}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${m.icon}"/></svg><span>${m.label}</span></a>`,
+  ).join("");
 }
 
 function render(): void {
-  const id = routeId();
-  const mod = MODULES.find((m) => m.id === id) ?? MODULES[0];
+  const mod = MODULES.find((m) => m.id === routeId()) ?? MODULES[0];
   if (!mod) return;
   const nav = $("#nav");
   const main = $("#main");
@@ -27,5 +32,37 @@ function render(): void {
   document.title = mod.id === "home" ? "Akhila Vrutta" : `${mod.label} · Akhila Vrutta`;
 }
 
-window.addEventListener("hashchange", render);
-render();
+async function boot(): Promise<void> {
+  ctx.rerender = render;
+  window.addEventListener("hashchange", render);
+  if (!config().firebase) { render(); return; } // local and test builds run without the cloud
+  const session = await unlock();
+  lockProgress("Opening your data…");
+  try {
+    ctx.store = await Store.open(session.home, session.uid, session.dek, lockProgress);
+  } catch (e) {
+    lockProgress(`Couldn't open your data: ${e instanceof Error ? e.message : String(e)}. Reload to try again.`);
+    return;
+  }
+  ctx.session = session;
+  let queued = false;
+  ctx.store.subscribe(() => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      // Don't redraw under someone typing in a form.
+      if (!document.activeElement?.closest("form, #impArea")) render();
+    });
+  });
+  render();
+  closeLock();
+
+  let hiddenAt = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+    if (session.mode !== "remember" && hiddenAt && Date.now() - hiddenAt > AUTO_LOCK_MS) location.reload();
+  });
+}
+
+void boot();

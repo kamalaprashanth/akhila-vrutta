@@ -67,3 +67,28 @@ main{max-width:760px;margin:0 auto;padding:var(--gap) 16px;display:grid;gap:var(
 #toast{position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;
   background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;transition:.2s;pointer-events:none;z-index:20}
 #toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* lock screen */
+.lock{position:fixed;inset:0;z-index:50;background:var(--bg);display:grid;place-items:center;padding:24px 16px;overflow:auto;transition:opacity .25s}
+.lock.out{opacity:0;pointer-events:none}
+.lockc{width:100%;max-width:380px;display:grid;gap:12px;text-align:center}
+.lockmark{width:56px;height:56px;margin:0 auto;border-radius:14px}
+.lockt{font:600 24px/1.2 var(--serif);margin:0}
+.lockm{margin:0;color:var(--muted)}
+.lockm.err,.err{color:#b4442e}
+@media (prefers-color-scheme:dark){.lockm.err,.err{color:#ef8f78}}
+.lockf,.inl{display:grid;gap:8px;text-align:left;margin-top:8px}
+.lockl,.inl label{font-size:13px;font-weight:600}
+.lockf input[type=password],.inl input[type=password]{min-height:44px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:15px var(--sans);width:100%}
+.lockf .btn,.lockopts .btn{width:100%}
+.lockopts{display:grid;gap:8px}
+.lockopt{display:grid;gap:4px;text-align:left;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:14px/1.4 var(--sans);cursor:pointer}
+.lockopt b{font-size:15px}
+.lockopt span{color:var(--muted)}
+.lockalt{background:transparent;border-color:transparent;color:var(--accent)}
+.inl .opt{display:flex;gap:10px;align-items:center;font-weight:500;font-size:15px;min-height:40px}
+.btn.danger{border-color:#b4442e;color:#b4442e}
+.btn:disabled{opacity:.6;cursor:default}
+.confirm{margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--accent-soft)}
+.confirm p{margin:0 0 8px}
+label.btn{user-select:none}

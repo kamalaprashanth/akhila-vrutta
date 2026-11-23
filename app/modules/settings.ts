@@ -1,0 +1,178 @@
+import type { Module } from "./types.ts";
+import { html, raw, toast } from "../core/dom.ts";
+import { config, signOutNow } from "../core/firebase.ts";
+import { ctx } from "../core/app.ts";
+import { bioCapable, changePassphrase, forgetDevice, MODE_LABEL, setMode, type UnlockMode } from "../core/vault.ts";
+import { confirmPassphrase } from "../core/lock.ts";
+import { META } from "../core/store.ts";
+import { isEncryptedBackup, openOldBackup, parseOldExport, type Parsed } from "./money/import.ts";
+
+const ICON = "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .3-1.5-1.5L17 5l-3-1-1 2h-2l-1-2-3 1 .5 1.8L6 8.3 4 8l-1 3 2 1v0l-2 1 1 3 2-.3 1.5 1.5L7 19l3 1 1-2h2l1 2 3-1-.5-1.8 1.5-1.5 2 .3 1-3z";
+
+const LABELS: Record<string, string> = {
+  txns: "transactions", accounts: "accounts", holdings: "investments", categories: "categories",
+  recurring: "regular payments", loans: "loans", props: "properties", propItems: "property costs",
+  trades: "broker trades", goals: "goals", payers: "payers", snaps: "month-end snapshots", settings: "settings",
+};
+const n = (x: number) => x.toLocaleString("en-IN");
+const when = (iso: unknown) => typeof iso === "string" ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+
+function dataCard(): string {
+  const s = ctx.store;
+  if (!s) return "";
+  const meta = s.get(META, "money");
+  const main = ["txns", "accounts", "holdings", "categories"].map((c) => `${n(s.count(c))} ${LABELS[c]}`).join(" · ");
+  return html`<section class="card" id="dataCard">
+    <h2>Your data</h2>
+    ${raw(meta ? html`<p>${main}</p><p class="note">Imported ${when(meta.imported)}${meta.exported ? `, from an export made ${when(meta.exported)}` : ""}.</p>` : html`<p>Nothing here yet. Import your KP Money Planner data to start.</p>`)}
+    <p class="note">${s.pending ? `Saving ${n(s.pending)} change${s.pending === 1 ? "" : "s"}…` : "Everything is saved, encrypted, in your cloud."}</p>
+    <div class="btns"><label class="btn ${meta ? "" : "pri"}" for="impFile">Import from KP Money Planner</label>
+    <input id="impFile" type="file" accept=".json,application/json" hidden></div>
+    <div id="impArea"></div>
+  </section>`;
+}
+
+function securityCard(): string {
+  const s = ctx.session;
+  if (!s) return "";
+  return html`<section class="card" id="secCard">
+    <h2>Security</h2>
+    <dl class="kv"><dt>This device</dt><dd>${MODE_LABEL[s.mode]}</dd></dl>
+    <div class="btns">
+      <button class="btn" type="button" id="secMode">Change how this device unlocks</button>
+      <button class="btn" type="button" id="secPass">Change passphrase</button>
+      <button class="btn" type="button" id="secLock">Lock now</button>
+      <button class="btn ghost" type="button" id="secOut">Sign out of this device</button>
+    </div>
+    <div id="secArea"></div>
+  </section>`;
+}
+
+async function wireImport(root: HTMLElement): Promise<void> {
+  const input = root.querySelector<HTMLInputElement>("#impFile");
+  const area = root.querySelector<HTMLElement>("#impArea");
+  if (!input || !area) return;
+  input.addEventListener("change", async () => {
+    const f = input.files?.[0];
+    input.value = "";
+    if (!f) return;
+    let j: unknown;
+    try { j = JSON.parse(await f.text()); } catch { area.innerHTML = html`<p class="lockm err">That file isn't readable JSON.</p>`; return; }
+    if (isEncryptedBackup(j)) {
+      const enc = j;
+      area.innerHTML = html`<form class="inl" id="impPassF"><label for="impPass">This is an encrypted backup. Enter your KP Money Planner passphrase:</label>
+        <input id="impPass" type="password" autocomplete="off" required><button class="btn pri" type="submit">Open</button></form>`;
+      area.querySelector("form")!.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const b = area.querySelector<HTMLButtonElement>("button")!;
+        b.disabled = true; b.textContent = "Opening…";
+        const x = await openOldBackup(enc, area.querySelector<HTMLInputElement>("#impPass")!.value);
+        if (!x) { b.disabled = false; b.textContent = "Open"; toast("That passphrase doesn't open this backup."); return; }
+        review(area, x);
+      });
+      return;
+    }
+    review(area, j);
+  });
+}
+
+function review(area: HTMLElement, j: unknown): void {
+  let p: Parsed;
+  try { p = parseOldExport(j); } catch (e) { area.innerHTML = html`<p class="lockm err">${e instanceof Error ? e.message : "Couldn't read that file."}</p>`; return; }
+  const list = Object.entries(p.counts).filter(([, v]) => v > 0).map(([k, v]) => `${n(v)} ${LABELS[k] ?? k}`).join(" · ");
+  area.innerHTML = html`<div class="confirm"><p><b>In this file:</b> ${list}${p.exported ? ` (exported ${when(p.exported)})` : ""}.</p>
+    <p>Importing <b>replaces everything</b> in Akhila Vrutta's money data with this file. Your KP Money Planner isn't touched.</p>
+    <div class="btns"><button class="btn pri" type="button" id="impGo">Replace with this file</button><button class="btn ghost" type="button" id="impNo">Cancel</button></div>
+    <p class="note" id="impProg"></p></div>`;
+  area.querySelector("#impNo")!.addEventListener("click", () => { area.innerHTML = ""; });
+  area.querySelector("#impGo")!.addEventListener("click", async () => {
+    const store = ctx.store;
+    if (!store) return;
+    area.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    const prog = area.querySelector<HTMLElement>("#impProg")!;
+    try {
+      const r = await store.replaceAll(p.records, (d, t) => { prog.textContent = t ? `Encrypting and saving… ${n(d)} of ${n(t)}` : "Nothing has changed since the last import."; });
+      toast(r.written + r.removed ? `Imported: ${n(r.written)} saved, ${n(r.removed)} removed` : "Already up to date");
+      ctx.rerender();
+    } catch (e) {
+      prog.textContent = `Import stopped: ${e instanceof Error ? e.message : String(e)}. Run it again to finish; done parts aren't repeated.`;
+      area.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
+  });
+}
+
+async function wireSecurity(root: HTMLElement): Promise<void> {
+  const s = ctx.session;
+  const area = root.querySelector<HTMLElement>("#secArea");
+  if (!s || !area) return;
+  root.querySelector("#secLock")?.addEventListener("click", () => location.reload());
+  root.querySelector("#secOut")?.addEventListener("click", (ev) => {
+    const b = ev.currentTarget as HTMLButtonElement;
+    if (!b.dataset.arm) { b.dataset.arm = "1"; b.textContent = "Tap again: sign out and remove this device's copy"; b.classList.add("danger"); return; }
+    void (async () => { ctx.store?.close(); await forgetDevice(); await signOutNow(); location.reload(); })();
+  });
+  root.querySelector("#secMode")?.addEventListener("click", async () => {
+    const canBio = await bioCapable();
+    const modes: UnlockMode[] = canBio ? ["bio", "remember", "pass"] : ["remember", "pass"];
+    area.innerHTML = html`<form class="inl" id="modeF">${modes.map((m) => raw(html`<label class="opt"><input type="radio" name="um" value="${m}" ${raw(s.mode === m ? "checked" : "")}> ${MODE_LABEL[m]}</label>`))}
+      ${raw(canBio ? "" : html`<p class="note">Fingerprint unlock isn't available in this browser.</p>`)}
+      <div class="btns"><button class="btn pri" type="submit">Save</button><button class="btn ghost" type="button" id="mx">Cancel</button></div></form>`;
+    area.querySelector("#mx")!.addEventListener("click", () => { area.innerHTML = ""; });
+    area.querySelector("form")!.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const m = area.querySelector<HTMLInputElement>('input[name="um"]:checked')?.value as UnlockMode | undefined;
+      if (!m || m === s.mode) { area.innerHTML = ""; return; }
+      let rawKey: Uint8Array<ArrayBuffer> | null = null;
+      if (m !== "pass") {
+        rawKey = await confirmPassphrase(s, `Enter your passphrase to switch to “${MODE_LABEL[m]}”.`);
+        if (!rawKey) return;
+      }
+      try { await setMode(s, m, rawKey ?? undefined); s.mode = m; toast(`Saved: ${MODE_LABEL[m]}`); ctx.rerender(); }
+      catch (e) { toast(`Couldn't set that up: ${e instanceof Error ? e.message : String(e)}`); }
+      finally { rawKey?.fill(0); }
+    });
+  });
+  root.querySelector("#secPass")?.addEventListener("click", () => {
+    area.innerHTML = html`<form class="inl" id="passF" autocomplete="off">
+      <input type="text" name="username" value="akhila-vrutta" autocomplete="username" hidden>
+      <label for="op">Current passphrase</label><input id="op" type="password" autocomplete="current-password" required>
+      <label for="np">New passphrase (10+ characters)</label><input id="np" type="password" autocomplete="new-password" required>
+      <label for="np2">New passphrase again</label><input id="np2" type="password" autocomplete="new-password" required>
+      <p class="note">Only the key is re-locked, so this is quick. Your other devices keep their fingerprint unlock.</p>
+      <div class="btns"><button class="btn pri" type="submit">Change</button><button class="btn ghost" type="button" id="px">Cancel</button></div></form>`;
+    area.querySelector("#px")!.addEventListener("click", () => { area.innerHTML = ""; });
+    area.querySelector("form")!.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const v = (id: string) => area.querySelector<HTMLInputElement>(`#${id}`)!.value;
+      if (v("np").length < 10) return toast("Use at least 10 characters.");
+      if (v("np") !== v("np2")) return toast("The new passphrases don't match.");
+      const b = area.querySelector<HTMLButtonElement>(".btn.pri")!;
+      b.disabled = true; b.textContent = "Changing…";
+      try {
+        if (await changePassphrase(s, v("op"), v("np"))) { area.innerHTML = ""; toast("Passphrase changed"); }
+        else { toast("The current passphrase is wrong."); }
+      } catch (e) { toast(e instanceof Error ? e.message : String(e)); }
+      b.disabled = false; b.textContent = "Change";
+    });
+  });
+}
+
+export const settings: Module = {
+  id: "settings",
+  label: "Settings",
+  icon: ICON,
+  render(root) {
+    const cfg = config();
+    root.innerHTML = html`${raw(dataCard())}${raw(securityCard())}
+      <section class="card">
+        <h2>About this build</h2>
+        <dl class="kv">
+          <dt>Firebase project</dt><dd>${cfg.firebase?.projectId ?? "not configured (local or test run)"}</dd>
+          ${raw(ctx.session ? html`<dt>Your user ID</dt><dd><code>${ctx.session.uid}</code></dd>` : "")}
+          <dt>Build</dt><dd>${cfg.build}</dd>
+        </dl>
+      </section>`;
+    void wireImport(root);
+    void wireSecurity(root);
+  },
+};

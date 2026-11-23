@@ -1,0 +1,213 @@
+/**
+ * Records: every item is its own encrypted Firestore document.
+ *   homes/{home}/{collection}/{id} = { iv, ct, z?, at, by, del? }
+ * The plaintext lives only in memory while the app is unlocked.
+ * Sync is incremental: on open, decrypt what this device has cached, then listen for
+ * anything newer than the latest change it has seen ("at" is the server time of each write).
+ */
+import { openJSON, sealJSON, type Sealed } from "./crypto.ts";
+import { initFirebase, type Fb } from "./firebase.ts";
+
+/** Collections the money planner uses (names match the old app's data). */
+export const MONEY_COLLECTIONS = [
+  "accounts", "categories", "txns", "recurring", "loans", "holdings", "payers",
+  "snaps", "goals", "views", "trades", "props", "propItems", "settings",
+] as const;
+/** Housekeeping: schema versions and where the data came from. */
+export const META = "meta";
+export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, META];
+
+export interface Rec {
+  id: string;
+  [k: string]: unknown;
+}
+
+interface Doc extends Sealed {
+  at: { toMillis(): number } | null;
+  by: string;
+  del?: true;
+}
+
+type Listener = () => void;
+
+export class Store {
+  private data = new Map<string, Map<string, Rec>>();
+  private listeners = new Set<Listener>();
+  private unsubs: (() => void)[] = [];
+  /** How many writes are waiting for the server. */
+  pending = 0;
+
+  private fb: Fb;
+  private dek: CryptoKey;
+  readonly home: string;
+  readonly uid: string;
+
+  private constructor(fb: Fb, home: string, uid: string, dek: CryptoKey) {
+    this.fb = fb;
+    this.home = home;
+    this.uid = uid;
+    this.dek = dek;
+    for (const c of COLLECTIONS) this.data.set(c, new Map());
+  }
+
+  static async open(home: string, uid: string, dek: CryptoKey, onProgress?: (msg: string) => void): Promise<Store> {
+    const fb = await initFirebase();
+    if (!fb) throw new Error("Firebase isn't configured for this build.");
+    const s = new Store(fb, home, uid, dek);
+    await s.start(onProgress);
+    return s;
+  }
+
+  private col(c: string) {
+    return this.fb.fs.collection!(this.fb.db, "homes", this.home, c);
+  }
+
+  /** Applies one document; returns true when it changed what the app sees. */
+  private async apply(c: string, id: string, d: Doc | null): Promise<boolean> {
+    const m = this.data.get(c)!;
+    if (!d || d.del) return m.delete(id);
+    try {
+      m.set(id, await openJSON<Rec>(this.dek, d, `${c}/${id}`));
+      return true;
+    } catch {
+      console.warn(`Couldn't decrypt ${c}/${id}`);
+      return false;
+    }
+  }
+
+  private async start(onProgress?: (msg: string) => void): Promise<void> {
+    const { fs } = this.fb;
+    // 1. What this device already has (ciphertext in Firestore's cache).
+    const cursors = new Map<string, number>();
+    for (const c of COLLECTIONS) {
+      const snap = await fs.getDocsFromCache!(this.col(c)).catch(() => null);
+      let max = 0;
+      if (snap) {
+        const docs: { id: string; data(): Doc }[] = snap.docs;
+        await Promise.all(docs.map((d) => { const x = d.data(); max = Math.max(max, x.at?.toMillis() ?? 0); return this.apply(c, d.id, x); }));
+      }
+      cursors.set(c, max);
+      onProgress?.(`Opening… ${this.count()} items`);
+    }
+    // 2. Anything newer from the cloud, now and as it happens.
+    const first: Promise<void>[] = [];
+    for (const c of COLLECTIONS) {
+      const since = (fs.Timestamp as unknown as { fromMillis(ms: number): unknown }).fromMillis(cursors.get(c) ?? 0);
+      const q = fs.query!(this.col(c), fs.where!("at", ">", since));
+      first.push(new Promise((res) => {
+        let done = false;
+        this.unsubs.push(fs.onSnapshot!(q, async (snap: { docChanges(): { type: string; doc: { id: string; data(): Doc } }[] }) => {
+          let changed = false;
+          for (const ch of snap.docChanges()) {
+            if (await this.apply(c, ch.doc.id, ch.type === "removed" ? null : ch.doc.data())) changed = true;
+          }
+          if (changed && done) this.emit();
+          if (!done) { done = true; res(); }
+        }, () => { if (!done) { done = true; res(); } }));
+      }));
+    }
+    // Wait for the first answer, but don't hang forever when offline.
+    await Promise.race([Promise.all(first), new Promise((r) => setTimeout(r, navigator.onLine ? 15000 : 1500))]);
+  }
+
+  close(): void {
+    this.unsubs.forEach((u) => u());
+    this.unsubs = [];
+    for (const m of this.data.values()) m.clear();
+  }
+
+  subscribe(fn: Listener): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+  private emit(): void {
+    this.listeners.forEach((fn) => fn());
+  }
+
+  all<T extends Rec = Rec>(c: string): T[] {
+    return [...(this.data.get(c)?.values() ?? [])] as T[];
+  }
+  get<T extends Rec = Rec>(c: string, id: string): T | undefined {
+    return this.data.get(c)?.get(id) as T | undefined;
+  }
+  count(c?: string): number {
+    if (c) return this.data.get(c)?.size ?? 0;
+    let n = 0;
+    for (const m of this.data.values()) n += m.size;
+    return n;
+  }
+
+  private async docFor(c: string, r: Rec): Promise<Record<string, unknown>> {
+    const s = await sealJSON(this.dek, r, `${c}/${r.id}`);
+    return { ...s, at: this.fb.fs.serverTimestamp!(), by: this.uid };
+  }
+
+  private track(p: Promise<unknown>): void {
+    this.pending++;
+    p.finally(() => { this.pending--; this.emit(); }).catch((e) => console.warn("write failed", e));
+  }
+
+  async put(c: string, r: Rec): Promise<void> {
+    if (!this.data.has(c)) throw new Error(`Unknown collection ${c}`);
+    const { fs, db } = this.fb;
+    const d = await this.docFor(c, r);
+    this.data.get(c)!.set(r.id, structuredClone(r));
+    this.emit();
+    this.track(fs.setDoc!(fs.doc!(db, "homes", this.home, c, r.id), d));
+  }
+
+  /** Moves a record to the trash (kept 30 days, then removed). */
+  async remove(c: string, id: string): Promise<void> {
+    const { fs, db } = this.fb;
+    this.data.get(c)!.delete(id);
+    this.emit();
+    this.track(fs.updateDoc!(fs.doc!(db, "homes", this.home, c, id), { del: true, at: fs.serverTimestamp!(), by: this.uid }));
+  }
+
+  /**
+   * Makes the cloud match `incoming` exactly: writes new and changed records, trashes the rest.
+   * Unchanged records cost nothing, so re-importing is cheap.
+   */
+  async replaceAll(incoming: Record<string, Rec[]>, onProgress?: (done: number, total: number) => void): Promise<{ written: number; removed: number }> {
+    const { fs, db } = this.fb;
+    const ops: { c: string; id: string; r: Rec | null }[] = [];
+    for (const c of COLLECTIONS) {
+      const next = new Map((incoming[c] ?? []).map((r) => [r.id, r]));
+      const cur = this.data.get(c)!;
+      for (const [id, r] of next) {
+        const old = cur.get(id);
+        if (!old || stableJSON(old) !== stableJSON(r)) ops.push({ c, id, r });
+      }
+      for (const id of cur.keys()) if (!next.has(id)) ops.push({ c, id, r: null });
+    }
+    let done = 0;
+    onProgress?.(0, ops.length);
+    for (let i = 0; i < ops.length; i += 400) {
+      const b = fs.writeBatch!(db);
+      for (const op of ops.slice(i, i + 400)) {
+        const ref = fs.doc!(db, "homes", this.home, op.c, op.id);
+        if (op.r) b.set(ref, await this.docFor(op.c, op.r));
+        else b.update(ref, { del: true, at: fs.serverTimestamp!(), by: this.uid });
+      }
+      await b.commit();
+      for (const op of ops.slice(i, i + 400)) {
+        if (op.r) this.data.get(op.c)!.set(op.id, structuredClone(op.r));
+        else this.data.get(op.c)!.delete(op.id);
+      }
+      done = Math.min(ops.length, i + 400);
+      onProgress?.(done, ops.length);
+    }
+    this.emit();
+    return { written: ops.filter((o) => o.r).length, removed: ops.filter((o) => !o.r).length };
+  }
+}
+
+/** JSON with sorted keys, so two equal records always compare equal. */
+export function stableJSON(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableJSON).join(",")}]`;
+  if (v && typeof v === "object") {
+    return `{${Object.keys(v).sort().filter((k) => (v as Record<string, unknown>)[k] !== undefined)
+      .map((k) => `${JSON.stringify(k)}:${stableJSON((v as Record<string, unknown>)[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
