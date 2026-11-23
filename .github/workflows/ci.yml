@@ -55,4 +55,5 @@ jobs:
           fi
           echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx --yes firebase-tools@14 hosting:sites:list --project akhila-vrutta --non-interactive || true
           npx --yes firebase-tools@14 deploy --only hosting:kp,firestore:rules --project akhila-vrutta --non-interactive --force
