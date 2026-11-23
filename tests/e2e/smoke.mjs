@@ -24,6 +24,8 @@ for (const vp of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
   page.on("console", (m) => { if (m.type() === "error" && !/fonts\.g/.test(m.location().url ?? "")) errors.push(`${m.text()} ${m.location().url ?? ""}`); });
   page.on("pageerror", (e) => errors.push(e.message));
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  // Run the shell without the cloud: the real build would stop at the lock screen.
+  await page.route(/\/config\.js$/, (r) => r.fulfill({ contentType: "text/javascript", body: 'window.AV_CONFIG={firebase:null,build:"test"};' }));
   for (const [id, text] of TABS) {
     await page.goto(`${base}#/${id}`);
     await page.waitForSelector(`#nav a.on[href="#/${id}"]`);
