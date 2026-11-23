@@ -9,5 +9,5 @@
 - New area = new folder in `app/modules/` exporting a `Module`, added to `MODULES`.
 - Firebase SDK comes from the gstatic CDN by dynamic import (pinned version in `app/core/firebase.ts`);
   keep runtime npm dependencies at zero.
-- Before pushing: `npm run check`. CI deploys `main` to kp.web.app.
+- Before pushing: `npm run check`. CI deploys `main` to kp-akhila-vrutta.web.app.
 - Commit as `Claude <noreply@anthropic.com>`.

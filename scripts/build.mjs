@@ -23,7 +23,7 @@ function parseConfig(text) {
   const obj = {};
   for (const m of text.matchAll(/["']?([A-Za-z]+)["']?\s*:\s*["']([^"']*)["']/g)) obj[m[1]] = m[2];
   for (const k of ["apiKey", "projectId", "appId"]) if (!obj[k]) throw new Error(`FIREBASE_WEB_CONFIG is missing ${k}`);
-  // Sign-in runs through our own address, so the popup stays on kp.web.app.
+  // Sign-in runs through our own address, so the popup stays on our own address.
   if (process.env.AUTH_DOMAIN) obj.authDomain = process.env.AUTH_DOMAIN;
   return obj;
 }

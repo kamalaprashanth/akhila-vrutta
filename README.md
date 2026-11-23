@@ -1,7 +1,7 @@
 # Akhila Vrutta
 
 One private app for money, household, health and documents. Built for one person first, family later.
-Live at **https://kp.web.app** (Firebase project `akhila-vrutta`).
+Live at **https://kp-akhila-vrutta.web.app** (Firebase project `akhila-vrutta`).
 
 ## Layout
 
@@ -30,7 +30,7 @@ A local build has no Firebase config, so sign-in is switched off. In CI the
 ## Deploys
 
 Every push to `main` runs `.github/workflows/ci.yml`: checks, then deploys Hosting
-(site `kp`) and the Firestore rules using the `FIREBASE_SERVICE_ACCOUNT` secret.
+(site `kp-akhila-vrutta`) and the Firestore rules using the `FIREBASE_SERVICE_ACCOUNT` secret.
 Pull requests run the checks only.
 
 ## Rules that don't bend

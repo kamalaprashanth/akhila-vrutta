@@ -1,7 +1,7 @@
 {
   "firestore": { "rules": "firestore.rules" },
   "hosting": {
-    "site": "kp",
+    "site": "kp-akhila-vrutta",
     "public": "dist",
     "ignore": ["**/*.map"],
     "cleanUrls": true,

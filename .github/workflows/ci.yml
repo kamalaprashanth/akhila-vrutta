@@ -28,7 +28,7 @@ jobs:
         run: npm run build
         env:
           FIREBASE_WEB_CONFIG: ${{ vars.FIREBASE_WEB_CONFIG }}
-          AUTH_DOMAIN: kp.web.app
+          AUTH_DOMAIN: kp-akhila-vrutta.web.app
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         with:
@@ -45,7 +45,7 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: Deploy hosting (kp.web.app) and Firestore rules
+      - name: Deploy hosting (kp-akhila-vrutta.web.app) and Firestore rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
         run: |
@@ -55,7 +55,7 @@ jobs:
           fi
           echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
-          if ! npx --yes firebase-tools@14 hosting:sites:list --project akhila-vrutta --json | grep -q '"name": "projects/[^"]*/sites/kp"'; then
-            npx --yes firebase-tools@14 hosting:sites:create kp --project akhila-vrutta --non-interactive
+          if ! npx --yes firebase-tools@14 hosting:sites:list --project akhila-vrutta --json | grep -q '"name": "projects/[^"]*/sites/kp-akhila-vrutta"'; then
+            npx --yes firebase-tools@14 hosting:sites:create kp-akhila-vrutta --project akhila-vrutta --non-interactive
           fi
-          npx --yes firebase-tools@14 deploy --only hosting:kp,firestore:rules --project akhila-vrutta --non-interactive --force
+          npx --yes firebase-tools@14 deploy --only hosting:kp-akhila-vrutta,firestore:rules --project akhila-vrutta --non-interactive --force
