@@ -181,6 +181,9 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   // Keyboard: Enter on a row opens it.
   await p.focus(`${V} .row[data-tx]`); await p.keyboard.press("Enter"); await settle();
   ok(await p.$eval("#mvLayer #modal", (e) => !!e.querySelector(".sheet")), "Enter on a row opens it");
+  await p.keyboard.press("Escape"); await settle();
+  ok(!(await p.$eval("#mvLayer #modal", (e) => !!e.querySelector(".sheet"))), "Escape closes it");
+  await p.focus(`${V} .row[data-tx]`); await p.keyboard.press("Enter"); await settle();
   await p.press("#mvLayer #modal #cx", "Enter"); await settle();
 
   ok(errors.length === 0, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);

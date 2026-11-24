@@ -28,6 +28,8 @@ export function ensureLayer(): HTMLElement {
   layer.innerHTML = '<div id="modal"></div>';
   document.body.appendChild(layer);
   layer.addEventListener("input", inrInput, true);
+  // Escape closes the open sheet (as the planner did).
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && sheetOpen()) closeModal(); });
   new MutationObserver(() => { const open = !!$("#mvLayer #modal")?.firstElementChild; for (const f of listeners) f(open); })
     .observe(layer.querySelector("#modal")!, { childList: true });
   return layer;

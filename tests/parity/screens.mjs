@@ -18,7 +18,9 @@ const server = createServer(async (req, res) => {
   if (url === "/export.json") return res.writeHead(200).end(await readFile(EXPORT));
   if (url === "/harness.js") return res.writeHead(200, { "content-type": T[".js"] }).end(harness);
   if (url === "/harness.html") return res.writeHead(200, { "content-type": T[".html"] }).end('<!doctype html><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/money/mv.css"><main id="main"></main><script type="module" src="/harness.js"></script>');
-  let file = join("dist", normalize(url)); if (!extname(file)) file += ".html";
+  // the old planner (dist-planner, never deployed) first, then the site
+  let file = join("dist-planner", normalize(url)); if (!extname(file)) file += ".html";
+  if (!existsSync(file)) { file = join("dist", normalize(url)); if (!extname(file)) file += ".html"; }
   try { res.writeHead(200, { "content-type": T[extname(file)] ?? "application/octet-stream" }).end(await readFile(file)); } catch { res.writeHead(404).end(); }
 });
 await new Promise((r) => server.listen(0, r));

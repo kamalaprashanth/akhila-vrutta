@@ -11,7 +11,7 @@ Each step ships on its own: branch → CI (cloud tests) → main → release, ch
 - The planner's stylesheet is scoped to `.mv` at build (`scripts/scope-css.mjs` → `dist/money/mv.css`).
 - The page state the planner kept in `S` (filters, month, tabs, open loan / card / holding) lives in
   `app/modules/money/index.ts`. The old planner is no longer loaded by the app: the parity tests run it on its
-  own (`tests/parity/oracle.ts`) as the reference, and it isn't deployed (firebase.json ignores it).
+  own (`tests/parity/oracle.ts`) as the reference; it is built beside the site (`dist-planner/`), never deployed.
 - Interactions are tested in `tests/e2e/*.mjs` on the made-up sample (phone + laptop).
 
 ## Order and status

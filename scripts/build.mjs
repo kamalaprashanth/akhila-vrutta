@@ -18,11 +18,15 @@ await build({
 });
 await build({ entryPoints: { app: "app/styles.css" }, bundle: true, minify: true, outdir: out, logLevel: "info" });
 
-// The old planner, kept only as the reference the parity tests compare against (firebase.json leaves it out of the site).
-const LEG = "app/modules/money/legacy";
+// The old planner, kept only as the reference the parity tests compare against: built beside the site
+// (dist-planner/), never into it, so it is never deployed.
+const LEG = "app/modules/money/legacy", REF = "dist-planner";
+rmSync(REF, { recursive: true, force: true });
+mkdirSync(`${REF}/money`, { recursive: true });
 const parts = readdirSync(LEG).filter((f) => f.endsWith(".js")).sort();
-writeFileSync(`${out}/money/legacy.js`, parts.map((f) => `/* ${f} */\n${readFileSync(`${LEG}/${f}`, "utf8")}`).join("\n"));
-writeFileSync(`${out}/money/money.css`, readFileSync(`${LEG}/money.css`, "utf8") + "\n" + readFileSync(`${LEG}/embed.css`, "utf8"));
+writeFileSync(`${REF}/money/legacy.js`, parts.map((f) => `/* ${f} */\n${readFileSync(`${LEG}/${f}`, "utf8")}`).join("\n"));
+writeFileSync(`${REF}/money/money.css`, readFileSync(`${LEG}/money.css`, "utf8") + "\n" + readFileSync(`${LEG}/embed.css`, "utf8"));
+cpSync("tests/parity/planner.html", `${REF}/money/app.html`);
 // Screens rewritten into the app keep the planner's look: its stylesheet, scoped to the money area.
 writeFileSync(`${out}/money/mv.css`, scopeCss(readFileSync(`${LEG}/money.css`, "utf8")) + "\n" + readFileSync("app/modules/money/views/mv-fixes.css", "utf8"));
 

@@ -46,14 +46,14 @@ async function newText() {
   p.on("pageerror", (e) => errors.push(e.message));
   p.on("console", (m) => { if (m.type() === "error" && !/fonts|ERR_FAILED/.test(m.text())) errors.push(m.text()); });
   await p.goto(`${base}/harness.html#/money/home`);
-  const f = await (await p.waitForSelector("#moneyFrame")).contentFrame();
+  const f = p;   // the planner's names (S, upsert…) are test hooks on the app's test page
   await f.waitForFunction(() => typeof S === "object" && !!S.data, null, { timeout: 20000 });
   const out = {};
-  // Pages Akhila Vrutta draws itself are read from the app, the rest from the planner's frame.
-  for (const v of VIEWS) { await p.evaluate((v) => { location.hash = `#/money/${v}`; }, v); await p.waitForTimeout(700); const drawnByApp = await p.$eval("#moneyView", (e) => !e.hidden).catch(() => false); out[v] = clean(await (drawnByApp ? p.innerText("#moneyView #view") : f.innerText("#view"))); }
+  // Every page is drawn by the app.
+  for (const v of VIEWS) { await p.evaluate((v) => { location.hash = `#/money/${v}`; }, v); await p.waitForTimeout(700); out[v] = clean(await p.innerText("#moneyView #view")); }
   await p.waitForTimeout(1200);
   const writes = await p.evaluate(() => window.FAKE.writes.map((w) => `${w.c}/${w.id}`));
-  // An edit in the planner is saved once, converted to paise.
+  // An edit is saved once, converted to paise.
   const t = await f.evaluate(() => { const t = S.data.txns.find((x) => !x.deleted && x.type === "expense"); upsert("txns", { ...t, amount: 1234.56, note: "parity check" }); return t.id; });
   await p.waitForTimeout(1500);
   const saved = await p.evaluate((id) => window.FAKE.writes.filter((w) => w.id === id).map((w) => ({ amount: w.r?.amount, note: w.r?.note })), t);
