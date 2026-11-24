@@ -27,11 +27,23 @@ npm run build        # dist/ only
 A local build has no Firebase config, so sign-in is switched off. In CI the
 `FIREBASE_WEB_CONFIG` repository variable supplies it.
 
+## Tests
+
+| What | Where | Runs |
+|---|---|---|
+| Types, unit tests (crypto, import, paise) | `tests/unit` | every push |
+| Every tab renders, phone and laptop | `tests/e2e` | every push |
+| Cloud: sign-in, passphrase, import, encrypted saving, reload, second device, sync, passphrase change, fingerprint, another account refused, database rules | `tests/cloud` on Firebase emulators | every push |
+| Money pages identical to KP Money Planner on a real export | `tests/parity` | locally, with `AV_EXPORT` and `OLD_APP` |
+| Files, types, headers, real CSP, lock screen, money frame on a deployed address | `tests/live` | preview and live, on `main` |
+
 ## Deploys
 
-Every push to `main` runs `.github/workflows/ci.yml`: checks, then deploys Hosting
-(site `kp-akhila-vrutta`) and the Firestore rules using the `FIREBASE_SERVICE_ACCOUNT` secret.
-Pull requests run the checks only.
+Pushes to `main` release themselves (`.github/workflows/ci.yml`):
+checks → deploy to a preview channel → `tests/live` on the preview → database rules → that exact build
+cloned to live → `tests/live` on live → automatic rollback to the previous version if that fails.
+Each release also rehearses the rollback on a throwaway preview. Screenshots from every stage are kept
+as run artifacts.
 
 ## Rules that don't bend
 
