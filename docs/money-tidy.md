@@ -29,6 +29,6 @@ Each step ships on its own: branch → CI (cloud tests) → main → release, ch
    Year in review, month-item sheet, category limits form still open in the planner.
 8. Advisor (views/advisor.ts) — done; asks Claude via askClaude itself. The monthly check-up still also runs
    automatically from the planner (render hook) until the frame goes.
-9. Money settings (views/more.ts) — done. Credit card (views/card.ts) and loan (views/loan.ts) pages — done. Its forms (profile, payers, tags, categories, restore), reminders
+9. Money settings (views/more.ts) — done. Credit card, loan, EPF, PPF, NPS and property pages (views/card, loan, epf, ppf, nps, prop) — done; every money page is now drawn by the app. Its forms (profile, payers, tags, categories, restore), reminders
    and backups still open in the planner.
 10. Remove the frame; switch-over (import button goes, old app read-only for a month).

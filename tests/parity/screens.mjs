@@ -114,7 +114,21 @@ const report = await f.evaluate(() => {
         manual: [{ id: "m1", k: "dep", d: `${ym1}-04`, amt: 500 }, { id: "m2", k: "wd", d: `${nowM}-01`, amt: 200 }] } },
       { id: "he", type: "EPF", name: "EPF2", updatedAt: 1, epf: { rate: 8.25, books: { A: { est: "X", fys: { 2025: { ob: [1000, 800, 300], rows: [{ k: "cont", wm: "2025-05", d: "2025-06-15", wage: 15000, epsw: 15000, emp: 1800, er: 550, eps: 1250 }] } } } },
         manual: [{ id: "e1", k: "cont", wm: ym1, d: `${nowM}-01`, emp: 1800, er: 550, eps: 1250, epsw: 15000 }, { id: "e2", k: "wd", d: `${ym1}-09`, emp: 5000, er: 0, eps: 0 }] } },
+      { id: "hn", type: "NPS", instrument: "NPS2", name: "NPS2", npsMode: "units", unitsAsOf: `${ym1}-15`, yearly: 50000, updatedAt: 1,
+        npsLines: [{ k: "E", units: 3456.789, price: 45.6789, priceDate: `${ym1}-20` }, { nm: "Scheme C - Tier I", units: 1200.1, price: 38.12 }, { nm: "Scheme G Tier I", units: 900, price: 29.5, priceSrc: "NPS Trust" }],
+        nps: { alloc: { E: 75, C: 10, G: 15 }, retireAge: 60, dob: "1990-06-15", contrib: 300000, charges: 1234.5, stmtDate: `${ym1}-15`, xirr: 11.2, pfm: "SBI Pension Funds", choice: "Active" } },
     ],
+    props: [...(real.props || []),
+      { id: "pz", name: "Test flat", kind: "flat", place: "Whitefield", status: "construction", since: "2025-02-01", value: 9000000, nw: true, loanId: loan?.id, note: "Tower B, 12th floor", updatedAt: 1,
+        fund: { by: addM(nowM, 10), ltv: 80, start: 25000 },
+        plan: [{ id: "a", name: "Slab 3", amt: 900000, gst: 45000, when: `${addM(nowM, 1)}-10`, who: "split", tds: true },
+          { id: "b", name: "Registration", amt: 600000, when: addM(nowM, 8), who: "you", status: "estimate" },
+          { id: "c", name: "Interiors", amt: 300000.5, who: "you" },
+          { id: "d", name: "Booking", amt: 100000, when: "2025-02-01", who: "you", done: true }] }],
+    propItems: [...(real.propItems || []),
+      { id: "pi1", prop: "pz", cat: "token", amt: 100000, date: "2025-02-01", accountId: acc, updatedAt: 1 },
+      { id: "pi2", prop: "pz", cat: "stamp", amt: 450000.5, date: "2025-06-10", note: "e-stamp", updatedAt: 1 },
+      { id: "pi3", prop: "pz", cat: "bank", amt: 1500000, date: "2025-08-01", updatedAt: 1 }],
   };
   MEMO = new Map();
   const d2 = N.dataFrom(S.data, today());
@@ -285,6 +299,50 @@ const report = await f.evaluate(() => {
     Object.assign(S, keep);
   };
   loanPages(d2, "made-up");
+  // EPF: every tab, and the passbook for each financial year.
+  const epfPages = (dx, tag) => {
+    const keep = { epfId: S.epfId, epfTab: S.epfTab, epfFy: S.epfFy, view: S.view };
+    for (const h of live("holdings").filter((h) => h.type === "EPF" && h.epf)) {
+      const e = epfCalc(h), fys = e ? [...new Set([...e.rows.map((r) => r.fy), e.fyNow])] : [];
+      for (const [tab, fy] of [["overview"], ["passbook"], ...fys.map((y) => ["passbook", y]), ["projection"], ["pension"]]) {
+        const st = { epfId: h.id, epfTab: tab, epfFy: fy };
+        page(`${tag} EPF ${tab} ${fy ?? ""}`, () => { Object.assign(S, st, { view: "epf" }); return vEpf(); }, () => N.epf.epfHtml(dx, st) ?? "(no EPF)");
+      }
+    }
+    Object.assign(S, keep);
+  };
+  epfPages(d2, "made-up");
+  // PPF: every tab, and the statement for each financial year.
+  const ppfPages = (dx, tag) => {
+    const keep = { ppfId: S.ppfId, ppfTab: S.ppfTab, ppfFy: S.ppfFy, view: S.view };
+    for (const h of live("holdings").filter((h) => h.type === "PPF" && h.ppf)) {
+      const p = ppfCalc(h), fys = []; if (p) for (let y = p.fy0; y <= p.fyNow; y++) fys.push(y);
+      for (const [tab, fy] of [["overview"], ["statement"], ...fys.map((y) => ["statement", y]), ["projection"]]) {
+        const st = { ppfId: h.id, ppfTab: tab, ppfFy: fy };
+        page(`${tag} PPF ${tab} ${fy ?? ""}`, () => { Object.assign(S, st, { view: "ppf" }); return vPpf(); }, () => N.ppf.ppfHtml(dx, st) ?? "(no PPF)");
+      }
+    }
+    Object.assign(S, keep);
+  };
+  ppfPages(d2, "made-up");
+  const npsPages = (dx, tag) => {
+    const keep = { npsId: S.npsId, npsTab: S.npsTab, view: S.view };
+    for (const h of live("holdings").filter((h) => h.type === "NPS" && h.nps)) for (const tab of ["overview", "entries", "projection"]) {
+      const st = { npsId: h.id, npsTab: tab };
+      page(`${tag} NPS ${tab}`, () => { Object.assign(S, st, { view: "nps" }); return vNps(); }, () => N.nps.npsHtml(dx, st) ?? "(no NPS)");
+    }
+    Object.assign(S, keep);
+  };
+  npsPages(d2, "made-up");
+  const propPages = (dx, tag) => {
+    const keep = { propId: S.propId, propTab: S.propTab, view: S.view, accTab: S.accTab };
+    for (const p of live("props").filter((p) => p.rec !== "cats")) for (const tab of ["overview", "payments", "expected", "loan"]) {
+      const st = { propId: p.id, propTab: tab };
+      page(`${tag} property ${p.name} ${tab}`, () => { Object.assign(S, st, { view: "prop" }); return vProp(); }, () => N.prop.propHtml(dx, st) ?? "(no property)");
+    }
+    Object.assign(S, keep);
+  };
+  propPages(d2, "made-up");
   sheets(d2, "made-up");
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
@@ -296,6 +354,10 @@ const report = await f.evaluate(() => {
   morePages(d, "yours");
   cardPages(d, "yours");
   loanPages(d, "yours");
+  epfPages(d, "yours");
+  ppfPages(d, "yours");
+  npsPages(d, "yours");
+  propPages(d, "yours");
   Object.assign(S, save); MEMO = new Map();
   // Also the money formats, on awkward amounts.
   for (const r of [0, 0.004, 0.005, -0.5, 0.5, 1.5, 2.5, -2.5, 999.995, 1234.56, -1234.56, 12345678.9, 1e9]) {
@@ -310,4 +372,4 @@ const SHOW = +(process.env.SHOW || 6);
 console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with a total ₹1 apart (half-rupee rounding)` : ""}`);
 if (report.fixedCrash.length) console.log(`  (the old planner crashes on ${report.fixedCrash.length} of these — ${[...new Set(report.fixedCrash.map((l) => l.replace(/^(made-up|yours) /, "")))].join(", ")} — the new page shows them)`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
-console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview, Insights (every tab) the Advisor (page and what Claude is sent), Money settings, credit cards and loans are identical to the planner's");
+console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview, Insights (every tab) the Advisor (page and what Claude is sent), Money settings, credit cards, loans, EPF, PPF, NPS and properties are identical to the planner's");

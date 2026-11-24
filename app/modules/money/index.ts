@@ -20,6 +20,10 @@ import { advisorPage, setAsk } from "./views/advisor.ts";
 import { morePage } from "./views/more.ts";
 import { cardPage } from "./views/card.ts";
 import { loanPage } from "./views/loan.ts";
+import { epfPage } from "./views/epf.ts";
+import { ppfPage } from "./views/ppf.ts";
+import { npsPage } from "./views/nps.ts";
+import { propPage } from "./views/prop.ts";
 import { mountPages } from "./views/pages.ts";
 import { ensureLayer, onSheet, toast as kitToast } from "./ui/kit.ts";
 import { prefGet, prefSet, setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
@@ -27,7 +31,7 @@ import { txnForm } from "./ui/txform.ts";
 import { mainAcc } from "./calc/forecast.ts";
 
 /** Planner pages that Akhila Vrutta now draws itself (the planner keeps their state and sheets). */
-const PAGES = { home: homePage, activity: txPage, accounts: accountsPage, plan: planPage, insights: insightsPage, advisor: advisorPage, more: morePage, card: cardPage, loan: loanPage };
+const PAGES = { home: homePage, activity: txPage, accounts: accountsPage, plan: planPage, insights: insightsPage, advisor: advisorPage, more: morePage, card: cardPage, loan: loanPage, epf: epfPage, ppf: ppfPage, nps: npsPage, prop: propPage };
 const MOVED = new Set(Object.keys(PAGES));
 
 const ICON = "M3 7h18v12H3zM3 11h18M7 15h3";

@@ -103,7 +103,7 @@ export function propItems(d: MoneyData, p: Property): PropItem[] {
   }).sort((a, b) => b.date.localeCompare(a.date)));
 }
 
-interface SchedRowDated { ym: YM; int: number; prin: number; date: Day; [k: string]: unknown }
+interface SchedRowDated { ym: YM; int: number; prin: number; date: Day; emi: number; rate: number; [k: string]: unknown }
 export interface PropInterest {
   l: Loan | null;
   st: Property["stmt"] | null;

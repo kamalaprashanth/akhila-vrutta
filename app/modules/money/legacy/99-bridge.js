@@ -40,6 +40,8 @@ async function hOpenBackup(){ throw new Error("Open encrypted backups from Setti
       /* a tap on a page Akhila Vrutta draws, for something only the planner can open yet */
       if(name === "click"){ const b=document.createElement("button"); b.type="button"; b.hidden=true; for(const [k,v] of Object.entries(args[0])) b.setAttribute(k,v); $("#view").appendChild(b); b.click(); b.remove(); return; }
       if(name === "files" && args[0] === "importTradebooks") return importTradebooks(args[1]);
+      if(name === "files" && (args[0] === "propPlan" || args[0] === "propStmt")){ const pp=byId("props",S.propId); if(pp && args[1][0]) return (args[0]==="propPlan"?propPlanLoad:propStmtLoad)(pp, args[1][0]); return; }
+      if(name === "files" && args[0] === "epfPdf"){ const hh=epfHold(); if(hh) return epfPdfToHolding(hh, args[1]); return; }
       if(name === "run" && args[0] === "ensureSmartGoals") return ensureSmartGoals();
     },
     openTx: id => openTxItem(id),
