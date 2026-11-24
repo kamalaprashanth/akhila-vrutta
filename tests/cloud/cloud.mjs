@@ -132,9 +132,12 @@ try {
   check(docs.length >= 6, `the transactions are in the cloud (${docs.length} records)`);
   const allowed = new Set(["iv", "ct", "z", "at", "by", "del"]);
   const shapes = docs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k)));
-  const blob = JSON.stringify(raw.body);
-  check(shapes && !blob.includes("cloud test") && !blob.includes("777") && !blob.includes("Test Bank"), "records in the cloud hold only ciphertext (no names, notes or amounts)");
-
+  // Look inside the stored bytes: none of the plain text may appear (timestamps are allowed to contain digits).
+  const plainHits = docs.filter((d) => {
+    const bytes = Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1");
+    return ["cloud test", "Test Bank", "sample expense", "777.77", "77777"].some((t) => bytes.includes(t));
+  }).length;
+  check(shapes && plainHits === 0, `records in the cloud hold only ciphertext (fields ${shapes ? "ok" : "unexpected"}, plain text found in ${plainHits})`);
   await A.page.reload();
   await unlockWithPass(A.page, "not the passphrase");
   await A.page.waitForSelector("#lk_e:not([hidden])", { timeout: 20000 });
