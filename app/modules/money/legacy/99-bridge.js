@@ -23,6 +23,9 @@ async function hOpenBackup(){ throw new Error("Open encrypted backups from Setti
   /* Transactions is drawn by Akhila Vrutta itself now (app/modules/money/views); the planner keeps its
      state (filters, month, selection) and still opens the forms and sheets for it. */
   for(const v of (AVB.moved || ["activity"])) VIEWS[v] = () => "";
+  /* carry-overs, card EMIs, net-worth snapshots and the starter payers are made by Akhila Vrutta now (ui/auto.ts) */
+  window.__plannerAuto = { ensureCarry, ensureCardEmi, ensureSnap, ensurePayers };   /* kept for the screen test */
+  ensureCarry = () => false; ensureCardEmi = () => false; ensureSnap = () => false; ensurePayers = () => {};
   const toast0 = toast;
   toast = t => { if(!(AVB.toast && AVB.toast(t))) toast0(t); };
   new MutationObserver(() => AVB.sheet && AVB.sheet(!!$("#modal").firstElementChild)).observe($("#modal"), { childList: true });

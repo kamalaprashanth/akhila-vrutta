@@ -26,6 +26,7 @@ import { npsPage } from "./views/nps.ts";
 import { propPage } from "./views/prop.ts";
 import { mountPages } from "./views/pages.ts";
 import { pxLine, pxRefresh } from "./ui/prices.ts";
+import { autoEntries } from "./ui/auto.ts";
 import { ensureLayer, onSheet, toast as kitToast } from "./ui/kit.ts";
 import { prefGet, prefSet, setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
 import { txnForm } from "./ui/txform.ts";
@@ -125,6 +126,15 @@ function flush(): void {
   for (const k of seen.keys()) if (!next.has(k)) { const [c, id] = [k.slice(0, k.indexOf("/")), k.slice(k.indexOf("/") + 1)]; ops.push({ c, id, r: null }); }
   seen = next;
   if (ops.length) ctx.store.writeMany(ops);
+  if (ops.length) runAuto();
+}
+/** The planner's automatic entries after a change (made once each; nothing to do most of the time). */
+function runAuto(): void {
+  if (!ctx.store) return;
+  const a = autoEntries(currentData());
+  if (!a.length) return;
+  ctx.store.writeMany(a.map(({ c, r }) => ({ c, id: r.id, r })));
+  if (api) window.setTimeout(() => api?.replace(loadForPlanner()), 0);
 }
 
 /** Other devices changed something: hand the planner the new data if it differs from what it has. */
@@ -136,7 +146,7 @@ function onStoreChange(ch: Changes): void {
     const now = r ? stableJSON(fromStored(c, r)) : undefined;
     return seen.get(key(c, id)) !== now;
   });
-  if (differs) { flush(); api.replace(loadForPlanner()); }
+  if (differs) { flush(); runAuto(); api.replace(loadForPlanner()); }
 }
 
 declare global {
@@ -266,10 +276,12 @@ function ensureBox(): HTMLElement {
 const currentData = () => moneyData((c) => ctx.store!.all(c), MONEY_COLLECTIONS);
 
 /** Saves records changed by a screen Akhila Vrutta draws, then hands the planner the new data. */
-function writeMoney(ops: MoneyWrite[]): void {
-  if (!ctx.store || !ops.length) return;
+function writeMoney(ops0: MoneyWrite[]): void {
+  if (!ctx.store || !ops0.length) return;
   if (pendingData) { clearTimeout(saveTimer); flush(); }
-  ctx.store.writeMany(ops.map(({ c, r }) => ({ c, id: r.id, r })));
+  ctx.store.writeMany(ops0.map(({ c, r }) => ({ c, id: r.id, r })));
+  // what the planner filled in by itself after every change (carry-overs, card EMIs, the month's snapshot)
+  { const a = autoEntries(currentData()); if (a.length) ctx.store.writeMany(a.map(({ c, r }) => ({ c, id: r.id, r }))); }
   if (api) api.replace(loadForPlanner());   // the planner redraws, which redraws a moved screen too
   else refreshMoved();
 }
@@ -301,6 +313,8 @@ function startEnv(): void {
     planner: (name, ...args) => { if (api) api.call(name, ...args); },
   });
   ensureLayer();
+  // Carry-overs, card EMIs due by today and this month's snapshot, made once when Money opens (then after each change).
+  { const ops = autoEntries(currentData()); if (ops.length) writeMoney(ops); }
   // Today's official prices onto the linked holdings (at most every 3 hours), as the planner did once unlocked.
   if (ctx.session) window.setTimeout(() => { void pxRefresh(); }, 1500);
   onSheet((open) => {

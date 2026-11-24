@@ -141,6 +141,10 @@ try {
   await moneyFrame(A.page, "accounts");
   check(/Net worth/i.test(await A.page.innerText("#moneyView #view")) && /Test Bank|Net worth/.test(await A.page.innerText("#moneyView #view")), "Accounts (drawn by the app) shows the imported data");
   const fT = await moneyFrame(A.page, "activity");
+  // The app makes what the planner used to fill in by itself: this month's net-worth snapshot, saved to the cloud.
+  await A.page.waitForTimeout(1500);
+  const snapYm = await fT.evaluate(() => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`; });
+  check(await fT.evaluate((ym) => (S.data.snaps || []).some((x) => x.id === `nw-${ym}` && !x.deleted), snapYm), `this month's net-worth snapshot is made by the app when Money opens (nw-${snapYm})`);
   const imported = (await plannerTxns(fT)).find((t) => t.note === "sample expense 1234.56");
   check(imported?.amount === 1234.56, `an imported transaction is back in rupees (₹${imported?.amount})`);
   await shot(A.page, "money-accounts");

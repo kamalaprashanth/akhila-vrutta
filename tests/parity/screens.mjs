@@ -578,9 +578,30 @@ const report = await f.evaluate(() => {
     }
   };
   formCases(d2, "made-up");
+  // What the planner filled in by itself on each redraw (carry-overs, card EMIs, the month's snapshot) vs the app's.
+  const autoCase = (tag, mut) => {
+    n++;
+    const keep = S.data, base = JSON.parse(JSON.stringify(S.data)); if (mut) mut(base);
+    S.data = JSON.parse(JSON.stringify(base)); MEMO = new Map(); S.snapT = 0;
+    const A0 = window.__plannerAuto; A0.ensurePayers(); A0.ensureCarry(); A0.ensureCardEmi(); A0.ensureSnap();
+    const oldOps = []; for (const c of Object.keys(S.data)) if (Array.isArray(S.data[c])) for (const r of S.data[c]) { const b = (base[c] || []).find((x) => x.id === r.id); const st = (x) => { const y = { ...x }; delete y.updatedAt; return JSON.stringify(y); }; if (!b || st(b) !== st(r)) oldOps.push({ c, r: N.toStored(c, r) }); }
+    S.data = keep; MEMO = new Map();
+    N.auto.resetSnapClock();
+    const newOps = N.auto.autoEntries(N.dataFrom(base, today()));
+    const key = (o) => { const x = { ...o.r }; delete x.updatedAt; return JSON.stringify([o.c, Object.keys(x).sort().reduce((a, k) => ((a[k] = x[k]), a), {})]); };
+    const A = oldOps.map(key).sort(), B = newOps.map(key).sort();
+    if (JSON.stringify(A) !== JSON.stringify(B)) out.push(`automatic entries ${tag}: differ\n    old ${A.join("\n        ").slice(0, 1200)}\n    new ${B.join("\n        ").slice(0, 1200)}`);
+    return A.length;
+  };
+  let autoN = 0;
+  autoN += autoCase("made-up, as is");
+  autoN += autoCase("made-up, carry-overs and snapshot made again", (x) => { x.txns = x.txns.filter((t) => t.type !== "carry"); x.snaps = []; });
+  autoN += autoCase("made-up, no payers yet", (x) => { x.payers = []; });
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
   formCases(d, "yours");
+  autoN += autoCase("yours, as is");
+  autoN += autoCase("yours, carry-overs, card EMIs and snapshot made again", (x) => { x.txns = x.txns.filter((t) => t.type !== "carry" && !t.cemi); x.snaps = (x.snaps || []).filter((s) => s.ym !== ymOf(today())); });
   accPages(d, "yours");
   planPages(d, "yours");
   homePages(d, "yours");
@@ -602,7 +623,8 @@ const report = await f.evaluate(() => {
   }
   // a tap the planner answered with nothing must open nothing here either (checked by the sheet comparison); taps
   // that open nothing in both are fine only when there's a reason in the data (e.g. no reserve account yet)
-  return { n, formN, fixedSaves, nothingOld: [...nothingOld], txns: live("txns").length, out, estRounding, fixedCrash };
+  if (!autoN) out.push("automatic entries: the planner made none in any case (the test checks nothing)");
+  return { n, formN, autoN, fixedSaves, nothingOld: [...nothingOld], txns: live("txns").length, out, estRounding, fixedCrash };
 });
 // Automatic prices: the same price lists applied by the planner and by the app must leave the same holdings.
 const pxOut = await f.evaluate(async () => {
@@ -641,6 +663,7 @@ const pxOut = await f.evaluate(async () => {
   return { out, n: nOld, nNew, changed };
 });
 report.out.push(...pxOut.out);
+console.log(`automatic entries: ${report.autoN} made the same way by the planner and the app`);
 console.log(`automatic prices: ${pxOut.changed} test holdings priced the same way by the planner and the app`);
 if (pxOut.changed < 5) report.out.push(`prices: only ${pxOut.changed} test holdings were priced (${pxOut.n} by the planner, ${pxOut.nNew} by the app)`);
 await browser.close(); server.close();

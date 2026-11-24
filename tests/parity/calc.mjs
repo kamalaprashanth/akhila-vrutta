@@ -506,7 +506,7 @@ const report = await f.evaluate(() => {
     S.data = JSON.parse(JSON.stringify(keep)); MEMO = new Map();
     const before = new Set(S.data.txns.map((t) => t.id));
     const ids = new Set(keep.txns.map((t) => t.id));
-    try { ensureCarry(); } catch (e) { out.push(`${label}: ensureCarry threw ${e.message}`); }
+    try { (window.__plannerAuto?.ensureCarry ?? ensureCarry)(); } catch (e) { out.push(`${label}: ensureCarry threw ${e.message}`); }
     const made = S.data.txns.filter((t) => !before.has(t.id));
     S.data = keep; MEMO = new Map();
     const want = NF.carriesToMake(d, ids);
