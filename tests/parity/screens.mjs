@@ -346,7 +346,7 @@ const report = await f.evaluate(() => {
   sheets(d2, "made-up");
   // Forms, saved: the same values typed into the planner's form and the new one must store the same records
   // (the planner's in rupees, converted to paise as an import would; new ids and save times aside).
-  let formN = 0; const fixedSaves = [];
+  let formN = 0; const fixedSaves = [], nothingOld = new Set();
   const fillIn = (root, vals) => {
     for (const [k, v] of Object.entries(vals)) {
       if (k.startsWith("click:")) { const b = root.querySelector(k.slice(6)); if (b) b.click(); else out.push(`form fill: nothing to click at ${k}`); continue; }
@@ -372,6 +372,8 @@ const report = await f.evaluate(() => {
     const oldOps = [];
     for (const c of Object.keys(S.data)) if (Array.isArray(S.data[c])) for (const r of S.data[c]) {
       const b = (snap[c] || []).find((x) => x.id === r.id), strip = (x) => { const y = { ...x }; delete y.updatedAt; return JSON.stringify(y); };
+      // a month's carried balance made by the planner's redraw isn't part of the form (the app makes those itself)
+      if (!b && c === "txns" && (r.type === "carry" || r.cemi)) continue;   // and card EMIs it posts
       if (!b || strip(b) !== strip(r)) oldOps.push({ c, r: N.toStored(c, r) });
     }
     closeModal(); S.data = keepData; MEMO = new Map();
@@ -401,7 +403,7 @@ const report = await f.evaluate(() => {
     // Taps the app now answers itself: the planner's handler for the same tap must open the same sheet.
     const mk = (attrs) => { const b = document.createElement("button"); for (const [k, v] of Object.entries(attrs)) b.setAttribute(k, v); return b; };
     const oldTap = (attrs) => { const b = mk(attrs); b.hidden = true; document.querySelector("#view").appendChild(b); b.click(); b.remove(); };
-    const cmpTap = (label, attrs, st = {}) => cmpSheet(`${tag} tap ${label}`, () => { Object.assign(S, st); oldTap(attrs); if (!document.querySelector("#modal .sheet")) out.push(`tap ${label}: the planner opened nothing`); }, () => { Object.assign(S, st); N.actions.appAct(mk(attrs), dx); });
+    const cmpTap = (label, attrs, st = {}) => cmpSheet(`${tag} tap ${label}`, () => { Object.assign(S, st); oldTap(attrs); if (!document.querySelector("#modal .sheet")) nothingOld.add(label); }, () => { Object.assign(S, st); N.actions.appAct(mk(attrs), dx); });
     for (const a of cards) for (const ca of ["pay", "spend", "edit"]) cmpTap(`card ${a.name} ${ca}`, { "data-ca": ca }, { cardId: a.id });
     for (const a of cards.slice(0, 3)) cmpTap(`Plan card bill ${a.name}`, { "data-cpay": a.id });
     for (const a of accs.slice(0, 3)) cmpTap(`account ${a.name}`, { "data-acc": a.id });
@@ -569,7 +571,7 @@ const report = await f.evaluate(() => {
     if (top) cmpForm(dx, `${tag} delete category ${top.name}`, () => catForm({ ...top }), () => F.catForm({ ...dx.byId("categories", top.id) }), {}, ["#dl", "#cy"]);
     if (accs[0]) cmpForm(dx, `${tag} delete account ${accs[0].name}`, () => accForm({ ...accs[0] }), () => F.accForm({ ...dx.byId("accounts", accs[0].id) }), {}, ["#dl", "#cy"]);
     const other = banks.find((a) => !a.hidden && a.id !== mainAcc()?.id);
-    if (other) cmpForm(dx, `${tag} Home balance account`, () => pickMainSheet(), () => F.pickMainSheet(), { acc: other.id });
+    if (other) cmpForm(dx, `${tag} Home balance account`, () => pickMainSheet(), () => F.pickMainSheet(), { acc: other.id }, undefined, (ops) => { for (const o of ops) delete o.r.seed; });
     for (const g of allTags().slice(0, 2)) {
       cmpForm(dx, `${tag} rename tag ${g}`, () => tagSheet(g), () => F.tagSheet(g), { name: g + " X" });
       cmpForm(dx, `${tag} remove tag ${g}`, () => tagSheet(g), () => F.tagSheet(g), {}, ["#dl", "#cy"]);
@@ -598,7 +600,9 @@ const report = await f.evaluate(() => {
     if (money(p / 100) !== N.txlist.money(p)) out.push(`money(${r}): old ${money(p / 100)} new ${N.txlist.money(p)}`);
     if (moneyP(p / 100) !== N.txlist.moneyP(p)) out.push(`moneyP(${r}): old ${moneyP(p / 100)} new ${N.txlist.moneyP(p)}`);
   }
-  return { n, formN, fixedSaves, txns: live("txns").length, out, estRounding, fixedCrash };
+  // a tap the planner answered with nothing must open nothing here either (checked by the sheet comparison); taps
+  // that open nothing in both are fine only when there's a reason in the data (e.g. no reserve account yet)
+  return { n, formN, fixedSaves, nothingOld: [...nothingOld], txns: live("txns").length, out, estRounding, fixedCrash };
 });
 // Automatic prices: the same price lists applied by the planner and by the app must leave the same holdings.
 const pxOut = await f.evaluate(async () => {

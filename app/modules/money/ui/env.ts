@@ -18,7 +18,10 @@ export interface Env {
   planner(name: string, ...args: unknown[]): void;
 }
 let env: Env | null = null;
-export const setEnv = (e: Env): void => { env = e; };
+/** Every save drops the "seed" mark (the planner's put() did: a starter record you've changed is yours). */
+export const setEnv = (e: Env): void => {
+  env = { ...e, write: (ops) => e.write(ops.map(({ c, r }) => { if (!("seed" in r)) return { c, r }; const x: Record<string, unknown> = { ...r }; delete x.seed; return { c, r: x as Rec }; })) };
+};
 export const E = (): Env => { if (!env) throw new Error("money screens used before the Money tab started"); return env; };
 
 export const uid = (): string => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
