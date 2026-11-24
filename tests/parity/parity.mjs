@@ -50,7 +50,7 @@ async function newText() {
   await f.waitForSelector("#view *", { timeout: 15000 });
   const out = {};
   // Pages Akhila Vrutta draws itself are read from the app, the rest from the planner's frame.
-  for (const v of VIEWS) { await p.evaluate((v) => { location.hash = `#/money/${v}`; }, v); await p.waitForTimeout(700); out[v] = clean(await (v === "activity" ? p.innerText("#moneyView #view") : f.innerText("#view"))); }
+  for (const v of VIEWS) { await p.evaluate((v) => { location.hash = `#/money/${v}`; }, v); await p.waitForTimeout(700); out[v] = clean(await (["activity", "accounts"].includes(v) ? p.innerText("#moneyView #view") : f.innerText("#view"))); }
   await p.waitForTimeout(1200);
   const writes = await p.evaluate(() => window.FAKE.writes.map((w) => `${w.c}/${w.id}`));
   // An edit in the planner is saved once, converted to paise.

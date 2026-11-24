@@ -22,7 +22,7 @@ async function hOpenBackup(){ throw new Error("Open encrypted backups from Setti
   const h = readHash(); if(VIEWS[h]) S.view = h;
   /* Transactions is drawn by Akhila Vrutta itself now (app/modules/money/views); the planner keeps its
      state (filters, month, selection) and still opens the forms and sheets for it. */
-  VIEWS.activity = () => "";
+  for(const v of (AVB.moved || ["activity"])) VIEWS[v] = () => "";
   const toast0 = toast;
   toast = t => { if(!(AVB.toast && AVB.toast(t))) toast0(t); };
   new MutationObserver(() => AVB.sheet && AVB.sheet(!!$("#modal").firstElementChild)).observe($("#modal"), { childList: true });
@@ -33,7 +33,14 @@ async function hOpenBackup(){ throw new Error("Open encrypted backups from Setti
     add: () => { const b = document.querySelector("[data-add]"); if(b) b.click(); },
     replace: data => { S.data = merge({}, data); MEMO = new Map(); render(); },
     state: () => { txFilter(); return S; },
-    call: (name, ...args) => { if(name === "go") return go(args[0]); },
+    call: (name, ...args) => {
+      if(name === "go") return go(args[0]);
+      /* fragments only the planner can draw yet */
+      if(name === "html") return args[0] === "pxLine" ? pxLine() : "";
+      /* a tap on a page Akhila Vrutta draws, for something only the planner can open yet */
+      if(name === "click"){ const b=document.createElement("button"); b.type="button"; b.hidden=true; for(const [k,v] of Object.entries(args[0])) b.setAttribute(k,v); $("#view").appendChild(b); b.click(); b.remove(); return; }
+      if(name === "files" && args[0] === "importTradebooks") return importTradebooks(args[1]);
+    },
     openTx: id => openTxItem(id),
     filters: () => txFilterSheet(),
     cleanup: () => cleanupSheet(),

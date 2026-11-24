@@ -11,16 +11,17 @@ import { ctx } from "../../core/app.ts";
 import { META, MONEY_COLLECTIONS, stableJSON, type Changes, type Rec, type WriteOp } from "../../core/store.ts";
 import { AMOUNTS_VERSION, fromStored, toStored, unclassified } from "./paise.ts";
 import { callable, initFirebase } from "../../core/firebase.ts";
-import { mountTransactions, moneyData, type PlannerState } from "./views/transactions.ts";
+import { moneyData, txPage, type PlannerState } from "./views/transactions.ts";
+import { accountsPage } from "./views/accounts.ts";
+import { mountPages } from "./views/pages.ts";
 import { ensureLayer, onSheet } from "./ui/kit.ts";
-import { setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
-import { carrySheet, txnForm } from "./ui/txform.ts";
-import { bulkAct, cleanupSheet, txFilterSheet } from "./ui/txsheets.ts";
+import { prefGet, prefSet, setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
+import { txnForm } from "./ui/txform.ts";
 import { mainAcc } from "./calc/forecast.ts";
-import type { Tx } from "./views/txlist.ts";
 
 /** Planner pages that Akhila Vrutta now draws itself (the planner keeps their state and sheets). */
-const MOVED = new Set(["activity"]);
+const PAGES = { activity: txPage, accounts: accountsPage };
+const MOVED = new Set(Object.keys(PAGES));
 
 const ICON = "M3 7h18v12H3zM3 11h18M7 15h3";
 
@@ -60,7 +61,7 @@ let saveTimer = 0;
 let pendingData: LegacyData | null = null;
 /** The area where moved screens are drawn (same place as the frame), and whether a planner sheet is open. */
 let box: HTMLElement | null = null;
-let txPage: { render(first?: boolean): void } | null = null;
+let pages: { render(first?: boolean): void } | null = null;
 let sheetOpen = false;
 let onMoved = false;
 
@@ -133,6 +134,8 @@ declare global {
       save(d: LegacyData): void;
       onView(v: string): void;
       ready(a: FrameApi): void;
+      /** Pages Akhila Vrutta draws itself (the planner leaves them blank). */
+      moved: string[];
       /** A planner sheet opened or closed. */
       sheet(open: boolean): void;
       /** A planner message; shown by Akhila Vrutta when the planner's page isn't on screen. */
@@ -176,6 +179,7 @@ function ensureFrame(): HTMLIFrameElement {
       return true;
     },
     ready: (a) => { api = a; },
+    moved: [...MOVED],
     firebase: async () => {
       const f = await initFirebase();
       const s = ctx.session;
@@ -204,7 +208,7 @@ function showMoved(on: boolean): void {
   if (!on) return;
   // Anything the planner just changed is saved first, so the page is drawn from current data.
   if (pendingData) { clearTimeout(saveTimer); flush(); }
-  txPage?.render(first);
+  pages?.render(first);
 }
 
 /** A planner sheet: the frame fills the screen while it's open, so the sheet reaches the bottom and nothing covers it. */
@@ -232,13 +236,15 @@ function ensureBox(): HTMLElement {
   box.hidden = true;
   box.innerHTML = '<div class="mv"><div class="wrap" id="view" role="main"></div></div>';
   document.body.appendChild(box);
-  txPage = mountTransactions(box, {
-    state: () => (api ? api.state() : null),
+  pages = mountPages(box, PAGES, {
     data: currentData,
-    openTx,
-    filters: txFilterSheet,
-    cleanup: cleanupSheet,
-    bulk: bulkAct,
+    state: () => api!.state() as PlannerState & Record<string, unknown>,
+    pref: prefGet,
+    prefSet,
+    plannerHtml: (name) => String(api?.call("html", name) ?? ""),
+    plannerClick: (attrs) => { api?.call("click", attrs); },
+    go: (v) => api?.go(v),
+    plannerFiles: (name, files) => { api?.call("files", name, files); },
   });
   return box;
 }
@@ -253,15 +259,7 @@ function writeMoney(ops: MoneyWrite[]): void {
   if (api) api.replace(loadForPlanner());   // the planner redraws, which redraws a moved screen too
   else refreshMoved();
 }
-function refreshMoved(): void { if (onMoved) txPage?.render(); }
-
-/** A Transactions row: the form or carry-over here; loan entries, EPF, PPF and trades still in the planner. */
-function openTx(id: string): void {
-  const t = currentData().byId<Tx>("txns", id);
-  if (t && t.type === "carry") return carrySheet(t);
-  if (t && ["expense", "income", "transfer", "investment"].includes(String(t.type))) return txnForm({ ...t });
-  api?.openTx(id);
-}
+function refreshMoved(): void { if (onMoved) pages?.render(); }
 
 function startEnv(): void {
   setEnv({

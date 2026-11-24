@@ -16,9 +16,10 @@ Each step ships on its own: branch → CI (cloud tests) → main → release, ch
 ## Order and status
 1. Calculations — done (calc/*.ts, `tests/parity/calc.mjs`).
 2. Transactions list — done (views/txlist.ts). Planner sheets fill the screen; + hidden while open.
-3. UI kit (sheet, fields, ₹ inputs, category/account pickers, toast, confirm) + transaction form, split,
-   tags, filters sheet, clean-up, bulk sheets — next.
-4. Accounts (+ card, loan, EPF, PPF, NPS, properties pages and their forms).
+3. UI kit (ui/kit.ts) + transaction form, split, carry-over, filters, clean-up, bulk sheets — done (live).
+4. Accounts page (views/accounts.ts, charts in views/charts.ts) — done. Still in the planner: card, loan, EPF,
+   PPF, NPS, property pages; account/loan/holding/property forms; prices status line (`plannerHtml("pxLine")`).
+   Pages plug into views/pages.ts; taps a page doesn't handle go to the planner (`plannerClick`).
 5. Plan (month, regular, cash flow, calendar, goals; forecast).
 6. Overview. 7. Insights. 8. Advisor. 9. Money settings (more).
 10. Remove the frame; switch-over (import button goes, old app read-only for a month).

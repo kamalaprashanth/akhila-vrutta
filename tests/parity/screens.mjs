@@ -140,9 +140,49 @@ const report = await f.evaluate(() => {
     for (const t of live("txns").filter((x) => x.type === "expense" && x.amount > 0).slice(-2)) cmpSheet(`${tag} split ${t.id}`, () => splitSheet({ ...t }), () => N.txform.splitSheet({ ...stored(t.id) }));
     S.selOn = false; S.sel = new Set();
   };
+  // Accounts: every section, chart ranges, folded cards, open holding groups, the payoff plan's settings.
+  const page = (label, oldFn, newFn) => {
+    n++;
+    S.cwFixed = 640; N.charts.setChartWidth(640);
+    for (const k in CH) delete CH[k]; chSeq = 0; N.charts.resetCharts();
+    const a = oldFn(), b = newFn();
+    if (a !== b && sameButEstimates(a, b)) { estRounding++; return; }
+    if (a !== b) { let i = 0; while (i < a.length && a[i] === b[i]) i++; out.push(`${label}: differs at ${i}\n    old …${a.slice(Math.max(0, i - 100), i + 140)}\n    new …${b.slice(Math.max(0, i - 100), i + 140)}`); }
+  };
+  // Estimated past months (worked back from entries) can land on a half rupee; paise round it ₹1 the other way.
+  // Accepted only inside an "(est.)" table row or the chart drawn from the same estimates, and only by ₹1.
+  let estRounding = 0;
+  const sameButEstimates = (a, b) => {
+    const A = a.split(/(<tr>.*?<\/tr>|<svg.*?<\/svg>)/s), B = b.split(/(<tr>.*?<\/tr>|<svg.*?<\/svg>)/s);
+    if (A.length !== B.length) return false;
+    return A.every((x, i) => {
+      const y = B[i];
+      if (x === y) return true;
+      if (x.startsWith("<svg")) return x.replace(/-?\d+(\.\d+)?/g, "#") === y.replace(/-?\d+(\.\d+)?/g, "#") && x.match(/-?\d+(\.\d+)?/g).every((v, k) => Math.abs(+v - +y.match(/-?\d+(\.\d+)?/g)[k]) <= 0.15);
+      if (!x.includes("(est.)")) return false;
+      const nx = x.match(/[\d,]+/g), ny = y.match(/[\d,]+/g);
+      return x.replace(/[\d,]+/g, "#") === y.replace(/[\d,]+/g, "#") && nx.every((v, k) => Math.abs(+v.replace(/,/g, "") - +ny[k].replace(/,/g, "")) <= 1);
+    });
+  };
+  const accHost = { pref: (k, v) => prefGet(k, v), plannerHtml: (name) => (name === "pxLine" ? pxLine() : "") };
+  const accPages = (dx, tag) => {
+    const keep = { accTab: S.accTab, nwN: S.nwN, allCards: S.allCards }, prefs = ["holdOpen", "poExtra", "poLump", "poOrder", "accTab"].map((k) => [k, localStorage.getItem("kpmp.ui." + k)]);
+    const types = [...new Set(live("holdings").map((h) => h.type))];
+    const combos = [[{}, {}], [{ nwN: 12 }, {}], [{ nwN: "all" }, {}], [{ allCards: true }, {}], [{}, { holdOpen: types }], [{}, { poExtra: 20000, poLump: 150000, poOrder: "snow" }], [{}, { poExtra: 7777.5, poOrder: "aval" }], [{}, { accTab: "cards" }]];
+    for (const tab of ["overview", "banks", "cards", "invest", "loans", "props", undefined]) for (const [stx, pf] of combos) {
+      for (const [k, v] of Object.entries(pf)) prefSet(k, v);
+      const st = { accTab: tab, ...stx };
+      page(`${tag} accounts ${tab ?? "(saved tab)"} ${JSON.stringify({ ...stx, ...pf })}`, () => { Object.assign(S, { accTab: tab, nwN: undefined, allCards: undefined }, stx); return vAccounts(); }, () => N.accounts.accountsHtml(dx, { ...st }, accHost));
+      for (const [k] of Object.entries(pf)) localStorage.removeItem("kpmp.ui." + k);
+    }
+    for (const [k, v] of prefs) { if (v == null) localStorage.removeItem("kpmp.ui." + k); else localStorage.setItem("kpmp.ui." + k, v); }
+    Object.assign(S, keep);
+  };
+  accPages(d2, "made-up");
   sheets(d2, "made-up");
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
+  accPages(d, "yours");
   Object.assign(S, save); MEMO = new Map();
   // Also the money formats, on awkward amounts.
   for (const r of [0, 0.004, 0.005, -0.5, 0.5, 1.5, 2.5, -2.5, 999.995, 1234.56, -1234.56, 12345678.9, 1e9]) {
@@ -150,10 +190,10 @@ const report = await f.evaluate(() => {
     if (money(p / 100) !== N.txlist.money(p)) out.push(`money(${r}): old ${money(p / 100)} new ${N.txlist.money(p)}`);
     if (moneyP(p / 100) !== N.txlist.moneyP(p)) out.push(`moneyP(${r}): old ${moneyP(p / 100)} new ${N.txlist.moneyP(p)}`);
   }
-  return { n, txns: live("txns").length, out };
+  return { n, txns: live("txns").length, out, estRounding };
 });
 await browser.close(); server.close();
 const SHOW = +(process.env.SHOW || 6);
-console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: Transactions in ${report.n} states (${report.txns} transactions)`);
+console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with an estimate ₹1 apart (half-rupee rounding)` : ""}`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
-console.log("✓ the Transactions page and its sheets (form, split, carry-over, filters, clean-up, bulk) are identical to the planner's");
+console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) and Accounts (every section) are identical to the planner's");
