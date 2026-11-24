@@ -46,7 +46,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.evaluate(() => { location.hash = "#/money/home"; }); await p.waitForTimeout(700);
   if (await p.$(`${V} [data-ptgo]`)) { await p.click(`${V} [data-ptgo]`); await p.waitForTimeout(700); ok(await f.evaluate(() => S.view === "plan" && S.planTab === "cashflow"), "Pay by Tuesday opens Plan › Cash flow"); await p.evaluate(() => { location.hash = "#/money/home"; }); await p.waitForTimeout(700); }
   await p.click(`${V} .advbtn`); await p.waitForTimeout(700);
-  ok(await frameShown() && await f.evaluate(() => S.view === "advisor"), "Ask your advisor opens the Advisor (still the planner's)");
+  ok(!(await frameShown()) && await f.evaluate(() => S.view === "advisor") && await p.$("#moneyView .advpills") !== null, "Ask your advisor opens the Advisor");
   await p.evaluate(() => { location.hash = "#/money/home"; }); await p.waitForTimeout(700);
   if (await p.$(`${V} #pickMain`)) { await p.click(`${V} #pickMain`); await settle(); ok(await frameShown() && await f.$("#modal .sheet") !== null, "Change account opens the planner's sheet"); await f.evaluate(() => closeModal()); await settle(); }
   ok(errors.length === 0, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);

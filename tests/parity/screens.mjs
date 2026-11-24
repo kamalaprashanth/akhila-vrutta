@@ -102,7 +102,7 @@ const report = await f.evaluate(() => {
     recurring: [...real.recurring,
       { id: "sipx", type: "investment", name: "Axis SIP", instrument: "Axis fund", invType: "Mutual Fund", amount: 5000, freq: "monthly", start: addM(nowM, -3), day: 28, accountId: acc, updatedAt: 1 },
       { id: "sipy", type: "investment", name: "Gold SIP", instrument: "Gullak", invType: "Gold", amount: 2000, charges: 30, freq: "monthly", start: addM(nowM, -3), day: 27, accountId: acc, updatedAt: 1 }],
-    settings: [...(real.settings || []).filter((x) => x.id !== "profile"), { id: "profile", updatedAt: 1, dob: "1985-05-20", retire: "58", kids: [{ id: "k1", name: "Anu", dob: "2016-08-10" }, { name: "Babu", dob: "2024-01-15" }] }],
+    settings: [...(real.settings || []).filter((x) => x.id !== "profile" && x.id !== "advcheck"), { id: "advcheck", updatedAt: 1, ym: nowM, at: `${nowM}-02`, quick: { verdict: "Mostly on track", pts: [{ ok: true, t: "Cash is fine" }, { ok: false, t: "Top up health cover" }] }, full: "## Cash\nFine" }, { id: "profile", updatedAt: 1, updated: "2025-05-01", wifeCat: cat, covered: ["me", "k0"], termCover: "10000000", healthSum: "500000", regime: "new", spouse: { name: "Asha", dob: "1988-03-03" }, depends: { father: true }, dob: "1985-05-20", retire: "58", kids: [{ id: "k1", name: "Anu", dob: "2016-08-10" }, { name: "Babu", dob: "2024-01-15" }] }],
     goals: [...(real.goals || []),
       { id: "ge1", kind: "edu", kidId: "k1", kid: 0, name: "Anu's education", pri: 3, school: 180000, ug: 2500000, pg: 3000000, inf: 9, ret: 12, holdings: ["hp"], updatedAt: 1 },
       { id: "ge2", kind: "edu", kid: 1, name: "Babu's education", pri: 4, updatedAt: 1 },
@@ -247,6 +247,21 @@ const report = await f.evaluate(() => {
     Object.assign(S, keep);
   };
   insPages(d2, "made-up");
+  const advPages = (dx, tag) => {
+    const keep = S.advChat;
+    // What Claude is sent: the whole picture, as text.
+    n++;
+    const a = ADV_RULES(advContext()) + "\n\nQUESTION: " + ADV_CHECK, b = N.advisor.ADV_RULES(N.advisor.advContext(dx)) + "\n\nQUESTION: " + ADV_CHECK;
+    const la = a.split("\n"), lb = b.split("\n");
+    const near = la.length === lb.length && la.every((x, k) => { const y = lb[k]; if (x === y) return true; const nx = x.match(/\d+/g) || [], ny = y.match(/\d+/g) || []; return x.replace(/\d+/g, "#") === y.replace(/\d+/g, "#") && nx.every((v, j) => Math.abs(+v - +ny[j]) <= 1); });
+    if (a !== b && near) estRounding++;
+    else if (a !== b) { let i = 0; while (i < a.length && a[i] === b[i]) i++; out.push(`${tag} advisor: what Claude is sent differs at ${i}\n    old …${a.slice(Math.max(0, i - 120), i + 120)}\n    new …${b.slice(Math.max(0, i - 120), i + 120)}`); }
+    const chats = [[], [{ role: "user", content: "x", q: "Full health check" }, { role: "assistant", content: "**Yes.**\n1. One **₹5,000** point\n2. Two\n## Heading\n- dot\nplain" }],
+      [{ role: "user", content: "x", q: "Q1" }, { role: "assistant", content: "A1" }, { role: "user", content: "y", q: "Go deeper", kind: "d" }, { role: "assistant", content: "## Area\nDeep" }]];
+    chats.forEach((c, i) => page(`${tag} advisor chat ${i}`, () => { S.advChat = JSON.parse(JSON.stringify(c)); return vAdvisor(); }, () => N.advisor.advisorHtml(dx, { advChat: JSON.parse(JSON.stringify(c)) }, false)));
+    S.advChat = keep;
+  };
+  advPages(d2, "made-up");
   sheets(d2, "made-up");
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
@@ -254,6 +269,7 @@ const report = await f.evaluate(() => {
   planPages(d, "yours");
   homePages(d, "yours");
   insPages(d, "yours");
+  advPages(d, "yours");
   Object.assign(S, save); MEMO = new Map();
   // Also the money formats, on awkward amounts.
   for (const r of [0, 0.004, 0.005, -0.5, 0.5, 1.5, 2.5, -2.5, 999.995, 1234.56, -1234.56, 12345678.9, 1e9]) {
@@ -268,4 +284,4 @@ const SHOW = +(process.env.SHOW || 6);
 console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with a total ₹1 apart (half-rupee rounding)` : ""}`);
 if (report.fixedCrash.length) console.log(`  (the old planner crashes on ${report.fixedCrash.length} of these — ${[...new Set(report.fixedCrash.map((l) => l.replace(/^(made-up|yours) /, "")))].join(", ")} — the new page shows them)`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
-console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview and Insights (every tab) are identical to the planner's");
+console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview, Insights (every tab) and the Advisor (page and what Claude is sent) are identical to the planner's");

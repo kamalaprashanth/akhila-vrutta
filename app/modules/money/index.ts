@@ -16,6 +16,7 @@ import { accountsPage } from "./views/accounts.ts";
 import { planPage } from "./views/plan.ts";
 import { homePage } from "./views/home.ts";
 import { insightsPage } from "./views/insights.ts";
+import { advisorPage, setAsk } from "./views/advisor.ts";
 import { mountPages } from "./views/pages.ts";
 import { ensureLayer, onSheet, toast as kitToast } from "./ui/kit.ts";
 import { prefGet, prefSet, setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
@@ -23,7 +24,7 @@ import { txnForm } from "./ui/txform.ts";
 import { mainAcc } from "./calc/forecast.ts";
 
 /** Planner pages that Akhila Vrutta now draws itself (the planner keeps their state and sheets). */
-const PAGES = { home: homePage, activity: txPage, accounts: accountsPage, plan: planPage, insights: insightsPage };
+const PAGES = { home: homePage, activity: txPage, accounts: accountsPage, plan: planPage, insights: insightsPage, advisor: advisorPage };
 const MOVED = new Set(Object.keys(PAGES));
 
 const ICON = "M3 7h18v12H3zM3 11h18M7 15h3";
@@ -266,7 +267,24 @@ function writeMoney(ops: MoneyWrite[]): void {
 }
 function refreshMoved(): void { if (onMoved) pages?.render(); }
 
+/** The Advisor asks Claude through Akhila Vrutta's askClaude function (signed in, same session). */
+function startAsk(): void {
+  setAsk(async (turns, signal) => {
+    const fn = await callable("askClaude", 300000);
+    const stop = new Promise<never>((_, rej) => { signal?.addEventListener("abort", () => rej({ code: "cancelled" }), { once: true }); });
+    try {
+      const r = await Promise.race([fn({ messages: turns.map((m) => ({ role: m.role, content: m.content })) }), stop]) as { data?: { text?: string } };
+      return { text: r.data?.text || "" };
+    } catch (e) {
+      const err = e as { code?: string; message?: string };
+      if (err?.code === "cancelled") throw e;
+      throw { code: String(err?.code || "error").replace(/^functions\//, ""), message: err?.message || "Couldn't get an answer." };
+    }
+  });
+}
+
 function startEnv(): void {
+  if (ctx.session) startAsk();
   setEnv({
     data: currentData,
     write: writeMoney,

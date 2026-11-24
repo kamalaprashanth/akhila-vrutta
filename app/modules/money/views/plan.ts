@@ -47,7 +47,7 @@ export function plannedRow(d: MoneyData, it: Row | (PlanItem & Partial<Row>), sh
 }
 
 /* ---------- regular items ---------- */
-function recNextLbl(d: MoneyData, r: Recurring): string {
+export function recNextLbl(d: MoneyData, r: Recurring): string {
   const now = ymOf(d.today), step = FREQ[String(r.freq)] || 1;
   if (!r.start) return "";
   let n = r.start >= now ? r.start : addM(r.start, Math.ceil(diffM(r.start, now) / step) * step);

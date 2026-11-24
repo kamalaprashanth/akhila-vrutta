@@ -98,7 +98,7 @@ async function unlockWithPass(page, pass) {
   await page.click("#lock .btn.pri");
 }
 /** Pages the app draws itself (the frame stays blank on them). */
-const MOVED = ["home", "activity", "accounts", "plan", "insights"];
+const MOVED = ["home", "activity", "accounts", "plan", "insights", "advisor"];
 async function moneyFrame(page, view = "more") {
   await page.goto(`${BASE}/#/money/${view}`);
   const f = await (await page.waitForSelector("#moneyFrame", { state: "attached", timeout: 20000 })).contentFrame();
@@ -151,6 +151,17 @@ try {
     catch (e) { return String(e && e.code); }
   });
   check(viaFrame === "functions/invalid-argument", `Advisor: the planner's call reaches askClaude as the owner (answer: ${viaFrame})`);
+  // The Advisor drawn by the app asks Claude itself: the call must reach askClaude as the owner (signed in),
+  // and whatever comes back (an answer, or why Claude couldn't be reached here) is shown, not a sign-in error.
+  await moneyFrame(A.page, "advisor");
+  const pillOn = await A.page.$eval("#moneyView [data-advq]", (b) => !b.disabled).catch(() => false);
+  check(pillOn, "Advisor (drawn by the app): the questions are enabled for the signed-in owner");
+  if (pillOn) {
+    await A.page.click("#moneyView [data-advq]");
+    let said = "";
+    for (let i = 0; i < 120 && !said; i++) { await A.page.waitForTimeout(500); said = await A.page.evaluate(() => { const t = document.querySelector("#mvLayer .toast"); const a = document.querySelector("#moneyView .adva:not(#advLive)"); return t ? "toast: " + t.textContent : a ? "answer" : ""; }); }
+    check(!!said && !/permission|sign in|allowed/i.test(said), `Advisor: the app's own call reaches askClaude (${said || "nothing came back"})`);
+  }
 
   progress("edit and reload");
   /* 4. An edit in the planner is saved: encrypted, in paise, and comes back after a reload */

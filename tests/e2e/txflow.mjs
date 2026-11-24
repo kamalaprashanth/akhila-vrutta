@@ -164,8 +164,8 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok(!(await sheetUp()), "…and closes");
 
   // Another tab and back.
-  await p.evaluate(() => { location.hash = "#/money/advisor"; }); await p.waitForTimeout(700);
-  ok(await frameShown() && await p.$eval("#moneyView", (e) => e.hidden), "the Advisor is the planner's page");
+  await p.evaluate(() => { location.hash = "#/money/more"; }); await p.waitForTimeout(700);
+  ok(await frameShown() && await p.$eval("#moneyView", (e) => e.hidden), "Money settings is the planner's page");
   // A sheet on a planner page: full screen, then back to its normal place.
   await f.evaluate(() => txFilterSheet()); await settle();
   ok(await p.$eval("#moneyFrame", (e) => e.classList.contains("over") && e.getBoundingClientRect().top === 0), "a planner page's sheet also fills the screen");

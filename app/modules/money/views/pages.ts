@@ -38,7 +38,7 @@ export interface Page {
 const KEYS = "[data-tx],[data-hold],[data-rec],[data-loan],[data-acc],[data-card]";
 const keyOf = (e: Element): string | null => e.getAttribute("data-tx") || e.getAttribute("data-hold") || e.getAttribute("data-rec") || e.getAttribute("data-loan") || e.getAttribute("data-acc") || e.getAttribute("data-card");
 /** Everything tappable on a page: data-* targets, buttons with an id, role=button rows. */
-const TAP = "[data-ins],[data-hm],[data-hmt],[data-hmo],[data-hmo2],[data-yr],[data-ytab],[data-taxfy],[data-trn],[data-trp],[data-trd],[data-ymc],[data-day],[data-mi],[data-cat],[data-insopen],[data-ptnext],[data-ptgo],[data-ptpay],[data-invpay],[data-invall],[data-hyr],[data-homem],[data-pt],[data-h],[data-bcm],[data-bcd],[data-repign],[data-repadd],[data-pay],[data-miss],[data-undo],[data-cpay],[data-rec],[data-goal],[data-emcat],[data-holi],[data-ptmove],[data-ptaside],[data-acct],[data-nwn],[data-hg],[data-hgo],[data-po],[data-card],[data-loan],[data-acc],[data-hold],[data-prop],[data-pact],[data-ym],[data-tx],[data-ftag],[data-ftype],[data-fcat],[data-fclear],[data-view],[data-bulk],[data-m],[data-go],[data-ins],button[id],[role=button]";
+const TAP = "[data-advq],[data-ins],[data-hm],[data-hmt],[data-hmo],[data-hmo2],[data-yr],[data-ytab],[data-taxfy],[data-trn],[data-trp],[data-trd],[data-ymc],[data-day],[data-mi],[data-cat],[data-insopen],[data-ptnext],[data-ptgo],[data-ptpay],[data-invpay],[data-invall],[data-hyr],[data-homem],[data-pt],[data-h],[data-bcm],[data-bcd],[data-repign],[data-repadd],[data-pay],[data-miss],[data-undo],[data-cpay],[data-rec],[data-goal],[data-emcat],[data-holi],[data-ptmove],[data-ptaside],[data-acct],[data-nwn],[data-hg],[data-hgo],[data-po],[data-card],[data-loan],[data-acc],[data-hold],[data-prop],[data-pact],[data-ym],[data-tx],[data-ftag],[data-ftype],[data-fcat],[data-fclear],[data-view],[data-bulk],[data-m],[data-go],[data-ins],button[id],[role=button]";
 
 export function mountPages(box: HTMLElement, pages: Record<string, Page>, host: PageHost) {
   const view = (): HTMLElement => box.querySelector<HTMLElement>("#view")!;
@@ -76,7 +76,10 @@ export function mountPages(box: HTMLElement, pages: Record<string, Page>, host: 
     if (t.closest("label[for], input, select, textarea, details > summary")) return;   // native controls behave natively
     // Any button counts too, so nothing tappable is missed (passed to the planner if the page doesn't handle it).
     const el = t.closest<HTMLElement>(TAP) ?? t.closest<HTMLElement>("button");
-    if (el && box.contains(el)) act(el);
+    if (el && box.contains(el)) {
+      if (el.matches('a[href="#"]')) e.preventDefault();   // a link the page handles itself, not an address
+      act(el);
+    }
   });
   box.addEventListener("keydown", (e) => {
     const t = e.target as HTMLElement;

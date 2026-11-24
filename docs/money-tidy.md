@@ -26,5 +26,8 @@ Each step ships on its own: branch → CI (cloud tests) → main → release, ch
 6. Overview (views/home.ts) — done. Pay/Move/Set aside/Invest buttons, Change account and the Advisor still
    open in the planner.
 7. Insights (views/insights.ts) — done. Fixed: the Year › Reserve tab crashed for a year with no months yet.
-   Year in review, month-item sheet, category limits form still open in the planner. 8. Advisor. 9. Money settings (more).
+   Year in review, month-item sheet, category limits form still open in the planner.
+8. Advisor (views/advisor.ts) — done; asks Claude via askClaude itself. The monthly check-up still also runs
+   automatically from the planner (render hook) until the frame goes.
+9. 9. Money settings (more).
 10. Remove the frame; switch-over (import button goes, old app read-only for a month).
