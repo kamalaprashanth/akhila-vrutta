@@ -36,6 +36,7 @@ for (const [localId, who] of [[OWNER_UID, "owner"], ["intruder-uid", "intruder"]
 }
 async function idToken(who) {
   const r = await api(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=test-api-key`, { method: "POST", body: JSON.stringify({ email: `${who}@test.local`, password: "test-password-123", returnSecureToken: true }) }, "none");
+  if (!r.body.idToken) throw new Error(`test sign-in failed for ${who}: ${JSON.stringify(r.body).slice(0, 200)}`);
   return r.body.idToken;
 }
 
@@ -191,15 +192,18 @@ try {
   ok("another Google account is told it isn't allowed");
   await shot(X.page, "intruder");
   const intr = await idToken("intruder");
-  check((await api(`${FS}/homes/${home}`, {}, intr)).status === 403, "rules: another account can't read the home");
-  check((await api(`${FS}/homes/${home}/txns?pageSize=5`, {}, intr)).status === 403, "rules: another account can't list records");
-  check((await api(`${FS}/users?pageSize=5`, {}, intr)).status === 403, "rules: another account can't list users");
-  const plain = await api(`${FS}/homes/${home}/txns?documentId=plain1`, { method: "POST", body: JSON.stringify({ fields: { amount: { integerValue: "500" } } }) }, owner);
-  check(plain.status === 403, "rules: even the owner can't save an unencrypted record");
-  const odd = await api(`${FS}/homes/${home}/secrets?documentId=x`, { method: "POST", body: JSON.stringify({ fields: { iv: { stringValue: "AAAAAAAAAAAAAAAA" }, ct: { stringValue: "abc" }, by: { stringValue: OWNER_UID } } }) }, owner);
-  check(odd.status === 403, "rules: records can't go into unknown collections");
-  const other = await api(`${FS}/homes/${home}/keys/${OWNER_UID}`, {}, intr);
-  check(other.status === 403, "rules: another account can't read the wrapped key");
+  check(typeof intr === "string" && intr.length > 20 && typeof owner === "string" && owner.length > 20, "test sign-in tokens obtained");
+  const denied = async (label, p) => { const r = await p; check(r.status === 403, `rules: ${label} (HTTP ${r.status}${r.status === 403 ? "" : " " + JSON.stringify(r.body).slice(0, 160)})`); };
+  await denied("another account can't read the home", api(`${FS}/homes/${home}`, {}, intr));
+  await denied("another account can't list records", api(`${FS}/homes/${home}/txns?pageSize=5`, {}, intr));
+  await denied("another account can't read the wrapped key", api(`${FS}/homes/${home}/keys/${OWNER_UID}`, {}, intr));
+  await denied("another account can't read the owner's account record", api(`${FS}/users/${OWNER_UID}`, {}, intr));
+  await denied("even the owner can't save an unencrypted record",
+    api(`${FS}/homes/${home}/txns?documentId=plain1`, { method: "POST", body: JSON.stringify({ fields: { amount: { integerValue: "500" } } }) }, owner));
+  await denied("records can't go into unknown collections",
+    api(`${FS}/homes/${home}/secrets?documentId=x`, { method: "POST", body: JSON.stringify({ fields: { iv: { stringValue: "AAAAAAAAAAAAAAAA" }, ct: { stringValue: "abc" }, by: { stringValue: OWNER_UID } } }) }, owner));
+  const ownRead = await api(`${FS}/homes/${home}`, {}, owner);
+  check(ownRead.status === 200, `rules: the owner can read their home (HTTP ${ownRead.status})`);
 
   for (const d of [A, B, C, X]) await d.ctx.close();
 } catch (e) {
