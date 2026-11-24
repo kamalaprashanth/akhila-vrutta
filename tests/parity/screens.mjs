@@ -32,6 +32,7 @@ await f.addScriptTag({ content: screens });
 
 const report = await f.evaluate(() => {
   const N = window.SCREENS, out = [];
+  ensureSmartGoals();   // the planner creates goals from the profile once; do it before taking the data
   const d = N.dataFrom(S.data, today());
   let dd = d;
   const blank = (x = {}) => ({ type: "all", cat: "", acc: "", tag: "", period: "month", from: "", to: "", q: "", ...x });
@@ -90,9 +91,20 @@ const report = await f.evaluate(() => {
       X({ type: "income", amount: 777, note: "no category" }), X({ type: "expense", amount: -250, categoryId: cat, note: "refund" }),
       X({ type: "transfer", amount: 5000, toAccountId: live("accounts")[1]?.id, note: "to savings", date: `${ym1}-20` }),
       X({ type: "expense", amount: 100, categoryId: "gone-cat", note: "category deleted" }),
+      // A small repeat (₹50 a month): too small to suggest as a regular item.
+      ...[1, 2, 3, 4, 5].map((k) => X({ type: "expense", amount: 50, categoryId: cat, note: "chai club", date: `${addM(nowM, -k)}-07` })),
+      // A ₹450 monthly repeat on the same account: suggested.
+      ...[1, 2, 3, 4, 5].map((k) => X({ type: "expense", amount: 450 + (k % 2), categoryId: cat, note: "newspaper", date: `${addM(nowM, -k)}-03` })),
       // Your own PPF deposit, 50 paise off the statement's: the statement line isn't listed twice.
       X({ type: "investment", amount: 1500.5, instrument: "PPF2", date: `${ym1}-12` }),
     ],
+    settings: [...(real.settings || []).filter((x) => x.id !== "profile"), { id: "profile", updatedAt: 1, dob: "1985-05-20", retire: "58", kids: [{ id: "k1", name: "Anu", dob: "2016-08-10" }, { name: "Babu", dob: "2024-01-15" }] }],
+    goals: [...(real.goals || []),
+      { id: "ge1", kind: "edu", kidId: "k1", kid: 0, name: "Anu's education", pri: 3, school: 180000, ug: 2500000, pg: 3000000, inf: 9, ret: 12, holdings: ["hp"], updatedAt: 1 },
+      { id: "ge2", kind: "edu", kid: 1, name: "Babu's education", pri: 4, updatedAt: 1 },
+      { id: "gr", kind: "retire", name: "Retirement", pri: 5, spend: 85000, inf: 6.5, life: 88, pre: 10.5, post: 7.5, updatedAt: 1 },
+      { id: "gc", kind: "custom", name: "New car", pri: 6, target: 900000, saved: 125000.5, by: addM(nowM, 18), holdings: ["he"], updatedAt: 1 },
+      { id: "gc2", kind: "custom", name: "Past trip", target: 50000, by: addM(nowM, -1), updatedAt: 1 }],
     holdings: [...real.holdings,
       { id: "hp", type: "PPF", instrument: "PPF2", name: "PPF2", rate: 7.1, updatedAt: 1, ppf: { opened: "2018-05-01", stmtDate: `${addM(nowM, -3)}-01`, rows: [{ k: "dep", d: "2025-05-01", amt: 1000 }, { k: "int", d: "2026-03-31", amt: 71.25 }, { k: "dep", d: `${ym1}-10`, amt: 1500 }],
         manual: [{ id: "m1", k: "dep", d: `${ym1}-04`, amt: 500 }, { id: "m2", k: "wd", d: `${nowM}-01`, amt: 200 }] } },
@@ -144,7 +156,7 @@ const report = await f.evaluate(() => {
   const page = (label, oldFn, newFn) => {
     n++;
     S.cwFixed = 640; N.charts.setChartWidth(640);
-    for (const k in CH) delete CH[k]; chSeq = 0; N.charts.resetCharts();
+    for (const k in CH) delete CH[k]; chSeq = 0; N.charts.resetCharts(); MEMO = new Map();
     const a = oldFn(), b = newFn();
     if (a !== b && sameButEstimates(a, b)) { estRounding++; return; }
     if (a !== b) { let i = 0; while (i < a.length && a[i] === b[i]) i++; out.push(`${label}: differs at ${i}\n    old …${a.slice(Math.max(0, i - 100), i + 140)}\n    new …${b.slice(Math.max(0, i - 100), i + 140)}`); }
@@ -179,10 +191,31 @@ const report = await f.evaluate(() => {
     Object.assign(S, keep);
   };
   accPages(d2, "made-up");
+  const planPages = (dx, tag) => {
+    const keep = { planTab: S.planTab, fcH: S.fcH, bcM: S.bcM, bcD: S.bcD }, keepP = ["fcMin", "repIgnore"].map((k) => [k, localStorage.getItem("kpmp.ui." + k)]);
+    const host = { pref: (k, v) => prefGet(k, v) }, nowM = ymOf(today());
+    const run = (label, st, pf = {}) => {
+      for (const [k, v] of Object.entries(pf)) prefSet(k, v);
+      page(`${tag} plan ${label}`, () => { Object.assign(S, { planTab: undefined, fcH: 12, bcM: undefined, bcD: undefined }, st); return vPlan(); }, () => N.plan.planHtml(dx, { fcH: 12, ...st }, host));
+      for (const k of Object.keys(pf)) localStorage.removeItem("kpmp.ui." + k);
+    };
+    for (const t of ["month", "regular", "goals", undefined, "ready"]) run(`tab ${t}`, { planTab: t });
+    for (const h of [6, 12, 24]) run(`cash flow ${h} months`, { planTab: "cashflow", fcH: h });
+    run("cash flow, keep at least ₹50,000", { planTab: "cashflow" }, { fcMin: 50000 });
+    run("cash flow, keep at least ₹99 lakh", { planTab: "cashflow" }, { fcMin: 9900000 });
+    for (const k of [-2, -1, 0, 1, 3]) run(`calendar ${addM(nowM, k)}`, { planTab: "calendar", bcM: addM(nowM, k) });
+    for (const dd of ["01", "05", "10", "15", "28"]) run(`calendar day ${dd}`, { planTab: "calendar", bcD: `${nowM}-${dd}` });
+    const reps = findRepeats();
+    if (reps.length) run("regular, one repeat ignored", { planTab: "regular" }, { repIgnore: [reps[0].key] });
+    for (const [k, v] of keepP) { if (v == null) localStorage.removeItem("kpmp.ui." + k); else localStorage.setItem("kpmp.ui." + k, v); }
+    Object.assign(S, keep);
+  };
+  planPages(d2, "made-up");
   sheets(d2, "made-up");
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
   accPages(d, "yours");
+  planPages(d, "yours");
   Object.assign(S, save); MEMO = new Map();
   // Also the money formats, on awkward amounts.
   for (const r of [0, 0.004, 0.005, -0.5, 0.5, 1.5, 2.5, -2.5, 999.995, 1234.56, -1234.56, 12345678.9, 1e9]) {
@@ -196,4 +229,4 @@ await browser.close(); server.close();
 const SHOW = +(process.env.SHOW || 6);
 console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with an estimate ₹1 apart (half-rupee rounding)` : ""}`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
-console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) and Accounts (every section) are identical to the planner's");
+console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section) and Plan (every tab) are identical to the planner's");

@@ -12,7 +12,7 @@ const EPF_FY = "epf.books.*.fys.*";
 const SYNCS = ["syncs[].bal", "syncs[].was"];
 
 /** Bumped whenever MONEY_FIELDS changes: stored data from an older list must be imported again. */
-export const AMOUNTS_VERSION = "paise-5";
+export const AMOUNTS_VERSION = "paise-6";
 
 export const MONEY_FIELDS: Record<string, string[]> = {
   accounts: ["opening", "minBal", "reserveStart", "emTarget"],
@@ -30,7 +30,8 @@ export const MONEY_FIELDS: Record<string, string[]> = {
     "stmt.chg", "stmt.int", "stmt.out", "stmt.pemi", "stmt.prin", "fund.start"],
   propItems: ["amt", "loanAmt", "funds[].amt"],
   snaps: ["banks", "cards", "inv", "loans", "prop", "total"],
-  goals: ["target", "saved"],
+  // Education costs (school, graduation, post-grad) and retirement spending, in today's rupees.
+  goals: ["target", "saved", "school", "ug", "pg", "spend"],
 };
 
 /**
@@ -41,7 +42,7 @@ export const MONEY_FIELDS: Record<string, string[]> = {
 export const NOT_MONEY: Record<string, string[]> = {
   "*": ["updatedAt"],
   accounts: ["dueDay", "stmtDay"],
-  goals: ["pri"],
+  goals: ["pri", "kid", "inf", "ret", "life", "pre", "post"],
   recurring: ["day", "remind"],
   loans: ["day", "rate", "tenure", "gstRate", "rates[].rate", "bank.day", "bank.rate", "bank.tenure", "bank.rates[].rate", "plans[].day"],
   holdings: ["rate", "fx", "price", "openUnits", "usdCost", "navHist[][]", "priceJump.from", "priceJump.to",

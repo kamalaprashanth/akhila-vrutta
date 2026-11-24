@@ -13,14 +13,15 @@ import { AMOUNTS_VERSION, fromStored, toStored, unclassified } from "./paise.ts"
 import { callable, initFirebase } from "../../core/firebase.ts";
 import { moneyData, txPage, type PlannerState } from "./views/transactions.ts";
 import { accountsPage } from "./views/accounts.ts";
+import { planPage } from "./views/plan.ts";
 import { mountPages } from "./views/pages.ts";
-import { ensureLayer, onSheet } from "./ui/kit.ts";
+import { ensureLayer, onSheet, toast as kitToast } from "./ui/kit.ts";
 import { prefGet, prefSet, setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
 import { txnForm } from "./ui/txform.ts";
 import { mainAcc } from "./calc/forecast.ts";
 
 /** Planner pages that Akhila Vrutta now draws itself (the planner keeps their state and sheets). */
-const PAGES = { activity: txPage, accounts: accountsPage };
+const PAGES = { activity: txPage, accounts: accountsPage, plan: planPage };
 const MOVED = new Set(Object.keys(PAGES));
 
 const ICON = "M3 7h18v12H3zM3 11h18M7 15h3";
@@ -245,6 +246,8 @@ function ensureBox(): HTMLElement {
     plannerClick: (attrs) => { api?.call("click", attrs); },
     go: (v) => api?.go(v),
     plannerFiles: (name, files) => { api?.call("files", name, files); },
+    plannerCall: (name) => { api?.call("run", name); },
+    toast: kitToast,
   });
   return box;
 }

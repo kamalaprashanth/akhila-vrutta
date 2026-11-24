@@ -21,6 +21,9 @@ export interface PageHost {
   go(view: string): void;
   /** Hands files to the planner (tradebook import). */
   plannerFiles(name: string, files: File[]): void;
+  /** Runs one of the planner's functions that saves something (goals from the profile). */
+  plannerCall(name: string): void;
+  toast(t: string): void;
 }
 export interface Page {
   html(d: MoneyData, h: PageHost): string;
@@ -35,7 +38,7 @@ export interface Page {
 const KEYS = "[data-tx],[data-hold],[data-rec],[data-loan],[data-acc],[data-card]";
 const keyOf = (e: Element): string | null => e.getAttribute("data-tx") || e.getAttribute("data-hold") || e.getAttribute("data-rec") || e.getAttribute("data-loan") || e.getAttribute("data-acc") || e.getAttribute("data-card");
 /** Everything tappable on a page: data-* targets, buttons with an id, role=button rows. */
-const TAP = "[data-acct],[data-nwn],[data-hg],[data-hgo],[data-po],[data-card],[data-loan],[data-acc],[data-hold],[data-prop],[data-pact],[data-ym],[data-tx],[data-ftag],[data-ftype],[data-fcat],[data-fclear],[data-view],[data-bulk],[data-m],[data-go],[data-ins],button[id],[role=button]";
+const TAP = "[data-pt],[data-h],[data-bcm],[data-bcd],[data-repign],[data-repadd],[data-pay],[data-miss],[data-undo],[data-cpay],[data-rec],[data-goal],[data-emcat],[data-holi],[data-ptmove],[data-ptaside],[data-acct],[data-nwn],[data-hg],[data-hgo],[data-po],[data-card],[data-loan],[data-acc],[data-hold],[data-prop],[data-pact],[data-ym],[data-tx],[data-ftag],[data-ftype],[data-fcat],[data-fclear],[data-view],[data-bulk],[data-m],[data-go],[data-ins],button[id],[role=button]";
 
 export function mountPages(box: HTMLElement, pages: Record<string, Page>, host: PageHost) {
   const view = (): HTMLElement => box.querySelector<HTMLElement>("#view")!;
