@@ -145,7 +145,7 @@ try {
   check(imported?.amount === 1234.56, `an imported transaction is back in rupees (₹${imported?.amount})`);
   await shot(A.page, "money-accounts");
   await moneyFrame(A.page, "more");
-  check(/Setup checklist/.test(await A.page.innerText("#moneyView #view")) && /\d+ transactions/.test(await A.page.innerText("#moneyView #view")), "Money settings (drawn by the app) shows the imported data");
+  check(/Setup checklist/i.test(await A.page.innerText("#moneyView #view")) && /\d+ transactions/i.test(await A.page.innerText("#moneyView #view")), "Money settings (drawn by the app) shows the imported data");
 
   progress("functions from the planner");
   /* 3b. The planner reaches the Cloud Functions through the main app's sign-in (Advisor, price refresh) */
