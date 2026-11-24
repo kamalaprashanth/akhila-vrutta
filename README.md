@@ -35,7 +35,7 @@ A local build has no Firebase config, so sign-in is switched off. In CI the
 | Every tab renders, phone and laptop | `tests/e2e` | every push |
 | Cloud: sign-in, passphrase, import, encrypted saving, reload, second device, sync, passphrase change, fingerprint, another account refused, database rules | `tests/cloud` on Firebase emulators | every push |
 | Money pages identical to KP Money Planner on a real export | `tests/parity` | locally, with `AV_EXPORT` and `OLD_APP` |
-| Files, types, headers, real CSP, lock screen, money frame on a deployed address | `tests/live` | preview and live, on `main` |
+| Files, types, headers, real CSP, lock screen, the old planner not served, on a deployed address | `tests/live` | preview and live, on `main` |
 
 ## Deploys
 

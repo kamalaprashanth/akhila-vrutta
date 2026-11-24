@@ -28,6 +28,7 @@ const fake = new FakeStore();
 for (const [c, list] of Object.entries(p.records)) fake.data.set(c, new Map(list.map((r) => [r.id, r])));
 (window as unknown as { FAKE: FakeStore }).FAKE = fake;
 (ctx as unknown as { store: FakeStore }).store = fake;
+(window as unknown as { AV_TEST: boolean }).AV_TEST = true;   // the planner's names (S, go, upsert…) as test hooks
 document.body.dataset.mod = "money";
 const render = () => money.render(document.getElementById("main")!);
 window.addEventListener("hashchange", render);

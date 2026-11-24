@@ -97,15 +97,12 @@ async function unlockWithPass(page, pass) {
   await page.fill("#lk_p", pass);
   await page.click("#lock .btn.pri");
 }
-/** Pages the app draws itself (the frame stays blank on them). */
-const MOVED = ["home", "activity", "accounts", "plan", "insights", "advisor", "more", "card", "loan", "epf", "ppf", "nps", "prop"];
+/** Opens a money page; the planner's names (S, go, upsert, uid) are test hooks on the app's page (emulator build only). */
 async function moneyFrame(page, view = "accounts") {
   await page.goto(`${BASE}/#/money/${view}`);
-  const f = await (await page.waitForSelector("#moneyFrame", { state: "attached", timeout: 20000 })).contentFrame();
-  // Transactions is drawn by the app itself; the planner pages are drawn in the frame.
-  if (MOVED.includes(view)) { await page.waitForSelector("#moneyView #view > *", { timeout: 20000 }); await f.waitForFunction(() => typeof S === "object" && !!S.data); }
-  else await f.waitForSelector("#view *", { timeout: 20000 });
-  return f;
+  await page.waitForSelector("#moneyView #view > *", { timeout: 20000 });
+  await page.waitForFunction(() => typeof S === "object" && !!S.data);
+  return page;
 }
 const plannerTxns = (f) => f.evaluate(() => S.data.txns.filter((t) => !t.deleted).map((t) => ({ note: t.note, amount: t.amount })));
 
@@ -130,14 +127,12 @@ try {
   /* 3. The Money tab: the planner frame loads with its styles (today's bug) and shows the data */
   let f = await moneyFrame(A.page);
   const styled = await f.evaluate(() => {
-    const sheets = [...document.styleSheets].filter((s) => { try { return s.cssRules.length > 50; } catch { return false; } }).length;
-    const bodyFont = getComputedStyle(document.body).fontFamily;
-    // Every page is drawn by the app now, so the frame's styles are checked on a card made for the purpose.
-    const card = document.createElement("div"); card.className = "card"; document.body.appendChild(card);
-    const radius = getComputedStyle(card).borderRadius; card.remove();
-    return { sheets, bodyFont, radius, script: typeof S === "object" };
+    const card = document.querySelector("#moneyView .card"), font = card ? getComputedStyle(card).fontFamily : "";
+    return { frame: !!document.querySelector("#moneyFrame, iframe[src*='money/app']"), radius: card ? getComputedStyle(card).borderRadius : "none", font };
   });
-  check(styled.sheets >= 1 && styled.radius !== "0px" && styled.radius !== "none" && styled.script, `money frame has its styles and script (${JSON.stringify(styled)})`);
+  check(!styled.frame && styled.radius !== "0px" && styled.radius !== "none", `Money is drawn by the app with the planner's look, and no planner frame is loaded (${JSON.stringify(styled)})`);
+  { const pg = await fetch(`${BASE}/money/app`), js = await fetch(`${BASE}/money/legacy.js`), pt = await pg.text(), jt = await js.text();
+    check(!pt.includes("legacy.js") && !jt.includes("01-core.js"), `the old planner isn't served (/money/app ${pg.status}, /money/legacy.js ${js.status})`); }
   await moneyFrame(A.page, "accounts");
   check(/Net worth/i.test(await A.page.innerText("#moneyView #view")) && /Test Bank|Net worth/.test(await A.page.innerText("#moneyView #view")), "Accounts (drawn by the app) shows the imported data");
   const fT = await moneyFrame(A.page, "activity");
@@ -170,14 +165,6 @@ try {
     const h = await f.evaluate(() => S.data.holdings.find((x) => x.name === "Cloud Flexi Cap" && !x.deleted));
     check(h && h.openInvested === 25000.5 && h.openUnits === 250 && h.price === 110, `an investment added with the app's form comes back the same after a reload (₹${h?.openInvested} invested, ${h?.openUnits} units at ₹${h?.price})`); }
 
-  progress("functions from the planner");
-  /* 3b. The planner reaches the Cloud Functions through the main app's sign-in (Advisor, price refresh) */
-  const viaFrame = await f.evaluate(async () => {
-    const limit = new Promise((_, rej) => setTimeout(() => rej({ code: "test-timeout" }), 60000));
-    try { const fn = await Promise.race([AVB.callable("askClaude", 30000), limit]); await Promise.race([fn({ messages: [] }), limit]); return "no error"; }
-    catch (e) { return String(e && e.code); }
-  });
-  check(viaFrame === "functions/invalid-argument", `Advisor: the planner's call reaches askClaude as the owner (answer: ${viaFrame})`);
   // The Advisor drawn by the app asks Claude itself: the call must reach askClaude as the owner (signed in),
   // and whatever comes back (an answer, or why Claude couldn't be reached here) is shown, not a sign-in error.
   await moneyFrame(A.page, "advisor");

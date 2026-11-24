@@ -32,10 +32,10 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   const errors = [];
   p.on("pageerror", (e) => errors.push(e.message));
   await p.goto(`${base}/harness.html#/money/advisor`);
-  const f = await (await p.waitForSelector("#moneyFrame", { state: "attached" })).contentFrame();
+  const f = p;   // the planner's names (S, go, upsert, byId…) are test hooks on the app's page; there is no frame
   const V = "#moneyView #view";
   await p.waitForSelector(`${V} .advpills`, { timeout: 15000 });
-  const frameShown = () => p.$eval("#moneyFrame", (e) => !e.hidden && getComputedStyle(e).display !== "none");
+  const frameShown = async () => !!(await p.$("#moneyFrame"));   // never: the planner frame is gone
   ok(!(await frameShown()), "the Advisor is drawn by the app");
   ok((await p.$$(`${V} [data-advq]`)).length === 8, "eight quick questions");
   ok(await p.$eval(`${V} [data-advq]`, (b) => b.disabled), "…off without a sign-in (this test has none; the cloud test asks for real)");

@@ -1,7 +1,6 @@
 /**
- * Money pages drawn by Akhila Vrutta. Each page builds its HTML from the stored data and the planner's shared
- * page state, and handles its own taps; any tap it doesn't handle yet (a form or page still in the planner)
- * is passed to the planner as if it had been tapped there.
+ * Money pages drawn by Akhila Vrutta. Each page builds its HTML from the stored data and the shared page
+ * state, and handles its own taps; the rest (forms, links to other pages) are answered by ui/actions.ts.
  */
 import type { MoneyData } from "../calc/data.ts";
 import { dress } from "./txlist.ts";
@@ -14,21 +13,15 @@ export interface PageHost {
   state(): PlannerState & Record<string, unknown>;
   pref<T>(k: string, d: T): T;
   prefSet(k: string, v: unknown): void;
-  /** HTML only the planner can draw yet (prices status line). */
+  /** A fragment drawn elsewhere (the prices status line). */
   plannerHtml(name: string): string;
-  /** Passes a tap to the planner (its data-* attributes and id). */
-  plannerClick(attrs: Record<string, string>): void;
   /** Goes to another money page. */
   go(view: string): void;
-  /** Hands files to the planner (tradebook import). */
-  plannerFiles(name: string, files: File[]): void;
-  /** Runs one of the planner's functions that saves something (goals from the profile). */
-  plannerCall(name: string): void;
   toast(t: string): void;
 }
 export interface Page {
   html(d: MoneyData, h: PageHost): string;
-  /** Handles a tap; false: not handled here (passed to the planner). */
+  /** Handles a tap; false: not handled here (ui/actions.ts answers it). */
   act?(el: HTMLElement, h: PageHost, redraw: () => void): boolean | void;
   change?(el: HTMLInputElement, h: PageHost, redraw: () => void): boolean | void;
   input?(el: HTMLInputElement, h: PageHost, redraw: () => void): boolean | void;
@@ -71,12 +64,12 @@ export function mountPages(box: HTMLElement, pages: Record<string, Page>, host: 
     if (p.act && p.act(el, host, redraw) !== false) return;
     if (appAct(el, host.data())) return;
     const a = attrsOf(el);
-    if (Object.keys(a).length) host.plannerClick(a);
+    if (Object.keys(a).length) console.debug("[money] tap not handled:", a);
   }
   box.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     if (t.closest("label[for], input, select, textarea, details > summary")) return;   // native controls behave natively
-    // Any button counts too, so nothing tappable is missed (passed to the planner if the page doesn't handle it).
+    // Any button counts too, so nothing tappable is missed (answered by the page, else by ui/actions.ts).
     const el = t.closest<HTMLElement>(TAP) ?? t.closest<HTMLElement>("button");
     if (el && box.contains(el)) {
       if (el.matches('a[href="#"]')) e.preventDefault();   // a link the page handles itself, not an address

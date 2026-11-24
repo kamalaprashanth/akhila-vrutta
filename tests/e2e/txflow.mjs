@@ -32,8 +32,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   const errors = [];
   p.on("pageerror", (e) => errors.push(e.message));
   await p.goto(`${base}/harness.html#/money/activity`);
-  const frameEl = await p.waitForSelector("#moneyFrame", { state: "attached" });
-  const f = await frameEl.contentFrame();
+  const f = p;   // the planner's names (S, go, upsert, byId…) are test hooks on the app's page; there is no frame
   const V = "#moneyView #view";
   await p.waitForSelector(`${V} .sumcard`, { timeout: 15000 });
   // The sample's entries are dated November 2026: show that month whatever today is.
@@ -41,7 +40,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await f.evaluate(() => { S.month = "2026-11"; go("activity"); });
   await p.waitForSelector(`${V} .dayhd`, { timeout: 15000 });
   const rows = () => p.$$eval(`${V} .row[data-tx] .t`, (es) => es.map((e) => e.textContent));
-  const frameShown = () => p.$eval("#moneyFrame", (e) => !e.hidden && getComputedStyle(e).display !== "none");
+  const frameShown = async () => !!(await p.$("#moneyFrame"));   // never: the planner frame is gone
   const settle = () => p.waitForTimeout(450);
 
   ok(!(await frameShown()), "the page is drawn by the app; the planner frame is hidden");
@@ -166,14 +165,13 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   // Another tab and back (every money page is drawn by the app now).
   await p.evaluate(() => { location.hash = "#/money/more"; }); await p.waitForTimeout(700);
   ok(!(await frameShown()) && /Setup checklist/i.test(await p.textContent("#moneyView #view")), "Money settings is the app's page too");
-  // A planner sheet on an app page: full screen, then the frame hides again.
+  // A sheet over a page: above the tabs, the + button hidden while it's open, back to the page after.
   await f.evaluate(() => txFilterSheet()); await settle();
-  ok(await p.$eval("#moneyFrame", (e) => e.classList.contains("over") && e.getBoundingClientRect().top === 0), "a planner sheet fills the screen");
+  ok(await p.$eval("#mvLayer #modal .sheet", (e) => !!e) && await p.evaluate(() => document.body.classList.contains("msheet")), "a sheet opens over the page (the + button hidden)");
   await f.evaluate(() => closeModal()); await settle();
-  ok(!(await frameShown()) && await p.$eval("#moneyFrame", (e) => !e.classList.contains("over")), "…and the frame hides again");
-  ok(await f.evaluate(() => !document.documentElement.classList.contains("avfull") && !document.documentElement.classList.contains("avonly")), "…with the planner's page back in place");
+  ok(!(await p.evaluate(() => document.body.classList.contains("msheet"))) && /Setup checklist/i.test(await p.textContent("#moneyView #view")), "…and closes back to the page");
 
-  // A link from another planner page into Transactions, with its filter.
+  // A link from another page into Transactions, with its filter.
   await f.evaluate(() => { S.f = { type: "expense", cat: "", acc: "", tag: "", period: "custom", from: "2026-11-02", to: "2026-11-03", q: "" }; go("activity"); }); await p.waitForTimeout(700);
   ok(!(await frameShown()) && (await rows()).length === 2, "a link from another page opens Transactions with its filter");
   await f.evaluate(() => { S.f = null; }); await p.evaluate(() => { location.hash = "#/money/home"; }); await p.waitForTimeout(500);

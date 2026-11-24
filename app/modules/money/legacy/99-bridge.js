@@ -1,5 +1,5 @@
-/* Bridge to Akhila Vrutta. The parent page owns the data: it decrypts it, hands it over in rupees,
-   and saves back whatever changed (in paise, encrypted, one record at a time). */
+/* Bridge to the page hosting the old planner. Akhila Vrutta no longer loads it: only the parity tests do (tests/parity/oracle.ts),
+   handing it the export in rupees, so the rewritten pages can be compared with the planner character for character. */
 const AVB = (() => { try { return window.parent !== window ? window.parent.AV_MONEY : null; } catch (e) { return null; } })();
 function hSaveLocal(){ if(AVB && S.data) AVB.save(S.data); }
 async function hSync(){ if(AVB && S.data) AVB.save(S.data); }

@@ -15,7 +15,7 @@ import { loanSum } from "../calc/loans.ts";
 import { propCalc, type Property } from "../calc/properties.ts";
 import { money, type Tx } from "./txlist.ts";
 import { dFull, GOAL_KINDS, recNextLbl, smartGoal } from "./plan.ts";
-import type { Page } from "./pages.ts";
+import type { Page, PageHost } from "./pages.ts";
 import { openSheet, closeModal, toast } from "../ui/kit.ts";
 import { E } from "../ui/env.ts";
 
@@ -150,9 +150,10 @@ async function advAsk(st: AdvState, redraw: () => void, ctxText: () => string, q
   busy = null;
   redraw();
 }
-async function advRunCheck(d: MoneyData, redraw: () => void, ctxText: () => string): Promise<void> {
+async function advRunCheck(d: MoneyData, redraw: () => void, ctxText: () => string, force = true, onAdvisor: () => boolean = () => true): Promise<void> {
   const now = ymOf(d.today), c = advCheck(d);
-  if (checkRunning || !ask) return;
+  if (checkRunning || !ask || (!force && c.ym === now)) return;
+  if (!force && c.triedOn === d.today) return;
   checkRunning = true;
   E().write([{ c: "settings", r: { ...c, triedOn: d.today, updatedAt: Date.now() } }]);
   redraw();
@@ -162,7 +163,7 @@ async function advRunCheck(d: MoneyData, redraw: () => void, ctxText: () => stri
     const verdict = (lines.find((l) => /^VERDICT:/i.test(l)) || lines[0] || "").replace(/^VERDICT:\s*/i, "").replace(/\*\*/g, "");
     const pts = lines.filter((l) => /^(OK|ACT):/i.test(l)).slice(0, 3).map((l) => ({ ok: /^OK/i.test(l), t: l.replace(/^(OK|ACT):\s*/i, "").replace(/\*\*/g, "") }));
     if (verdict) E().write([{ c: "settings", r: { ...advCheck(E().data()), ym: now, at: d.today, quick: { verdict, pts }, full: rest.join("\n---\n").trim() || text, updatedAt: Date.now() } }]);
-  } catch (e) { toast("Couldn't write this month's check-up: " + ((e as { message?: string })?.message || "try again later")); }
+  } catch (e) { if (onAdvisor()) toast("Couldn't write this month's check-up: " + ((e as { message?: string })?.message || "try again later")); }
   checkRunning = false;
   redraw();
 }
@@ -193,6 +194,13 @@ export function advisorHtml(d: MoneyData, st: AdvState, on: boolean): string {
   <p class="note">${P.updated ? `Profile updated ${dFull(P.updated)} · ` : ""}<a href="#" data-go="more">Edit profile</a>. This chat is cleared when you close the app.</p>`;
 }
 
+/** As the planner: the first time Overview or the Advisor is shown, this month's check-up is written in the background (once a day at most). */
+export function advAuto(h: PageHost): void {
+  const S = h.state() as unknown as { advAuto?: boolean; view: string };
+  if (S.advAuto || !ask) return;
+  S.advAuto = true;
+  window.setTimeout(() => { const d = h.data(); void advRunCheck(d, () => E().refresh(), () => advContext(h.data()), false, () => (h.state() as unknown as { view: string }).view === "advisor"); }, 2500);
+}
 export const advisorPage: Page = {
   html(d, h) { return advisorHtml(d, h.state() as unknown as AdvState, !!ask); },
   act(el, h, redraw) {
@@ -214,7 +222,8 @@ export const advisorPage: Page = {
     if (el.matches("a[data-go]")) return false;
     return false;
   },
-  after(root) {
+  after(root, h) {
+    advAuto(h);
     const inp = root.querySelector<HTMLInputElement>("#advIn");
     if (inp) inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); root.querySelector<HTMLElement>("#advGo")?.click(); } };
     const live = root.querySelector("#advLive");

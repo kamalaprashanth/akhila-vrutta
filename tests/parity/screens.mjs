@@ -10,7 +10,7 @@ import { extname, join, normalize } from "node:path";
 
 const EXPORT = process.env.AV_EXPORT && existsSync(process.env.AV_EXPORT) ? process.env.AV_EXPORT : "tests/fixtures/sample-export.json";
 const bundle = async (e, fmt) => (await build({ entryPoints: [e], bundle: true, format: fmt, write: false, target: "es2022" })).outputFiles[0].text;
-const harness = await bundle("tests/parity/harness.ts", "esm");
+const harness = await bundle("tests/parity/oracle.ts", "esm");   // the old planner on its own, with the export
 const screens = await bundle("tests/parity/screens-entry.ts", "iife");
 const T = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json" };
 const server = createServer(async (req, res) => {
@@ -25,7 +25,7 @@ await new Promise((r) => server.listen(0, r));
 const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.route(/fonts\.g/, (r) => r.abort());
-await page.goto(`http://127.0.0.1:${server.address().port}/harness.html#/money/home`);
+await page.goto(`http://127.0.0.1:${server.address().port}/harness.html`);
 const f = await (await page.waitForSelector("#moneyFrame")).contentFrame();
 await f.waitForFunction(() => typeof S === "object" && !!S.data, null, { timeout: 20000 });
 await f.addScriptTag({ content: screens });
@@ -548,6 +548,12 @@ const report = await f.evaluate(() => {
       tapSave(`NPS ${h.name} new contribution`, { "data-na": "add" }, st, { amt: "5,000", d: today(), acc: b0 }, undefined, setAcc(b0));
       tapSave(`NPS ${h.name} units from statement`, { "data-na": "units" }, st, { u0: "3500.1234", p0: "46.12", sd: today(), ct: "3,10,000", xr: "11.5" });
     }
+    // Opening an entry from a list: loan entries, carry-overs, EPF / PPF lines, trades.
+    for (const t of live("txns").filter((t) => t.type === "loan").slice(0, 8)) cmpTap(`list loan entry ${t.act} ${t.id}`, { "data-tx": t.id });
+    for (const t of live("txns").filter((t) => t.type === "carry").slice(0, 2)) cmpTap(`list carry ${t.id}`, { "data-tx": t.id });
+    for (const it of [...N.txlist.epfTxItems(dx).slice(0, 4), ...N.txlist.epfTxItems(dx).filter((x) => x.mid).slice(0, 3), ...N.txlist.ppfTxItems(dx).slice(0, 4), ...N.txlist.ppfTxItems(dx).filter((x) => x.mid).slice(0, 3), ...N.txlist.tradeTxItems(dx).slice(0, 3)]) cmpTap(`list ${it.id}`, { "data-tx": it.id });
+    { n++; const a = JSON.stringify(epfTxItems().map((x) => [x.id, x.epfMid ?? null, x.epfFy])), b = JSON.stringify(N.txlist.epfTxItems(dx).map((x) => [x.id, x.mid ?? null, x.fy])); if (a !== b) out.push(`EPF lines' entries differ\n    old ${a.slice(0, 400)}\n    new ${b.slice(0, 400)}`); }
+    { n++; const a = JSON.stringify(ppfTxItems().map((x) => [x.id, x.ppfHid, x.ppfMid ?? null])), b = JSON.stringify(N.txlist.ppfTxItems(dx).map((x) => [x.id, x.hid, x.mid ?? null])); if (a !== b) out.push(`PPF lines' entries differ\n    old ${a.slice(0, 400)}\n    new ${b.slice(0, 400)}`); }
     // My profile for the advisor, and the goals made from it.
     for (const k of ["about", "income", "ins", "prop", "assets", "estate"]) cmpTap(`profile ${k}`, { "data-prof": k });
     cmpForm(dx, `${tag} profile about`, () => profForm("about"), () => N.profform.profForm("about"), { pdob: "1985-04-12", pr: "58", sn: "Wife", sd: "1988-01-01", "click:#addKid": 1, "#kidRows .fam:last-child input[type=text]": "Son", "#kidRows .fam:last-child input[type=date]": "2016-08-20", "#dpm": true, pd: "parents partly", pj: "Stable", pk: "Medium" });

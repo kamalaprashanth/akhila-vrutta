@@ -17,7 +17,7 @@ const check = (cond, m) => { if (cond) console.log(`✓ ${m}`); else { failed++;
 const FILES = [
   ["/", "text/html", 500], ["/app.js", "javascript", 5000], ["/app.css", "text/css", 1000], ["/config.js", "javascript", 50],
   ["/manifest.webmanifest", "", 100], ["/icons/logo.svg", "image/svg", 100], ["/icons/icon-192.png", "image/png", 500],
-  ["/money/app", "text/html", 500], ["/money/money.css", "text/css", 10000], ["/money/legacy.js", "javascript", 100000],
+  ["/money/mv.css", "text/css", 10000],
   ["/money/vendor/pdfjs/pdf.min.mjs", "javascript", 10000], ["/money/vendor/pdfjs/pdf.worker.min.mjs", "javascript", 10000],
 ];
 for (const [path, type, min] of FILES) {
@@ -36,6 +36,10 @@ for (const [path, type, min] of FILES) {
   }
 }
 
+/* The old planner (now only the parity tests' reference) isn't part of the site. */
+{ const t = await (await fetch(BASE + "/money/legacy.js")).text(), a = await (await fetch(BASE + "/money/app")).text();
+  check(!t.includes("01-core.js") && !a.includes("legacy.js"), "the old planner isn't served"); }
+
 /* 2. In a browser, with the real CSP: the lock screen appears, Firebase loads, nothing errors */
 const browser = await chromium.launch();
 for (const [label, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { width: 1366, height: 800 }]]) {
@@ -53,15 +57,6 @@ for (const [label, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { 
   } catch { check(false, `${label}: lock screen or Firebase didn't load`); }
   await page.screenshot({ path: `${SHOTS}/${label}-lock.png` });
 
-  // The money frame page on its own: its styles and script must load under the real CSP.
-  await page.goto(`${BASE}/money/app`);
-  await page.waitForTimeout(1500);
-  const frame = await page.evaluate(() => ({
-    styled: [...document.styleSheets].some((s) => { try { return s.cssRules.length > 50; } catch { return false; } }),
-    script: typeof window.S === "object" || /Open this from Akhila Vrutta/.test(document.body.textContent ?? ""),
-  }));
-  check(frame.styled && frame.script, `${label}: money frame loads its styles and script`);
-  await page.screenshot({ path: `${SHOTS}/${label}-money-frame.png` });
   check(errors.length === 0, `${label}: no errors in the browser${errors.length ? ":\n    " + errors.join("\n    ") : ""}`);
   await page.close();
 }

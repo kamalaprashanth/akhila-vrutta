@@ -32,10 +32,10 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   const errors = [];
   p.on("pageerror", (e) => errors.push(e.message));
   await p.goto(`${base}/harness.html#/money/insights`);
-  const f = await (await p.waitForSelector("#moneyFrame", { state: "attached" })).contentFrame();
+  const f = p;   // the planner's names (S, go, upsert, byId…) are test hooks on the app's page; there is no frame
   const V = "#moneyView #view";
   await p.waitForSelector(`${V} [data-ins]`, { timeout: 15000 });
-  const frameShown = () => p.$eval("#moneyFrame", (e) => !e.hidden && getComputedStyle(e).display !== "none");
+  const frameShown = async () => !!(await p.$("#moneyFrame"));   // never: the planner frame is gone
   const settle = () => p.waitForTimeout(450);
   ok(!(await frameShown()), "Insights is drawn by the app");
   await f.evaluate(() => { S.hm = "2026-11"; }); await p.click(`${V} [data-ins="month"]`); await settle();

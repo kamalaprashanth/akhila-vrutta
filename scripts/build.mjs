@@ -18,7 +18,7 @@ await build({
 });
 await build({ entryPoints: { app: "app/styles.css" }, bundle: true, minify: true, outdir: out, logLevel: "info" });
 
-// The money planner, moved over as-is: its script parts run as one classic script in its own frame.
+// The old planner, kept only as the reference the parity tests compare against (firebase.json leaves it out of the site).
 const LEG = "app/modules/money/legacy";
 const parts = readdirSync(LEG).filter((f) => f.endsWith(".js")).sort();
 writeFileSync(`${out}/money/legacy.js`, parts.map((f) => `/* ${f} */\n${readFileSync(`${LEG}/${f}`, "utf8")}`).join("\n"));

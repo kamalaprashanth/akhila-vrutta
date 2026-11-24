@@ -17,6 +17,7 @@ import { money, txLine, type Tx } from "./txlist.ts";
 import { CC, lastMonths, nwHistory, rs0, short } from "./accounts.ts";
 import { dFull, findRepeats, goalSum } from "./plan.ts";
 import type { Page, PageHost } from "./pages.ts";
+import { advAuto } from "./advisor.ts";
 
 export interface HomeState { ptNext?: boolean; insOpen?: boolean }
 const wd = (d: Day): string => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(d + "T00:00").getDay()]!;
@@ -234,6 +235,7 @@ export function homeHtml(d: MoneyData, st: HomeState, h: PageHost): string {
 
 export const homePage: Page = {
   html(d, h) { return homeHtml(d, h.state() as unknown as HomeState, h); },
+  after(_root, h) { advAuto(h); },
   act(el, h, redraw) {
     const S = h.state() as unknown as HomeState & { planTab?: string }, x = el.dataset;
     if (x.ptnext !== undefined) { S.ptNext = !S.ptNext; return redraw(); }

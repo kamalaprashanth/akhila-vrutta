@@ -30,7 +30,7 @@ export interface Tx extends Txn {
   budgetId?: string; splitOf?: string; charges?: Paise; link?: string; cemi?: string;
 }
 /** EPF, PPF and broker-trade entries listed for reference (never counted). Amounts in paise. */
-export interface RefItem { id: string; type: "epf" | "trade"; date: Day; amount: Paise; title: string; sub: string; note: string; out: boolean; updatedAt: number; ccy?: string }
+export interface RefItem { id: string; type: "epf" | "trade"; date: Day; amount: Paise; title: string; sub: string; note: string; out: boolean; updatedAt: number; ccy?: string; hid?: string; mid?: string | null; fy?: number }
 type Item = Tx | RefItem;
 interface Payer extends Rec { name?: string; own?: boolean; tag?: string }
 interface Category extends Rec { name?: string; parentId?: string | null; kind?: string }
@@ -126,7 +126,7 @@ export function epfTxItems(d: MoneyData): RefItem[] {
       if (k === "tout" || (k === "tin" && r.internal)) return;
       const title = k === "int" ? `EPF interest · FY ${fyLbl(r.fy!)}` : k === "cont" || k === "exp" ? `EPF · ${mLabel(r.wm!)} contribution` : k === "wd" ? "EPF withdrawal" : k === "ipr" ? "EPF back-period credit" : "EPF transfer in";
       const sub = `You ${rs0(r.emp)} · Employer ${rs0(r.er)}${r.eps ? ` · EPS ${rs0(r.eps)}` : ""}${k === "exp" ? " · expected" : ""}${r.manual ? " · added by you" : ""} · not from a bank account`;
-      out.push({ id: `epf:${h.id}:${k}:${r.d}:${i}`, type: "epf", date: r.d, amount: r.emp + r.er, note: `${title} ${sub}`, title, sub, out: k === "wd", updatedAt: 0 });
+      out.push({ id: `epf:${h.id}:${k}:${r.d}:${i}`, type: "epf", date: r.d, amount: r.emp + r.er, note: `${title} ${sub}`, title, sub, out: k === "wd", updatedAt: 0, hid: h.id, mid: r.mid, fy: r.fy ?? fyOf(r.d) });
     };
     (e.rows as R[]).forEach(add);
     (e.ints as R[]).forEach((r, i) => add({ ...r, k: "int" }, "i" + i));
@@ -145,7 +145,7 @@ export function ppfTxItems(d: MoneyData): RefItem[] {
       if (r.src === "txn") return;
       if (r.k === "dep" && mine.some((t) => Math.abs(num(t.amount) - r.amt) < 100 && Math.abs(+new Date(t.date ?? "") - +new Date(r.d)) <= 4 * 864e5)) return;
       const title = r.k === "int" ? `PPF interest · FY ${fyLbl(fyOf(r.d))}` : r.k === "wd" ? "PPF withdrawal" : "PPF deposit (from statement)";
-      out.push({ id: `ppf:${h.id}:${r.k}:${r.d}:${i}`, type: "epf", date: r.d, amount: r.amt, note: `${title} PPF`, title, sub: `${r.src === "manual" ? "Added by you" : "SBI statement"} · not from a bank account`, out: r.k === "wd", updatedAt: 0 });
+      out.push({ id: `ppf:${h.id}:${r.k}:${r.d}:${i}`, type: "epf", date: r.d, amount: r.amt, note: `${title} PPF`, title, sub: `${r.src === "manual" ? "Added by you" : "SBI statement"} · not from a bank account`, out: r.k === "wd", updatedAt: 0, hid: h.id, mid: r.src === "manual" ? (r as { id?: string }).id ?? null : null });
     });
   }
   return out;

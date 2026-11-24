@@ -9,8 +9,9 @@ Each step ships on its own: branch → CI (cloud tests) → main → release, ch
 - `tests/parity/screens.mjs` compares it with the planner's own view function, character for character,
   on the real export (AV_EXPORT) and on made-up rows for anything rare. Mutation-test the new code.
 - The planner's stylesheet is scoped to `.mv` at build (`scripts/scope-css.mjs` → `dist/money/mv.css`).
-- Until the planner frame is gone it keeps shared UI state (`S`): filters, month, tabs. Moved screens read and
-  write that state through the bridge (`99-bridge.js` → `FrameApi`).
+- The page state the planner kept in `S` (filters, month, tabs, open loan / card / holding) lives in
+  `app/modules/money/index.ts`. The old planner is no longer loaded by the app: the parity tests run it on its
+  own (`tests/parity/oracle.ts`) as the reference, and it isn't deployed (firebase.json ignores it).
 - Interactions are tested in `tests/e2e/*.mjs` on the made-up sample (phone + laptop).
 
 ## Order and status
@@ -31,4 +32,8 @@ Each step ships on its own: branch → CI (cloud tests) → main → release, ch
    automatically from the planner (render hook) until the frame goes.
 9. Money settings (views/more.ts) — done. Credit card, loan, EPF, PPF, NPS and property pages (views/card, loan, epf, ppf, nps, prop) — done; every money page is now drawn by the app. Its forms (profile, payers, tags, categories, restore), reminders
    and backups still open in the planner.
-10. Remove the frame; switch-over (import button goes, old app read-only for a month).
+10. Every form, sheet and file job (holding form, Kite tradebooks, profile, goals from the profile, Excel,
+    data file, restore, calendar file, reminders, the monthly check-up) — done. `tests/e2e/taps.mjs` taps
+    everything on every page and fails if anything is left unanswered.
+11. The frame is removed — done. Switch-over (fresh import, then the old app read-only) once the owner has
+    checked import / export on the live site.

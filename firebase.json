@@ -6,7 +6,10 @@
     "site": "kp-akhila-vrutta",
     "public": "dist",
     "ignore": [
-      "**/*.map"
+      "**/*.map",
+      "money/app.html",
+      "money/legacy.js",
+      "money/money.css"
     ],
     "cleanUrls": true,
     "headers": [

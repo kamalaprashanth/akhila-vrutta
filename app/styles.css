@@ -103,20 +103,14 @@ label.btn{user-select:none}
 .msub a.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .msub .mset{margin-left:auto;display:grid;place-items:center;width:36px;height:36px;padding:0}
 .msub .mset svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
-#moneyFrame{position:fixed;left:0;right:0;top:calc(108px + env(safe-area-inset-top));bottom:calc(62px + env(safe-area-inset-bottom));
-  width:100%;height:calc(100% - 170px - env(safe-area-inset-top) - env(safe-area-inset-bottom));border:0;background:var(--bg)}
-body:not([data-mod="money"]) #moneyFrame,body:not([data-mod="money"]) #moneyView{display:none}
-/* Screens moved out of the planner are drawn here, in the same place, with the planner's look (money/mv.css). */
+body:not([data-mod="money"]) #moneyView{display:none}
+/* The money pages are drawn here, with the planner's look (money/mv.css). */
 #moneyView{position:fixed;left:0;right:0;top:calc(108px + env(safe-area-inset-top));bottom:calc(62px + env(safe-area-inset-bottom));
   overflow:auto;overscroll-behavior:contain;container:mv/inline-size;background:var(--bg)}
-/* A planner sheet: the frame covers the whole screen (above the tabs and the + button) until it closes. */
-#moneyFrame.over{top:0;left:0;right:0;bottom:0;width:100%;height:100%;z-index:30;background:transparent}
 body.msheet .fab{display:none}
 /* Akhila Vrutta's own money sheets: above the tabs and the + button. */
 #mvLayer.mv{position:fixed;inset:0;z-index:30;height:auto;min-height:0;background:transparent;pointer-events:none}
 #mvLayer.mv>*{pointer-events:auto}
-/* the planner's sheets sit in its frame, whose scrim can't blur the app around it */
-body.fsheet .top,body.fsheet .msub,body.fsheet .nav,body.fsheet #moneyView{filter:blur(3px)}
 body[data-mod="money"] main{padding:0}
 .fab{position:fixed;z-index:6;right:16px;bottom:calc(78px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:16px;border:0;
   background:var(--accent);color:var(--on-accent);display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.18);cursor:pointer}
@@ -124,8 +118,6 @@ body[data-mod="money"] main{padding:0}
 @media (min-width:900px){
   .nav{height:auto;bottom:0}
   .msub{left:96px}
-  #moneyFrame{left:96px;width:calc(100% - 96px);bottom:0;height:calc(100% - 108px)}
   #moneyView{left:96px;bottom:0}
-  #moneyFrame.over{left:0;width:100%;height:100%}
   .fab{bottom:24px;right:24px}
 }

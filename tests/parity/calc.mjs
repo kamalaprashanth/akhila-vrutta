@@ -10,7 +10,7 @@ import { extname, join, normalize } from "node:path";
 
 const EXPORT = process.env.AV_EXPORT && existsSync(process.env.AV_EXPORT) ? process.env.AV_EXPORT : "tests/fixtures/sample-export.json";
 const bundle = async (e, fmt) => (await build({ entryPoints: [e], bundle: true, format: fmt, write: false, target: "es2022" })).outputFiles[0].text;
-const harness = await bundle("tests/parity/harness.ts", "esm");
+const harness = await bundle("tests/parity/oracle.ts", "esm");   // the old planner on its own, with the export
 const calc = await bundle("tests/parity/calc-entry.ts", "iife");
 const T = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json" };
 const server = createServer(async (req, res) => {
@@ -25,7 +25,7 @@ await new Promise((r) => server.listen(0, r));
 const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.route(/fonts\.g/, (r) => r.abort());
-await page.goto(`http://127.0.0.1:${server.address().port}/harness.html#/money/home`);
+await page.goto(`http://127.0.0.1:${server.address().port}/harness.html`);
 const f = await (await page.waitForSelector("#moneyFrame")).contentFrame();
 await f.waitForFunction(() => typeof S === "object" && !!S.data, null, { timeout: 20000 });
 await f.addScriptTag({ content: calc });
