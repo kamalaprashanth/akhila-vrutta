@@ -71,7 +71,8 @@
       "port": 8080
     },
     "hosting": {
-      "port": 5050
+      "port": 5050,
+      "host": "localhost"
     },
     "ui": {
       "enabled": false

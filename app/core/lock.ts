@@ -167,9 +167,11 @@ async function setup(): Promise<Session> {
     lockProgress("Checking your account…");
     home = await homeOf(uid);
   } catch (x) {
-    const denied = /permission/i.test(String((x as { code?: string }).code ?? x));
-    const e2 = show(html`${raw(msg(denied ? "This Google account isn't allowed to use this app." : html`Couldn't reach the cloud (${String((x as { code?: string }).code ?? x)}). Check your connection and reload.`, "err"))}
-      <div class="lockopts"><button class="btn" type="button" id="lk_o">Sign out</button></div>`);
+    const code = String((x as { code?: string }).code ?? x);
+    const denied = /permission/i.test(code);
+    const e2 = show(html`${raw(msg(denied ? "This Google account isn't allowed to use this app." : html`Setting up this device needs the internet, and the cloud couldn't be reached (${code}). Check your connection and try again.`, "err"))}
+      <div class="lockopts">${raw(denied ? "" : html`<button class="btn pri" type="button" id="lk_r">Try again</button>`)}<button class="btn" type="button" id="lk_o">Sign out</button></div>`);
+    e2.querySelector("#lk_r")?.addEventListener("click", () => location.reload());
     e2.querySelector("#lk_o")!.addEventListener("click", async () => { await signOutNow(); location.reload(); });
     return new Promise(() => {});
   }

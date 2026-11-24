@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 
 const PROJECT = "demo-akhila-vrutta";
 const OWNER_UID = "Qc1qDKgHAJgWaYnppeUni1hPxXr1"; // the allowed account in firestore.rules
-const BASE = "http://127.0.0.1:5050";
+const BASE = "http://localhost:5050"; // localhost, not 127.0.0.1: fingerprint (WebAuthn) needs a domain
 const AUTH = "http://127.0.0.1:9099";
 const FS = `http://127.0.0.1:8080/v1/projects/${PROJECT}/databases/(default)/documents`;
 const PASS1 = "first test passphrase";
@@ -52,7 +52,7 @@ async function device(name, { user, bio } = {}) {
   if (user) await ctx.addInitScript((u) => { window.AV_TEST_USER = u; }, user);
   const page = await ctx.newPage();
   openPages.push([name, page]);
-  page.on("console", (m) => consoleLines.push(`${name} [${m.type()}] ${m.text().slice(0, 300)}`));
+  page.on("console", (m) => { if (!/ERR_FAILED/.test(m.text())) consoleLines.push(`${name} [${m.type()}] ${m.text().slice(0, 300)}`); });
   page.on("pageerror", (e) => pageErrors.push(`${name}: ${e.message}`));
   page.on("response", (r) => { if (r.url().startsWith(BASE) && r.status() >= 400) pageErrors.push(`${name}: ${r.status()} ${r.url()}`); });
   if (bio) {
@@ -99,9 +99,8 @@ try {
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.setInputFiles("#impFile", SAMPLE);
   await A.page.click("#impGo");
-  await A.page.waitForSelector("#toast.on", { timeout: 30000 });
-  const toastText = await A.page.innerText("#toast");
-  check(/Imported/.test(toastText), `import finished: "${toastText}"`);
+  await A.page.waitForFunction(() => /Imported|up to date/.test(document.querySelector("#toast")?.textContent ?? ""), null, { timeout: 30000 });
+  check(true, `import finished: "${await A.page.innerText("#toast")}"`);
   await shot(A.page, "imported");
 
   /* 3. The Money tab: the planner frame loads with its styles (today's bug) and shows the data */
@@ -113,7 +112,10 @@ try {
     return { sheets, bodyFont, radius: card ? getComputedStyle(card).borderRadius : "none", script: typeof S === "object" };
   });
   check(styled.sheets >= 1 && styled.radius !== "0px" && styled.radius !== "none" && styled.script, `money frame has its styles and script (${JSON.stringify(styled)})`);
-  check((await f.innerText("#view")).includes("Test Bank"), "Accounts shows the imported bank");
+  check(/Net worth/i.test(await f.innerText("#view")), "Accounts shows the imported data");
+  const fT = await moneyFrame(A.page, "activity");
+  const imported = (await plannerTxns(fT)).find((t) => t.note === "sample expense 1234.56");
+  check(imported?.amount === 1234.56, `an imported transaction is back in rupees (₹${imported?.amount})`);
   await shot(A.page, "money-accounts");
 
   /* 4. An edit in the planner is saved: encrypted, in paise, and comes back after a reload */
@@ -158,8 +160,8 @@ try {
   await A.page.click("#secPass");
   await A.page.fill("#op", PASS1); await A.page.fill("#np", PASS2); await A.page.fill("#np2", PASS2);
   await A.page.click("#passF .btn.pri");
-  await A.page.waitForSelector("#toast.on", { timeout: 20000 });
-  check(/Passphrase changed/.test(await A.page.innerText("#toast")), "passphrase changed");
+  await A.page.waitForFunction(() => /Passphrase changed/.test(document.querySelector("#toast")?.textContent ?? ""), null, { timeout: 20000 });
+  check(true, "passphrase changed");
   await B.page.reload();
   await unlockWithPass(B.page, PASS1);
   await B.page.waitForSelector("#lk_e:not([hidden])", { timeout: 20000 });

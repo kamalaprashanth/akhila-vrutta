@@ -50,11 +50,25 @@ async function readDoc<T>(...path: string[]): Promise<T | null> {
   const { fs, db } = await fb();
   const ref = fs.doc!(db, ...path);
   let snap;
-  try { snap = await fs.getDoc!(ref); } catch { snap = await fs.getDocFromCache!(ref).catch(() => null); }
+  try {
+    snap = await fs.getDoc!(ref);
+  } catch (e) {
+    // Only being offline falls back to this device's copy. A refusal (permission-denied) is never "not found".
+    if ((e as { code?: string }).code !== "unavailable") throw e;
+    snap = await fs.getDocFromCache!(ref).catch(() => null);
+  }
   return snap && snap.exists() ? (snap.data() as T) : null;
 }
 
-export const homeOf = async (uid: string) => (await readDoc<{ home: string }>("users", uid))?.home ?? null;
+/**
+ * Which home this account belongs to, asked of the server itself: setting up a device must never
+ * mistake "offline" or "not allowed" for "no data yet" (that would start a second, empty home).
+ */
+export async function homeOf(uid: string): Promise<string | null> {
+  const { fs, db } = await fb();
+  const snap = await fs.getDocFromServer!(fs.doc!(db, "users", uid));
+  return snap.exists() ? ((snap.data() as { home?: string }).home ?? null) : null;
+}
 export const passWrapOf = (home: string, uid: string) => readDoc<PassWrap>("homes", home, "keys", uid);
 
 async function savePassWrap(home: string, uid: string, w: PassWrap): Promise<void> {
