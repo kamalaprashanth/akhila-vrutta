@@ -97,11 +97,13 @@ async function unlockWithPass(page, pass) {
   await page.fill("#lk_p", pass);
   await page.click("#lock .btn.pri");
 }
-async function moneyFrame(page, view = "accounts") {
+/** Pages the app draws itself (the frame stays blank on them). */
+const MOVED = ["activity", "accounts", "plan"];
+async function moneyFrame(page, view = "more") {
   await page.goto(`${BASE}/#/money/${view}`);
   const f = await (await page.waitForSelector("#moneyFrame", { state: "attached", timeout: 20000 })).contentFrame();
   // Transactions is drawn by the app itself; the planner pages are drawn in the frame.
-  if (view === "activity") { await page.waitForSelector("#moneyView #view .sumcard", { timeout: 20000 }); await f.waitForFunction(() => typeof S === "object" && !!S.data); }
+  if (MOVED.includes(view)) { await page.waitForSelector("#moneyView #view > *", { timeout: 20000 }); await f.waitForFunction(() => typeof S === "object" && !!S.data); }
   else await f.waitForSelector("#view *", { timeout: 20000 });
   return f;
 }
@@ -134,7 +136,8 @@ try {
     return { sheets, bodyFont, radius: card ? getComputedStyle(card).borderRadius : "none", script: typeof S === "object" };
   });
   check(styled.sheets >= 1 && styled.radius !== "0px" && styled.radius !== "none" && styled.script, `money frame has its styles and script (${JSON.stringify(styled)})`);
-  check(/Net worth/i.test(await f.innerText("#view")), "Accounts shows the imported data");
+  await moneyFrame(A.page, "accounts");
+  check(/Net worth/i.test(await A.page.innerText("#moneyView #view")) && /Test Bank|Net worth/.test(await A.page.innerText("#moneyView #view")), "Accounts (drawn by the app) shows the imported data");
   const fT = await moneyFrame(A.page, "activity");
   const imported = (await plannerTxns(fT)).find((t) => t.note === "sample expense 1234.56");
   check(imported?.amount === 1234.56, `an imported transaction is back in rupees (₹${imported?.amount})`);
