@@ -47,25 +47,32 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   if (pay) {
     const key = await pay.getAttribute("data-pay");
     await pay.click(); await p.waitForTimeout(900);
-    const sheet = await f.$("#modal .sheet");
-    if (sheet) { await f.click("#modal .btn.pri"); await p.waitForTimeout(900); }
-    ok(await p.$(`${V} [data-undo="${key}"]`) !== null, "Paid marks the item done (planner records it, page redraws)");
+    ok(!(await frameShown()) && /Add transaction/.test(await p.textContent("#mvLayer #modal h3")), "Paid opens the app's entry, filled in");
+    await p.click("#mvLayer #modal #sv"); await p.waitForTimeout(900);
+    ok(await p.$(`${V} [data-undo="${key}"]`) !== null && await f.evaluate((k) => S.data.txns.some((t) => t.link === k && !t.deleted), key), "…saving it marks the item done (linked entry saved, page redraws)");
     await p.click(`${V} details.fm summary:has-text("Done this month")`); await settle();
     await p.click(`${V} [data-undo="${key}"]`); await settle();
-    if (await frameShown()) { const undo = await f.$("#modal #un, #modal .btn.danger"); if (undo) { await undo.click(); await p.waitForTimeout(900); } else await f.evaluate(() => closeModal()); }
-    ok(await p.$(`${V} [data-pay="${key}"]`) !== null, "…and can be undone");
+    ok(/Marked/.test(await p.textContent("#mvLayer #modal h3")), "tapping Paid ▾ shows what was recorded");
+    await p.click("#mvLayer #modal #un"); await p.waitForTimeout(900);
+    ok(await p.$(`${V} [data-pay="${key}"]`) !== null && !(await f.evaluate((k) => S.data.txns.some((t) => t.link === k && !t.deleted), key)), "…and Undo makes it due again");
   } else ok(false, "an item to mark paid");
 
-  // Regular: + Add opens the planner's form; the list search filters rows.
+  // Regular: + Add opens the app's form and saves a new item; the list search filters rows.
   await p.click(`${V} [data-pt="regular"]`); await settle();
   await p.fill(`${V} [data-lsearch]`, "rent"); await settle();
   ok(await p.$$eval(`${V} .list > .row:not([hidden])`, (r) => r.length >= 1 && r.every((x) => /rent/i.test(x.textContent))), "searching the regular items filters them");
+  await p.fill(`${V} [data-lsearch]`, ""); await settle();
   await p.click(`${V} #addRec`); await settle();
-  ok(await frameShown() && /planned item/i.test(await f.textContent("#modal h3")), "+ Add regular item opens the planner's form");
-  await f.evaluate(() => closeModal()); await settle();
-  await p.click(`${V} [data-rec]`); await settle();
-  ok(await frameShown(), "a regular item opens its form");
-  await f.evaluate(() => closeModal()); await settle();
+  ok(!(await frameShown()) && /Add planned item/.test(await p.textContent("#mvLayer #modal h3")), "+ Add regular item opens the app's form");
+  await p.click("#mvLayer #rseg [data-k=investment]"); await settle();
+  ok(await p.$eval("#mvLayer #w_categoryId", (e) => e.hidden) && await p.$eval("#mvLayer #w_invType", (e) => !e.hidden), "an investment asks for its type, not a category");
+  await p.fill("#mvLayer #f_name", "Flow SIP"); await p.fill("#mvLayer #f_amount", "2,500"); await p.selectOption("#mvLayer #f_invType", "Mutual Fund"); await p.fill("#mvLayer #f_day", "5");
+  await p.click("#mvLayer #modal #sv"); await p.waitForTimeout(900);
+  const sip = await f.evaluate(() => S.data.recurring.find((r) => r.name === "Flow SIP"));
+  ok(sip && sip.amount === 2500 && sip.type === "investment" && sip.invType === "Mutual Fund" && sip.day === 5, "…a ₹2,500 SIP on the 5th is saved");
+  await p.click(`${V} [data-rec="${sip?.id}"]`); await settle();
+  ok(/Edit planned item/.test(await p.textContent("#mvLayer #modal h3")) && (await p.inputValue("#mvLayer #f_amount")) === "2,500", "a regular item opens its form with its amount");
+  await p.click("#mvLayer #modal #cx"); await settle();
 
   // Cash flow: forecast length and the keep-at-least line.
   await p.click(`${V} [data-pt="cashflow"]`); await settle();
@@ -84,11 +91,13 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${V} .bcal .bd[data-bcd]:not(.x) >> nth=4`); await settle();
   ok(await p.$eval(`${V} .sh h3`, (e) => /^\d+ \w{3}$/.test(e.textContent)), "tapping a day lists that day");
 
-  // Goals: + Add goal opens the planner's form.
+  // Goals: + Add goal opens the app's form; changing the kind redraws it for that kind.
   await p.click(`${V} [data-pt="goals"]`); await settle();
   await p.click(`${V} #addGoal`); await settle();
-  ok(await frameShown() && /goal/i.test(await f.textContent("#modal h3")), "+ Add goal opens the planner's form");
-  await f.evaluate(() => closeModal()); await settle();
+  ok(!(await frameShown()) && /Add goal/.test(await p.textContent("#mvLayer #modal h3")), "+ Add goal opens the app's form");
+  await p.selectOption("#mvLayer #f_gk", "retire"); await settle();
+  ok(!!(await p.$("#mvLayer #f_rs")) && !(await p.$("#mvLayer #f_target")), "…choosing Retirement shows its fields");
+  await p.click("#mvLayer #modal #cx"); await settle();
 
   ok(errors.length === 0, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   await ctx.close();

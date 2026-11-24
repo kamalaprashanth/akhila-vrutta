@@ -20,11 +20,12 @@ import * as prop from "../../app/modules/money/views/prop.ts";
 import { setEnv } from "../../app/modules/money/ui/env.ts";
 import * as forms from "../../app/modules/money/ui/forms.ts";
 import * as actions from "../../app/modules/money/ui/actions.ts";
+import * as planforms from "../../app/modules/money/ui/planforms.ts";
 import { toStored } from "../../app/modules/money/paise.ts";
 import { MONEY_COLLECTIONS } from "../../app/core/store.ts";
 
 (window as unknown as { SCREENS: unknown }).SCREENS = {
-  toStored, forms, actions, txlist, txform, txsheets, kit, setEnv, accounts, charts, plan, home, insights, advisor, more, card, loan, epf, ppf, nps, prop,
+  toStored, forms, actions, planforms, txlist, txform, txsheets, kit, setEnv, accounts, charts, plan, home, insights, advisor, more, card, loan, epf, ppf, nps, prop,
   dataFrom(legacy: Record<string, unknown>, today: string) {
     const cols: Record<string, { id: string }[]> = {};
     for (const c of MONEY_COLLECTIONS) cols[c] = ((legacy[c] as { id: string }[]) ?? []).map((r) => toStored(c, r));

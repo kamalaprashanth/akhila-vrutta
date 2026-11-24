@@ -349,6 +349,7 @@ const report = await f.evaluate(() => {
   let formN = 0;
   const fillIn = (root, vals) => {
     for (const [k, v] of Object.entries(vals)) {
+      if (k.startsWith("click:")) { const b = root.querySelector(k.slice(6)); if (b) b.click(); else out.push(`form fill: nothing to click at ${k}`); continue; }
       const e = k.startsWith("#") || k.startsWith("input") ? root.querySelector(k) : root.querySelector("#f_" + k);
       if (!e) { out.push(`form fill: no field ${k}`); continue; }
       if (e.type === "checkbox" || e.type === "radio") e.checked = !!v; else e.value = v;
@@ -357,7 +358,9 @@ const report = await f.evaluate(() => {
   };
   const sortK = (o) => Object.keys(o).sort().reduce((a, k) => ((a[k] = o[k]), a), {});
   // A record saved again unchanged (only its time) isn't a change.
-  const norm = (ops, before, dx) => ops.map(({ c, r }) => { const o = { ...r }; delete o.updatedAt; const was = dx.all(c).find((x) => x.id === o.id); if (was) { const w = { ...was }; delete w.updatedAt; if (JSON.stringify(sortK(w)) === JSON.stringify(sortK(o))) return null; } if (!before.has(c + ":" + o.id)) o.id = "NEW"; return JSON.stringify([c, sortK(o)]); }).filter(Boolean).sort();
+  const norm = (ops, before, dx) => ops.map(({ c, r }) => { const o = { ...r }; delete o.updatedAt; const was = dx.all(c).find((x) => x.id === o.id); if (was) { const w = { ...was }; delete w.updatedAt; if (JSON.stringify(sortK(w)) === JSON.stringify(sortK(o))) return null; } if (!before.has(c + ":" + o.id)) o.id = "NEW"; return JSON.stringify([c, sortK(o)]).replace(/"(id|mid|loanId|prop|txnId|budgetId|splitOf)":"([^"]+)"/g, (m, k, v) => (knownIds.has(v) ? m : `"${k}":"NEW"`)); }).filter(Boolean).sort();
+  // ids already in the data (nested ones too, e.g. a loan's rate changes); any other id was just made
+  const knownIds = new Set(JSON.stringify(S.data).match(/"(?:id|mid)":"[^"]+"/g)?.map((x) => x.split('":"')[1].slice(0, -1)) ?? []);
   const cmpForm = (dx, label, openOld, openNew, vals, steps = ["#sv"]) => {
     n++; formN++;
     const keepData = S.data, snap = JSON.parse(JSON.stringify(S.data)), ids = new Set();
@@ -399,7 +402,99 @@ const report = await f.evaluate(() => {
     for (const a of cards) for (const ca of ["pay", "spend", "edit"]) cmpTap(`card ${a.name} ${ca}`, { "data-ca": ca }, { cardId: a.id });
     for (const a of cards.slice(0, 3)) cmpTap(`Plan card bill ${a.name}`, { "data-cpay": a.id });
     for (const a of accs.slice(0, 3)) cmpTap(`account ${a.name}`, { "data-acc": a.id });
-    for (const [id] of [["addAcc"], ["addCat"], ["addPayer"], ["pickMain"]]) cmpTap(id, { id });
+    for (const [id] of [["addAcc"], ["addCat"], ["addPayer"], ["pickMain"], ["addLoan"]]) cmpTap(id, { id });
+    // Loans: every button and row on each loan's page, as drawn, then saved with typed values.
+    const tapSave = (label, attrs, st, vals, steps) => cmpForm(dx, `${tag} ${label}`, () => { Object.assign(S, st); oldTap(attrs); }, () => { Object.assign(S, st); N.actions.appAct(mk(attrs), dx); }, vals, steps);
+    const nowM = ymOf(today()), b0 = banks[0]?.id ?? "";
+    for (const l of live("loans")) {
+      const st = { loanId: l.id }, k = l.kind || "emi", bk = k === "hybrid" ? l.bank || {} : l;
+      // the buttons its page shows (each tab)
+      const las = new Set(); for (const tab of ["overview", "schedule", "history"]) for (const m of (N.loan.loanHtml(dx, { loanId: l.id, loanTab: tab }) || "").matchAll(/data-la="(\w+)"/g)) las.add(m[1]);
+      for (const la of las) if (la !== "reopen") cmpTap(`loan ${l.name} ${la}`, { "data-la": la }, st);
+      if (las.has("reopen")) tapSave(`loan ${l.name} reopen`, { "data-la": "reopen" }, st, {}, ["#cy"]);
+      for (const r of bk.rates || []) cmpTap(`loan ${l.name} rate change ${r.ym}`, { "data-rc": r.id }, st);
+      for (const pl of l.plans || []) cmpTap(`loan ${l.name} planned ${pl.start}`, { "data-pl": pl.id }, st);
+      if (las.has("prepay")) {
+        tapSave(`loan ${l.name} part payment`, { "data-la": "prepay" }, st, { amount: "10,000", date: today(), accountId: b0, 'input[name="mode"][value="tenure"]': true, note: "test" });
+        tapSave(`loan ${l.name} part payment, lower EMI`, { "data-la": "prepay" }, st, { amount: "25000.5", 'input[name="mode"][value="emi"]': true, hist: true });
+      }
+      if (las.has("rate")) tapSave(`loan ${l.name} rate change`, { "data-la": "rate" }, st, { ym: addM(nowM, 1), rate: "8.15", 'input[name="mode"][value="emi"]': true });
+      if (las.has("sync")) tapSave(`loan ${l.name} match the bank`, { "data-la": "sync" }, st, { sdate: today(), sbal: "123456.78", 'input[name="smode"][value="emi"]': true });
+      tapSave(`loan ${l.name} edit`, { "data-la": "edit" }, st, { name: l.name + " X", ...(k === "family" ? {} : { rate: "9.99", emi: "" }) });
+      if (las.has("close")) tapSave(`loan ${l.name} close`, { "data-la": "close" }, st, { ym: nowM });
+      if (las.has("borrow")) {
+        tapSave(`loan ${l.name} borrow`, { "data-la": "borrow" }, st, { amount: "5000", accountId: b0 });
+        tapSave(`loan ${l.name} repay`, { "data-la": "repay" }, st, { amount: "1", date: today() });
+        tapSave(`loan ${l.name} plan monthly`, { "data-la": "plan" }, st, { "click:#fseg [data-k=monthly]": 1, amount: "2,500", start: nowM, end: addM(nowM, 12), accountId: b0 });
+        tapSave(`loan ${l.name} plan once`, { "data-la": "plan" }, st, { amount: "10000", start: addM(nowM, 3) });
+      }
+      for (const r of bk.rates || []) tapSave(`loan ${l.name} delete rate change ${r.ym}`, { "data-rc": r.id }, st, {}, ["#dl", "#cy"]);
+      for (const pl of l.plans || []) tapSave(`loan ${l.name} change planned ${pl.start}`, { "data-pl": pl.id }, st, { amount: "999" });
+      if (k === "hybrid") {
+        const s0 = schedule(l), um = s0 && s0.rows.find((r) => r.ym <= nowM && !paidMap().has(`l:${l.id}|${r.ym}`));
+        if (um) { cmpTap(`loan ${l.name} missed ${um.ym}`, { "data-miss": `l:${l.id}|${um.ym}` }); tapSave(`loan ${l.name} mark missed ${um.ym}`, { "data-miss": `l:${l.id}|${um.ym}` }, {}, {}); }
+        if (missedInfo(l).list.some((m) => !m.by)) tapSave(`loan ${l.name} pay back missed`, { "data-la": "catchup" }, st, { accountId: b0 });
+      }
+    }
+    const cat0 = live("categories").find((c) => c.kind === "expense" && !c.parentId)?.id ?? "";
+    tapSave("new bank loan", { id: "addLoan" }, {}, { "click:#kseg [data-k=emi]": 1, name: "Car loan", lender: "HDFC", principal: "5,00,000", rate: "9.5", tenure: "60", start: nowM, day: "5", accountId: b0 });
+    tapSave("new bank loan, no schedule", { id: "addLoan" }, {}, { name: "Gold loan", lender: "Muthoot", principal: "75000.25", rate: "12" });
+    tapSave("new family loan", { id: "addLoan" }, {}, { "click:#kseg [data-k=family]": 1, name: "From Ravi", lender: "Ravi", ownAmt: "1,00,000", ownDate: today(), ownAcc: b0 });
+    tapSave("new hybrid loan", { id: "addLoan" }, {}, { "click:#kseg [data-k=hybrid]": 1, name: "Flat loan", lender: "Amma", bankName: "SBI", principal: "20,00,000", rate: "8.4", tenure: "240", start: nowM, emi: "17,500", day: "10", accountId: b0, ownAmt: "3,00,000", ownAcc: b0 });
+    if (cards[0]) tapSave("new card EMI", { id: "addLoan" }, {}, { "click:#kseg [data-k=cardemi]": 1, name: "Phone EMI", cardId: cards[0].id, categoryId: cat0, principal: "60000", rate: "15", tenure: "6", start: nowM, fee: "199", gst: "18" });
+    tapSave("new loan, no lender (nothing)", { id: "addLoan" }, {}, { "click:#kseg [data-k=family]": 1, name: "x", lender: "" });
+    // Plan: regular items, a month's amount, marking paid and undoing, Invest day, Pay by Tuesday, holidays, goals, the emergency fund.
+    const tapThen = (label, attrs, steps, st = {}) => cmpSheet(`${tag} ${label}`, () => { Object.assign(S, st); oldTap(attrs); for (const x of steps) document.querySelector("#modal " + x)?.click(); }, () => { Object.assign(S, st); N.actions.appAct(mk(attrs), dx); for (const x of steps) document.querySelector("#mvLayer #modal " + x)?.click(); });
+    const recs = live("recurring");
+    for (const r of recs.slice(0, 30)) cmpTap(`regular item ${r.name}`, { "data-rec": r.id });
+    cmpTap("add regular item", { id: "addRec" });
+    for (const r of recs.slice(0, 6)) tapSave(`regular item ${r.name} changed`, { "data-rec": r.id }, {}, { amount: "1,234.5", day: "7", end: addM(nowM, 6), remind: "15", provider: "Test", auto: true });
+    for (const r of recs.filter((r) => r.type === "investment").slice(0, 2)) tapSave(`SIP ${r.name} with charges`, { "data-rec": r.id }, {}, { charges: "12.5" });
+    const ecat = live("categories").find((c) => c.kind === "expense" && !c.parentId)?.id, icat = live("categories").find((c) => c.kind === "income" && !c.parentId)?.id;
+    tapSave("new expense item", { id: "addRec" }, {}, { name: "Gym", amount: "2,000", freq: "monthly", start: nowM, day: "3", accountId: b0, categoryId: ecat, budget: true, shift: true });
+    tapSave("new income item", { id: "addRec" }, {}, { "click:#rseg [data-k=income]": 1, name: "Rent in", amount: "15000", freq: "monthly", start: nowM, categoryId: icat });
+    tapSave("new investment item", { id: "addRec" }, {}, { "click:#rseg [data-k=investment]": 1, name: "Index SIP", amount: "5000", freq: "monthly", start: nowM, day: "5", accountId: b0, invType: "Mutual Fund" });
+    const vb = banks.filter((a) => !a.hidden && !a.noTotal);
+    if (vb[1]) tapSave("new transfer item", { id: "addRec" }, {}, { "click:#rseg [data-k=transfer]": 1, name: "To savings", amount: "10000", freq: "quarterly", start: nowM, accountId: vb[0].id, toAccountId: vb[1].id });
+    tapSave("new item once", { id: "addRec" }, {}, { name: "Trip", amount: "50000", freq: "once", start: addM(nowM, 2), end: addM(nowM, 5), categoryId: ecat });
+    tapSave("new item, no amount (nothing)", { id: "addRec" }, {}, { name: "x", amount: "" });
+    if (recs[0]) tapSave(`delete regular item ${recs[0].name}`, { "data-rec": recs[0].id }, {}, {}, ["#dl", "#cy"]);
+    for (const r of recs.filter((r) => r.freq === "monthly" && !r.budget).slice(0, 3)) {
+      cmpTap(`month amount ${r.name}`, { "data-mi": `${r.id}|${nowM}` });
+      tapSave(`month amount ${r.name} changed`, { "data-mi": `${r.id}|${nowM}` }, {}, { amt: "999.99" });
+      tapSave(`month amount ${r.name} skipped`, { "data-mi": `${r.id}|${addM(nowM, 1)}` }, {}, {}, ["#sk"]);
+    }
+    for (const r of recs.filter((r) => r.ov && Object.keys(r.ov).length).slice(0, 3)) { const ym = Object.keys(r.ov)[0]; cmpTap(`month amount ${r.name} ${ym}`, { "data-mi": `${r.id}|${ym}` }); tapSave(`month amount ${r.name} back to usual`, { "data-mi": `${r.id}|${ym}` }, {}, {}, ["#rs"]); }
+    const P0 = planned(nowM), pm = paidMap();
+    for (const it of P0.filter((x) => !pm.has(x.key) && x.src !== "c" && x.src !== "b").slice(0, 12)) cmpTap(`mark paid ${it.name}`, { "data-pay": it.key });
+    for (const [k] of [...pm.entries()].slice(0, 6)) { cmpTap(`undo ${k}`, { "data-undo": k }); tapThen(`undo ${k}, edit`, { "data-undo": k }, ["#ed"]); }
+    for (const [k] of [...pm.entries()].filter(([, t]) => t.act !== "missed").slice(0, 2)) tapSave(`undo ${k}`, { "data-undo": k }, {}, {}, ["#un"]);
+    for (const [k] of [...pm.entries()].filter(([, t]) => t.act === "missed").slice(0, 1)) tapSave(`undo missed ${k}`, { "data-undo": k }, {}, {}, ["#dl"]);
+    const inv = forecast(1).months[0].rows.filter((r) => r.type === "investment" && r.amount > 0.5 && !r.paid);
+    for (const r of inv.slice(0, 3)) cmpTap(`invest ${r.name}`, { "data-invpay": r.key });
+    if (inv.length) { cmpTap("invest all", { "data-invall": "1" }); tapSave("invest all", { "data-invall": "1" }, {}, {}, ["#cy"]); }
+    cmpTap("market holidays", { "data-holi": "1" });
+    tapSave("add a market holiday", { "data-holi": "1" }, {}, { hd: `${+nowM.slice(0, 4) + 1}-01-26` }, ["#hadd"]);
+    const O = obligations(21).filter((o) => o.src !== "pp");
+    for (const o of O.slice(0, 10)) { cmpTap(`Pay by Tuesday ${o.name}`, { "data-ptpay": o.key }); tapThen(`Pay by Tuesday ${o.name}, record`, { "data-ptpay": o.key }, ["#pp_rec"]); tapThen(`Pay by Tuesday ${o.name}, already in`, { "data-ptpay": o.key }, ["#pp_link"]); }
+    for (const o of O.filter((o) => o.src === "r").slice(0, 2)) tapSave(`Pay by Tuesday ${o.name}, skip`, { "data-ptpay": o.key }, {}, {}, ["#pp_skip"]);
+    if (banks[1]) cmpTap("move money in", { "data-ptmove": `${banks[0].id}|${banks[1].id}|12345.5|Rent` });
+    cmpTap("set aside", { "data-ptaside": "reserve|5000" }); cmpTap("set aside extra", { "data-ptaside": "reserve|extra" });
+    for (const p of live("props").filter((p) => p.rec !== "cats").slice(0, 2)) cmpTap(`set aside for ${p.name}`, { "data-ptaside": `prop:${p.id}|25000` });
+    for (const g of live("goals")) { cmpTap(`goal ${g.name}`, { "data-goal": g.id }); tapSave(`goal ${g.name} priority`, { "data-goal": g.id }, {}, { gp: "2" }); }
+    cmpTap("add goal", { id: "addGoal" });
+    for (const k of ["loans", "edu", "retire", "custom"]) cmpSheet(`${tag} new goal ${k}`, () => goalForm({ kind: k }), () => N.planforms.goalForm({ kind: k }));
+    cmpForm(dx, `${tag} new savings goal`, () => goalForm({ kind: "custom" }), () => N.planforms.goalForm({ kind: "custom" }), { name: "Car", target: "9,00,000", by: addM(nowM, 18), saved: "1,25,000.5", gp: "3" });
+    cmpForm(dx, `${tag} new education goal`, () => goalForm({ kind: "edu" }), () => N.planforms.goalForm({ kind: "edu" }), { name: "Edu", es: "1,80,000", eu: "25,00,000", ep: "", ei: "9", er: "" });
+    cmpForm(dx, `${tag} new retirement goal`, () => goalForm({ kind: "retire" }), () => N.planforms.goalForm({ kind: "retire" }), { rs: "85,000", ri: "6.5", rl: "88" });
+    cmpForm(dx, `${tag} new loans goal`, () => goalForm({ kind: "loans" }), () => N.planforms.goalForm({ kind: "loans" }), { name: "Debt free", by: addM(nowM, 24) });
+    cmpTap("emergency fund", { id: "emSet" });
+    tapSave("emergency fund months", { id: "emSet" }, {}, { em: "9", emt: "" });
+    tapSave("emergency fund own target", { id: "emSet" }, {}, { em: "6", emt: "4,50,000" });
+    const ek = [...(N.calc_insights?.spendByCat?.(dx) ?? [])];
+    for (const c of live("categories").filter((c) => c.kind === "expense" && !c.parentId).slice(0, 2)) tapSave(`emergency fund leaves out ${c.name}`, { "data-emcat": c.id }, {}, {});
+    void ek;
+    for (const r of findRepeats().slice(0, 4)) { cmpTap(`add repeat ${r.name}`, { "data-repadd": r.key }); tapSave(`add repeat ${r.name}`, { "data-repadd": r.key }, {}, {}); }
     cmpForm(dx, `${tag} new bank account`, () => accForm(), () => F.accForm(), { name: "Test bank", type: "bank", group: "Savings", opening: "12,345.67", minBal: "5000", reserve: true, reserveStart: "1000.5", emTarget: "" });
     cmpForm(dx, `${tag} new card`, () => accForm(), () => F.accForm(), { name: "Test card", type: "card", opening: "-12000", stmtDay: "5", dueDay: "25", payFrom: banks[0]?.id ?? "", limit: "2,00,000", apr: "3.75", fee: "499", feeWaive: "150000", reward: "1.5", rewardNote: "5% on Swiggy", hidden: true });
     cmpForm(dx, `${tag} new account, no name`, () => accForm(), () => F.accForm(), { name: "" });

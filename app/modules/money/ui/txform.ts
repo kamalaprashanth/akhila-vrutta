@@ -28,7 +28,7 @@ const payerNote = (p: Payer): string => p.own
 const payerLbl = (d: MoneyData, t: Tx): string => (t.paidBy ? (payersAll(d).find((p) => p.id === t.paidBy)?.name ?? t.paidBy) : "");
 const loanLbl = (l: Loan & { name?: string; lender?: string }): string => `${l.name}${l.lender ? ` · ${l.lender}` : ""}`;
 const legacyLoanOpt = (d: MoneyData, id?: string): [string, string][] => { const l = id ? d.byId<Loan & { name?: string; lender?: string }>("loans", id) : undefined; return l ? [["~" + l.id, `${loanLbl(l)} · loan`]] : []; };
-const instruments = (d: MoneyData): string[] => [...new Set([
+export const instruments = (d: MoneyData): string[] => [...new Set([
   ...d.live<Rec & { instrument?: string; name?: string }>("holdings").map((h) => String(h.instrument || h.name)),
   ...[...d.live<Rec & { type?: string; instrument?: string }>("txns"), ...d.live<Rec & { type?: string; instrument?: string }>("recurring")].filter((x) => x.type === "investment" && x.instrument).map((x) => x.instrument!),
 ])];

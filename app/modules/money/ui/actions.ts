@@ -7,6 +7,8 @@ import { accForm, catForm, payerForm, pickMainSheet, tagSheet } from "./forms.ts
 import { txnForm } from "./txform.ts";
 import { balances, cardInfo, type Account } from "../calc/accounts.ts";
 import { E } from "./env.ts";
+import { loanAct, loanForm, markMissed } from "./loanforms.ts";
+import { planAct } from "./planforms.ts";
 
 /** Handles a tap; false: not one of ours yet. */
 export function appAct(el: HTMLElement, d: MoneyData): boolean {
@@ -29,7 +31,12 @@ export function appAct(el: HTMLElement, d: MoneyData): boolean {
     txnForm({}, { type: "transfer", amount: Math.round(amt) || undefined, accountId: from, toAccountId: a.id, note: `${a.name} bill` });
     return true;
   }
+  // The loan page's buttons and rows, Missed on an EMI in Plan, + Add loan.
+  if (x.la !== undefined || x.rc !== undefined || x.pl !== undefined) return loanAct(d, x, (E().state() as unknown as { loanId?: string } | null)?.loanId);
+  if (x.miss !== undefined) { markMissed(x.miss); return true; }
+  if (planAct(d, x, id)) return true;
   switch (id) {
+    case "addLoan": loanForm(); return true;
     case "addAcc": accForm(); return true;
     case "addCat": catForm(); return true;
     case "addPayer": payerForm(); return true;

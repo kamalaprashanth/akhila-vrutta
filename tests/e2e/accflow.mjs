@@ -117,8 +117,19 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${V} [data-lt="history"]`); await settle();
   ok(await p.$eval(`${V} [data-lt="history"]`, (e) => e.getAttribute("aria-pressed") === "true") && /History/i.test(await p.textContent(V)), "History tab");
   await p.click(`${V} [data-la="edit"]`); await settle();
-  ok(await frameShown() && /loan/i.test(await f.textContent("#modal h3")), "Edit opens the planner's loan form");
-  await f.evaluate(() => closeModal()); await settle();
+  ok(!(await frameShown()) && /Edit loan/.test(await p.textContent("#mvLayer #modal h3")), "Edit opens the app's loan form");
+  await p.click("#mvLayer #modal #cx"); await settle();
+  // A part payment, saved in paise; its toast says what changed.
+  if (await p.$(`${V} [data-la="prepay"]`)) {
+    const n0 = await f.evaluate(() => S.data.txns.filter((t) => t.act === "prepay" && t.loanId === S.loanId).length);
+    await p.click(`${V} [data-la="prepay"]`); await settle();
+    await p.fill("#mvLayer #f_amount", "10,000");
+    if (await p.$('#mvLayer input[name="mode"]')) await p.click('#mvLayer input[name="mode"][value="tenure"]');
+    await p.click("#mvLayer #modal #sv"); await p.waitForTimeout(900);
+    const pp = await f.evaluate(() => S.data.txns.filter((t) => t.act === "prepay" && t.loanId === S.loanId));
+    ok(pp.length === n0 + 1 && pp.some((t) => t.amount === 10000), "a ₹10,000 part payment is saved on the loan");
+    ok(/interest saved|Saved|Added|closed/i.test(await p.textContent("#mvLayer").catch(() => "")), "…and a message says what it changed");
+  }
   await p.evaluate(() => { location.hash = "#/money/accounts"; }); await p.waitForTimeout(700);
 
   // Net worth range and the chart's tooltip.
