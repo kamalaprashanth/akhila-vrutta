@@ -79,6 +79,17 @@ jobs:
       - run: cd functions && npm ci --no-audit --no-fund
       - name: Deploy Cloud Functions
         run: $FT deploy --only functions --project "$PROJECT" --non-interactive --force
+      - name: Check the functions are running
+        run: |
+          $FT functions:list --project "$PROJECT" --json > fns.json
+          node -e '
+            const j = require("./fns.json");
+            const names = (j.result || []).map((f) => f.id || f.name?.split("/").pop());
+            const want = ["askClaude", "refreshPricesNow", "refreshPrices"];
+            const missing = want.filter((w) => !names.includes(w));
+            console.log(`::notice title=Cloud Functions::running: ${names.join(", ")}`);
+            if (missing.length) { console.log(`::error title=Cloud Functions::missing: ${missing.join(", ")}`); process.exit(1); }
+          '
 
   preview:
     needs: check
