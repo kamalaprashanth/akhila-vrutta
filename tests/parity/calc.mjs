@@ -148,6 +148,7 @@ const report = await f.evaluate(() => {
   const planReal = comparePlan(d, "yours");
   const fcReal = compareForecast(d, "yours");
   const propReal = compareProps(d, "yours");
+  const resReal = compareReserve(d, "yours");
 
   // Made-up plan items: every frequency, month changes and skips, a budget with spends, trading-day shifts,
   // SIPs with and without charges, transfers, a card EMI, family repayment plans (monthly and one-off, one paid).
@@ -169,6 +170,7 @@ const report = await f.evaluate(() => {
     R("sip-mf", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 10000, day: 7, shift: "trading" }),
     R("sip-chg", { type: "investment", invType: "Stocks", freq: "monthly", amount: 5000, charges: 15.9, day: 14, shift: "trading" }),
     R("sip-zero", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 3000, charges: "", day: 1 }),
+    R("sip-odd", { type: "investment", invType: "Stocks", freq: "monthly", amount: 10, charges: 15, day: 2 }),
     R("salary", { type: "income", freq: "monthly", amount: 185000, day: 30 }),
     R("move", { type: "transfer", freq: "monthly", amount: 20000, accountId: "pb", toAccountId: "pc", day: 28 }),
     // money leaving the counted accounts for one left out of totals
@@ -214,6 +216,7 @@ const report = await f.evaluate(() => {
   MEMO = new Map();
   const dP = N.dataFrom(S.data, T);
   const planSynth = comparePlan(dP, "made-up");
+  compareReserve(dP, "made-up (no reserve)");
   const fcSynth = compareForecast(dP, "made-up");
   S.data = real;
   MEMO = new Map();
@@ -223,7 +226,7 @@ const report = await f.evaluate(() => {
   const ymQ = ymOf(T);
   const Pa = [
     { id: "rb", name: "Reserve bank", type: "bank", opening: 300000, reserve: true, updatedAt: 1 },
-    { id: "mb", name: "HDFC", type: "bank", opening: 90000, updatedAt: 1 },
+    { id: "mb", name: "HDFC", type: "bank", opening: 700000, updatedAt: 1 }, // its low point sits just above its minimum: a partly capped set-aside
   ];
   const PL = [
     { id: "hl", name: "Home loan", lender: "SBI", kind: "emi", principal: 4000000, rate: 8.4, tenure: 240, start: addM(ymQ, -14), day: 5, accountId: "mb", updatedAt: 1 },
@@ -278,12 +281,73 @@ const report = await f.evaluate(() => {
       ] },
     { id: "p3", name: "Land", status: "registered", since: `${addM(ymQ, 6)}-01`, value: 0, nw: true, updatedAt: 1 },
   ];
-  S.data = { ...real, accounts: Pa, loans: PL, txns: PT, props: PP, propItems: PI };
+  const RR = (id, x) => ({ id, name: id, updatedAt: 1, type: "expense", amount: 1000, start: ymQ, day: 10, accountId: "mb", ...x });
+  const PR = [
+    RR("insurance", { freq: "yearly", amount: 42000, start: addM(ymQ, 3), day: 15 }),
+    RR("car-ins", { freq: "yearly", amount: 18500.5, start: addM(ymQ, -11), day: 3 }),
+    RR("school", { freq: "quarterly", amount: 60000, start: addM(ymQ, -1), day: 5 }),
+    RR("paid-now", { freq: "halfyearly", amount: 9000, start: ymQ, day: 1 }),
+    RR("rent", { freq: "monthly", amount: 45000, day: 1 }),
+    RR("salary", { type: "income", freq: "monthly", amount: 210000, day: 28 }),
+    RR("sip", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 25000, day: 7, accountId: "mb" }),
+    RR("groceries", { freq: "monthly", budget: true, amount: 15000 }),
+  ];
+  PT.push(
+    Z({ type: "transfer", amount: 30000, date: `${addM(ymQ, -2)}-05`, accountId: "mb", toAccountId: "rb", pot: "reserve" }),
+    Z({ type: "transfer", amount: 12000, date: `${ymQ}-03`, accountId: "mb", toAccountId: "rb", pot: "reserve" }),
+    Z({ type: "expense", amount: 18500.5, date: `${addM(ymQ, -1)}-03`, accountId: "rb", pot: "reserve" }),
+    Z({ type: "expense", amount: 9000, date: `${ymQ}-01`, accountId: "mb", link: `r:paid-now|${ymQ}` }),
+    Z({ type: "expense", amount: 6200, date: `${addM(ymQ, -3)}-14`, accountId: "mb", categoryId: (real.categories.find((c) => !c.deleted && c.kind === "expense") || {}).id }),
+    Z({ type: "investment", amount: 25000, date: `${addM(ymQ, -1)}-07`, accountId: "mb", charges: 1.25, instrument: "Index fund" }),
+    Z({ type: "income", amount: 210000, date: `${addM(ymQ, -1)}-28`, accountId: "mb" }),
+  );
+  // a high minimum on the main account: it can't spare the full set-aside this month, so the ask is capped
+  Pa[0].reserveStart = 20000; Pa[0].emTarget = 0; Pa[1].minBal = 70000;
+  S.data = { ...real, accounts: Pa, loans: PL, txns: PT, props: PP, propItems: PI, recurring: PR, settings: [{ id: "app", emMonths: 9 }] };
   MEMO = new Map();
-  const propSynth = compareProps(N.dataFrom(S.data, T), "made-up");
+  const dQ = N.dataFrom(S.data, T);
+  const propSynth = compareProps(dQ, "made-up");
+  const resSynth = compareReserve(dQ, "made-up");
   S.data = real;
   MEMO = new Map();
-  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth, planReal, planSynth, fcReal, fcSynth, propReal, propSynth };
+  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth, planReal, planSynth, fcReal, fcSynth, propReal, propSynth, resReal, resSynth };
+
+  function compareReserve(d, label) {
+    const NI = N.insights, NR = N.reserve, map = (m, scale) => Object.fromEntries([...m.entries()].map(([k, v]) => [k, scale ? v / 100 : v]));
+    const cmpMap = (a, b, what) => { for (const k of new Set([...a.keys(), ...b.keys()])) close(a.get(k) ?? 0, b.get(k) ?? 0, `${what} ${k}`); };
+    let n = 0;
+    for (let k = -24; k <= 12; k++) {
+      const ym = addM(ymOf(T), k), a = monthFigures(ym), b = NI.monthFigures(d, ym); n++;
+      for (const f of ["income", "expense", "investment", "setAside", "balance"]) close(a[f], b[f], `${label} ${ym}: ${f}`);
+      same(a.kind, b.kind, `${label} ${ym}: kind`);
+      cmpMap(a.byCat, b.byCat, `${label} ${ym}: spending in`); cmpMap(a.byInc, b.byInc, `${label} ${ym}: income in`); cmpMap(a.byInv, b.byInv, `${label} ${ym}: investing in`);
+      for (const top of new Set([...a.sub.keys(), ...b.sub.keys()])) cmpMap(a.sub.get(top) ?? new Map(), b.sub.get(top) ?? new Map(), `${label} ${ym}: ${top} ›`);
+      close(setAsideOf(ym), NR.setAsideOf(d, ym), `${label} ${ym}: set aside`);
+    }
+    cmpMap(spendByCat(), NI.spendByCat(d), `${label}: 12-month average for`);
+    same([...emExcluded()].sort(), [...NI.emExcluded(d)].sort(), `${label}: left out of the emergency fund`);
+    close(emBase(), NI.emBase(d), `${label}: emergency base`); same(emMonths(), NI.emMonths(d), `${label}: emergency months`); close(retireBase(), NI.retireBase(d), `${label}: retirement base`);
+    same(payTue(), NR.payTue(d), `${label}: payment Tuesday`);
+    const bb = bigBills(), nb = NR.bigBills(d);
+    same(bb.map((x) => [x.r.id, x.next, x.left, x.months, x.step]), nb.map((x) => [x.r.id, x.next, x.left, x.months, x.step]), `${label}: big bills`);
+    close(reserveHeld(), NR.reserveHeld(d), `${label}: reserve held`);
+    const rs = reserveState(), ns = NR.reserveState(d);
+    for (const f of ["held", "target", "monthly", "thisIn", "setAside", "setAsideFull", "avg", "emSuggest", "emTarget", "emergency", "bal"]) close(rs[f], ns[f], `${label} reserve: ${f}`);
+    same([rs.capped, rs.doneThis, rs.spareFrom?.id ?? null, rs.a?.id ?? null], [ns.capped, ns.doneThis, ns.spareFrom?.id ?? null, ns.a?.id ?? null], `${label} reserve: flags`);
+    rs.B.forEach((x, i) => { const y = ns.B[i]; if (y) { close(x.have, y.have, `${label} big bill ${x.r.id}: have`); close(x.ask, y.ask, `${label} big bill ${x.r.id}: ask`); } });
+    rs.funds.forEach((f, i) => { const g = ns.funds[i]; if (g) for (const k of ["need", "have", "monthly"]) close(f[k], g[k], `${label} fund ${f.p.id}: ${k}`); });
+    for (const days of [45, 60]) {
+      const ob = obligations(days), nob = NR.obligations(d, days);
+      same(ob.map((o) => [o.key, o.date, o.anyDay, !!o.auto, !!o.budget, !!o.big, o.acc]), nob.map((o) => [o.key, o.date, o.anyDay, !!o.auto, !!o.budget, !!o.big, o.acc]), `${label}: obligations ${days} days`);
+      ob.forEach((o, i) => nob[i] && close(o.amount, nob[i].amount, `${label} obligation ${o.key}: amount`));
+    }
+    const ra = readiness(45), rb = NR.readiness(d, 45);
+    same(ra.map((s) => [s.acc.id, s.date, s.item.key, s.from?.id ?? null, s.by]), rb.map((s) => [s.acc.id, s.date, s.item.key, s.from?.id ?? null, s.by]), `${label}: dips below minimum`);
+    ra.forEach((s, i) => { if (rb[i]) { close(s.need, rb[i].need, `${label} dip ${s.acc.id} ${s.date}: need`); close(s.bal, rb[i].bal, `${label} dip ${s.acc.id} ${s.date}: balance`); } });
+    same(ra.lows.map((x) => [x.acc.id, x.lowD]), rb.lows.map((x) => [x.acc.id, x.lowD]), `${label}: lowest points`);
+    ra.lows.forEach((x, i) => { if (rb.lows[i]) { close(x.low, rb.lows[i].low, `${label} ${x.acc.id}: lowest`); close(x.min, rb.lows[i].min, `${label} ${x.acc.id}: minimum`); } });
+    return n;
+  }
 
   function compareProps(d, label) {
     const NP = N.props, list = propList(), nlist = NP.propList(d);
@@ -459,6 +523,6 @@ const report = await f.evaluate(() => {
 });
 await browser.close();
 server.close();
-console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up · plan items over 28 months: ${report.planReal} yours + ${report.planSynth} made-up · carry-overs to make: ${report.fcReal} yours, ${report.fcSynth} made-up · properties: ${report.propReal} yours + ${report.propSynth} made-up`);
-if (report.diffs.length) { console.error(`✗ ${report.diffs.length} differences:\n  ${report.diffs.slice(0, 30).join("\n  ")}`); process.exit(1); }
-console.log("✓ dates, loans, balances, month totals, card cycles, bills, plan items, carry-overs, the 36-month forecast and properties match the planner exactly");
+console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up · plan items over 28 months: ${report.planReal} yours + ${report.planSynth} made-up · carry-overs to make: ${report.fcReal} yours, ${report.fcSynth} made-up · properties: ${report.propReal} yours + ${report.propSynth} made-up · month figures: ${report.resReal} months`);
+if (report.diffs.length) { console.error(`✗ ${report.diffs.length} differences:\n  ${report.diffs.slice(0, Number(process.env.SHOW || 30)).join("\n  ")}`); process.exit(1); }
+console.log("✓ dates, loans, balances, month totals, card cycles, bills, plan items, carry-overs, the 36-month forecast, properties, month figures, the emergency fund, the reserve and readiness match the planner exactly");

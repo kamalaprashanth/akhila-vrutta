@@ -12,10 +12,10 @@ const EPF_FY = "epf.books.*.fys.*";
 const SYNCS = ["syncs[].bal", "syncs[].was"];
 
 /** Bumped whenever MONEY_FIELDS changes: stored data from an older list must be imported again. */
-export const AMOUNTS_VERSION = "paise-3";
+export const AMOUNTS_VERSION = "paise-4";
 
 export const MONEY_FIELDS: Record<string, string[]> = {
-  accounts: ["opening", "minBal"],
+  accounts: ["opening", "minBal", "reserveStart", "emTarget"],
   categories: ["limit"],
   txns: ["amount", "carry", "fundAmt", "funds[].amt", "charges"],
   recurring: ["amount", "ov.*", "charges"],
@@ -42,10 +42,12 @@ export const NOT_MONEY: Record<string, string[]> = {
   accounts: ["dueDay", "stmtDay"],
   goals: ["pri"],
   recurring: ["day", "remind"],
-  loans: ["day", "rate", "tenure", "rates[].rate", "bank.day", "bank.rate", "bank.tenure", "bank.rates[].rate", "plans[].day"],
+  loans: ["day", "rate", "tenure", "gstRate", "rates[].rate", "bank.day", "bank.rate", "bank.tenure", "bank.rates[].rate", "plans[].day"],
   holdings: ["rate", "fx", "price", "openUnits", "usdCost", "navHist[][]", "priceJump.from", "priceJump.to",
     "epf.raise", "epf.rate", "epf.retireAge", "nps.alloc.*", "nps.xirr", "npsLines[].hist[][]", "npsLines[].price", "npsLines[].units"],
   props: ["fund.ltv"],
+  // App settings: months of spending for the emergency fund. (Profile amounts are kept as typed text.)
+  settings: ["emMonths"],
   // Broker trades are in their own currency (ccy), with per-unit prices.
   trades: ["amt", "fee", "price", "qty"],
 };
