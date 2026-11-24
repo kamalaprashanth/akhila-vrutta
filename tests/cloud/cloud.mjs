@@ -42,6 +42,8 @@ async function idToken(who) {
 /* ---------- browser helpers ---------- */
 const browser = await chromium.launch();
 const pageErrors = [];
+const consoleLines = [];
+const openPages = [];
 
 async function device(name, { user, bio } = {}) {
   // The emulator ports aren't in the production CSP; the real CSP is checked on the preview deploy.
@@ -49,6 +51,8 @@ async function device(name, { user, bio } = {}) {
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   if (user) await ctx.addInitScript((u) => { window.AV_TEST_USER = u; }, user);
   const page = await ctx.newPage();
+  openPages.push([name, page]);
+  page.on("console", (m) => consoleLines.push(`${name} [${m.type()}] ${m.text().slice(0, 300)}`));
   page.on("pageerror", (e) => pageErrors.push(`${name}: ${e.message}`));
   page.on("response", (r) => { if (r.url().startsWith(BASE) && r.status() >= 400) pageErrors.push(`${name}: ${r.status()} ${r.url()}`); });
   if (bio) {
@@ -198,6 +202,12 @@ try {
   for (const d of [A, B, C, X]) await d.ctx.close();
 } catch (e) {
   bad(`stopped: ${e.message.split("\n")[0]}`);
+  for (const [name, page] of openPages) {
+    const t = await page.locator("#lock").innerText({ timeout: 1000 }).catch(() => "(no lock screen)");
+    console.error(`  ${name} screen: ${t.replace(/\s+/g, " ").slice(0, 300)}`);
+    await page.screenshot({ path: `${SHOTS}/failed-${name.replace(/\W/g, "")}.png` }).catch(() => {});
+  }
+  console.error("  console:\n    " + consoleLines.slice(-25).join("\n    "));
 }
 await browser.close();
 if (pageErrors.length) bad(`errors on the pages:\n  ${pageErrors.join("\n  ")}`);
