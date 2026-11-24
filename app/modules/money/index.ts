@@ -25,6 +25,7 @@ import { ppfPage } from "./views/ppf.ts";
 import { npsPage } from "./views/nps.ts";
 import { propPage } from "./views/prop.ts";
 import { mountPages } from "./views/pages.ts";
+import { pxLine, pxRefresh } from "./ui/prices.ts";
 import { ensureLayer, onSheet, toast as kitToast } from "./ui/kit.ts";
 import { prefGet, prefSet, setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
 import { txnForm } from "./ui/txform.ts";
@@ -252,7 +253,7 @@ function ensureBox(): HTMLElement {
     state: () => api!.state() as PlannerState & Record<string, unknown>,
     pref: prefGet,
     prefSet,
-    plannerHtml: (name) => String(api?.call("html", name) ?? ""),
+    plannerHtml: (name) => (name === "pxLine" ? pxLine(currentData()) : ""),
     plannerClick: (attrs) => { api?.call("click", attrs); },
     go: (v) => api?.go(v),
     plannerFiles: (name, files) => { api?.call("files", name, files); },
@@ -300,6 +301,8 @@ function startEnv(): void {
     planner: (name, ...args) => { if (api) api.call(name, ...args); },
   });
   ensureLayer();
+  // Today's official prices onto the linked holdings (at most every 3 hours), as the planner did once unlocked.
+  if (ctx.session) window.setTimeout(() => { void pxRefresh(); }, 1500);
   onSheet((open) => {
     document.body.classList.toggle("msheet", open || sheetOpen);
   });

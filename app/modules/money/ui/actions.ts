@@ -11,6 +11,7 @@ import { loanAct, loanForm, markMissed } from "./loanforms.ts";
 import { planAct } from "./planforms.ts";
 import { propAct } from "./propforms.ts";
 import { invAct } from "./invforms.ts";
+import { pxStatusSheet } from "./prices.ts";
 
 /** Handles a tap; false: not one of ours yet. */
 export function appAct(el: HTMLElement, d: MoneyData): boolean {
@@ -41,6 +42,7 @@ export function appAct(el: HTMLElement, d: MoneyData): boolean {
   if (invAct(d, x)) return true;
   switch (id) {
     case "addLoan": loanForm(); return true;
+    case "pxStatus": pxStatusSheet(); return true;
     case "addAcc": accForm(); return true;
     case "addCat": catForm(); return true;
     case "addPayer": payerForm(); return true;

@@ -600,6 +600,45 @@ const report = await f.evaluate(() => {
   }
   return { n, formN, fixedSaves, txns: live("txns").length, out, estRounding, fixedCrash };
 });
+// Automatic prices: the same price lists applied by the planner and by the app must leave the same holdings.
+const pxOut = await f.evaluate(async () => {
+  const N = window.SCREENS, out = [], td = today(), clone = (x) => JSON.parse(JSON.stringify(x));
+  const HS = [
+    { id: "pm1", type: "Mutual Fund", name: "F1", px: "mf:111", price: 10, priceAuto: "2026-11-01", openUnits: 100, openInvested: 1000, inclTo: "2026-01-01", navHist: [["2026-11-01", 10]], updatedAt: 1 },
+    { id: "pm2", type: "Mutual Fund", name: "F2", isin: "INF1", openUnits: 5, openInvested: 90, inclTo: "2026-01-01", updatedAt: 1 },
+    { id: "ps1", type: "Stock", name: "S1", px: "stk:INE1", price: 100, priceManual: true, priceDate: td, openUnits: 3, updatedAt: 1 },
+    { id: "ps2", type: "Stock", name: "S2", px: "stk:INE2", price: 100, priceAuto: "2026-11-01", openUnits: 1, updatedAt: 1 },
+    { id: "pu1", type: "US Stocks", name: "AAPL", px: "us:AAPL", ccy: "USD", price: 150, fx: 83, openUnits: 2, openInvested: 25000, updatedAt: 1 },
+    { id: "pn1", type: "NPS", name: "NPS3", npsMode: "units", npsLines: [{ nm: "SBI PENSION FUND SCHEME E - TIER I", units: 100, price: 40 }, { px: "nps:SM001002", units: 50, price: 30 }], updatedAt: 1 },
+  ];
+  const tables = { mf: { date: td, rows: { "111": { p: 11.5, d: td }, "222": { p: 20.25, d: td } } }, stk: { date: td, rows: { INE1: { p: 105, d: "2026-11-20" }, INE2: { p: 150, d: td } } },
+    us: { date: td, rows: { AAPL: { p: 190.5, d: td }, USDINR: { p: 84.2, d: td } }, hist: `AAPL\t180\t2026-11-10\nAAPL\t185\t2026-11-11` }, nps: { date: td, rows: { SM001001: { p: 45.5, d: td }, SM001002: { p: 33, d: td } } } };
+  const names = { mf: [{ k: "222", n: "F2 fund", isin: "INF1,INF9" }], nps: [{ k: "SM001001", n: "SBI PENSION FUND SCHEME E - TIER I", f: "SBI" }, { k: "SM001002", n: "SBI PENSION FUND SCHEME C - TIER I", f: "SBI" }] };
+  const base = { ...clone(S.data), holdings: [...clone(S.data.holdings || []), ...clone(HS)] };
+  // the planner
+  const keep = S.data; S.data = clone(base); MEMO = new Map();
+  P.tables = clone(tables); P.names = clone(names); P.at = Date.now();
+  const thr = () => { throw new Error("no Firebase in the test"); };
+  Object.assign(H, { fb: { fs: { getDoc: thr, doc: thr, query: thr, collection: thr, where: thr, orderBy: thr, getDocs: thr, setDoc: thr } }, user: { uid: "t" }, key: true });
+  const nOld = await pxApply();
+  const oldH = Object.fromEntries(S.data.holdings.map((h) => [h.id, N.toStored("holdings", h)]));
+  S.data = keep; MEMO = new Map();
+  // the app
+  const cols = {}; for (const c of Object.keys(base)) if (Array.isArray(base[c])) cols[c] = base[c].map((r) => N.toStored(c, r));
+  let cur = new N.MoneyData(cols, td);
+  N.setEnv({ data: () => cur, state: () => S, write: (ops) => { for (const { c, r } of ops) { const i = cols[c].findIndex((x) => x.id === r.id); if (i >= 0) cols[c][i] = r; else cols[c].push(r); } cur = new N.MoneyData(cols, td); }, refresh: () => {}, planner: () => {} });
+  N.prices.pxTest(clone(tables), clone(names));
+  const nNew = await N.prices.pxApply();
+  const strip = (h) => { const x = { ...h }; delete x.updatedAt; return JSON.stringify(Object.keys(x).sort().reduce((a, k) => ((a[k] = x[k]), a), {})); };
+  for (const h of cols.holdings) if (strip(h) !== strip(oldH[h.id] || {})) out.push(`prices: holding ${h.name} differs\n    old ${strip(oldH[h.id] || {}).slice(0, 600)}\n    new ${strip(h).slice(0, 600)}`);
+  const changed = cols.holdings.filter((h) => HS.some((x) => x.id === h.id) && strip(h) !== strip(N.toStored("holdings", HS.find((x) => x.id === h.id)))).length;
+  // the lists' search and the Investments line
+  for (const q of ["f2", "222", "inf9", "sbi tier", "x"]) for (const src of ["mf", "nps"]) if (JSON.stringify(pxSearch(names[src], q)) !== JSON.stringify(N.prices.pxSearch(names[src], q))) out.push(`prices: search ${q} differs`);
+  return { out, n: nOld, nNew, changed };
+});
+report.out.push(...pxOut.out);
+console.log(`automatic prices: ${pxOut.changed} test holdings priced the same way by the planner and the app`);
+if (pxOut.changed < 5) report.out.push(`prices: only ${pxOut.changed} test holdings were priced (${pxOut.n} by the planner, ${pxOut.nNew} by the app)`);
 await browser.close(); server.close();
 const SHOW = +(process.env.SHOW || 6);
 console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets, ${report.formN} of them forms saved (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with a total ₹1 apart (half-rupee rounding)` : ""}`);
