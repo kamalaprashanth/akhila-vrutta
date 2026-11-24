@@ -74,6 +74,11 @@ export class MoneyData {
     return l as T[];
   }
 
+  /** Every record, deleted ones included. */
+  all<T extends Rec = Rec>(c: string): T[] {
+    return (this.cols[c] ?? []) as T[];
+  }
+
   byId<T extends Rec = Rec>(c: string, id: string): T | undefined {
     return (this.cols[c] ?? []).find((x) => x.id === id) as T | undefined;
   }

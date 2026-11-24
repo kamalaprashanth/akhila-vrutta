@@ -453,6 +453,17 @@ document.addEventListener("input",e=>{ const inp=e.target.closest&&e.target.clos
     L.hidden=!any && !!q; const h=L.previousElementSibling; if(h&&h.classList.contains("sh")) h.hidden=L.hidden; });
 });
 $("#syncBtn").onclick=()=>{ const t=($("#syncTxt").textContent||"Sync").trim(); toast(t+(syncing?"":" · checking for changes now")); syncNow(); };
+/* opens what a Transactions row stands for: the entry form, a loan entry, carry, EPF/PPF page or holding */
+function openTxItem(id){
+  if(id && id.startsWith("trd:")){ const tr=byId("trades",id.slice(4)); const hh=tr && live("holdings").find(h=>h.px==="stk:"+tr.isin || (h.type==="Stock" && (h.name||"").split(" ")[0].toUpperCase()===tr.sym.replace(/-\w+$/,""))); if(hh) return holdingForm({...hh}); toast(tr?`You no longer hold ${tr.sym}.`:"Trade not found."); return; }
+  if(id && id.startsWith("ppf:")){ const it=ppfTxItems().find(x=>x.id===id); if(!it) return; S.ppfId=it.ppfHid; const hh=byId("holdings",it.ppfHid);
+    if(it.ppfMid && hh){ const m=(hh.ppf.manual||[]).find(x=>x.id===it.ppfMid); if(m) return ppfEntryForm(hh,{...m}); }
+    S.ppfTab="statement"; S.ppfFy=fyOf(it.date); return go("ppf"); }
+  if(id && id.startsWith("epf:")){ const [,hid,k,,]=id.split(":"); const it=epfTxItems().find(x=>x.id===id); S.epfId=hid; const hh=byId("holdings",hid);
+    if(it && it.epfMid && hh){ const m=(hh.epf.manual||[]).find(x=>x.id===it.epfMid); if(m) return epfEntryForm(hh,{...m}); }
+    S.epfTab="passbook"; if(it) S.epfFy=it.epfFy; return go("epf"); }
+  { const t=byId("txns",id); if(t && t.type==="carry") return carrySheet(t); if(t && t.type==="loan"){ const l=byId("loans",t.loanId); if(l){ if(t.act==="missed") return missedSheet(l,t); if(t.act==="catchup") return catchupForm(l,{...t}); return entryForm(l,t.act,{...t}); } } return txnForm({...t}); }
+}
 function activate(e){
   const el=e.target.closest("[data-insopen],[data-invpay],[data-invall],[data-holi],[data-ptnext],[data-pplan],[data-ptpay],[data-ptmove],[data-ptaside],[data-prop],[data-ptab],[data-pact],[data-pitem],[data-go],[data-payer],[data-hold],[data-acct],[data-hg],[data-hyr],[data-homem],[data-ins],[data-lt],[data-pt],[data-mi],[data-hm],[data-hmt],[data-hmo],[data-hmo2],[data-cpay],[data-yr],[data-ytab],[data-ym],[data-pay],[data-miss],[data-undo],[data-ftype],[data-ftag],[data-tagedit],[data-fclear],[data-fcat],[data-tx],[data-rec],[data-loan],[data-card],[data-ca],[data-et],[data-efy],[data-epfm],[data-ea],[data-pt2],[data-pfy],[data-ppfm],[data-pa],[data-nt],[data-na],[data-ct],[data-cyc],[data-la],[data-rc],[data-pl],[data-acc],[data-cat],[data-m],[data-h],#addRec,#addLoan,#addAcc,#addCat,#syncNow,#copyJson,#restore,#imp25,#impMM,#pickMain,#txFilters,#txMore,#addHold,#moreCards,#xlsx,#dlJson,#encBackup,#hMode,#hPass,#hLock,#hOut,#addPayer,#pxStatus,#snaps");
   if(!el) return;
@@ -511,14 +522,7 @@ function activate(e){
   if(d.fcat){ txFilter().cat=d.fcat; S.txLimit=0; return render(); }
   if(d.fclear){ const f=txFilter(); if(d.fclear==="all") S.f={type:f.type,cat:"",acc:"",tag:"",period:"month",from:"",to:"",q:""}; else if(d.fclear==="period"){ f.period="month"; f.from=f.to=""; } else if(d.fclear==="amt"){ f.min=f.max=""; } else if(d.fclear==="uncat"){ f.uncat=false; } else f[d.fclear]=""; S.txLimit=0; return render(); }
   if(d.undo) return undoMark(d.undo);
-  if(d.tx && d.tx.startsWith("trd:")){ const tr=byId("trades",d.tx.slice(4)); const hh=tr && live("holdings").find(h=>h.px==="stk:"+tr.isin || (h.type==="Stock" && (h.name||"").split(" ")[0].toUpperCase()===tr.sym.replace(/-\w+$/,""))); if(hh) return holdingForm({...hh}); toast(tr?`You no longer hold ${tr.sym}.`:"Trade not found."); return; }
-  if(d.tx && d.tx.startsWith("ppf:")){ const it=ppfTxItems().find(x=>x.id===d.tx); if(!it) return; S.ppfId=it.ppfHid; const hh=byId("holdings",it.ppfHid);
-    if(it.ppfMid && hh){ const m=(hh.ppf.manual||[]).find(x=>x.id===it.ppfMid); if(m) return ppfEntryForm(hh,{...m}); }
-    S.ppfTab="statement"; S.ppfFy=fyOf(it.date); return go("ppf"); }
-  if(d.tx && d.tx.startsWith("epf:")){ const [,hid,k,,]=d.tx.split(":"); const it=epfTxItems().find(x=>x.id===d.tx); S.epfId=hid; const hh=byId("holdings",hid);
-    if(it && it.epfMid && hh){ const m=(hh.epf.manual||[]).find(x=>x.id===it.epfMid); if(m) return epfEntryForm(hh,{...m}); }
-    S.epfTab="passbook"; if(it) S.epfFy=it.epfFy; return go("epf"); }
-  if(d.tx){ const t=byId("txns",d.tx); if(t && t.type==="carry") return carrySheet(t); if(t && t.type==="loan"){ const l=byId("loans",t.loanId); if(l){ if(t.act==="missed") return missedSheet(l,t); if(t.act==="catchup") return catchupForm(l,{...t}); return entryForm(l,t.act,{...t}); } } return txnForm({...t}); }
+  if(d.tx) return openTxItem(d.tx);
   if(d.rec) return recForm({...byId("recurring",d.rec)});
   if(d.loan){ S.loanId=d.loan; S.loanTab="overview"; return go("loan"); }
   if(d.la || d.rc || d.pl){ const l=byId("loans",S.loanId); if(!l) return;

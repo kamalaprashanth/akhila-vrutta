@@ -99,8 +99,10 @@ async function unlockWithPass(page, pass) {
 }
 async function moneyFrame(page, view = "accounts") {
   await page.goto(`${BASE}/#/money/${view}`);
-  const f = await (await page.waitForSelector("#moneyFrame", { timeout: 20000 })).contentFrame();
-  await f.waitForSelector("#view *", { timeout: 20000 });
+  const f = await (await page.waitForSelector("#moneyFrame", { state: "attached", timeout: 20000 })).contentFrame();
+  // Transactions is drawn by the app itself; the planner pages are drawn in the frame.
+  if (view === "activity") { await page.waitForSelector("#moneyView #view .sumcard", { timeout: 20000 }); await f.waitForFunction(() => typeof S === "object" && !!S.data); }
+  else await f.waitForSelector("#view *", { timeout: 20000 });
   return f;
 }
 const plannerTxns = (f) => f.evaluate(() => S.data.txns.filter((t) => !t.deleted).map((t) => ({ note: t.note, amount: t.amount })));
@@ -187,6 +189,9 @@ try {
   let seen = false;
   for (let i = 0; i < 20 && !seen; i++) { await A.page.waitForTimeout(500); seen = (await plannerTxns(fA)).some((t) => t.note === "from device 2"); }
   check(seen, "a change on device 2 reaches device 1 without reloading");
+  let drawn = false;
+  for (let i = 0; i < 20 && !drawn; i++) { drawn = (await A.page.innerText("#moneyView #view").catch(() => "")).includes("from device 2"); if (!drawn) await A.page.waitForTimeout(500); }
+  check(drawn, "…and shows on device 1's Transactions page (drawn by the app from the cloud data)");
   await shot(B.page, "device2");
 
   progress("passphrase change");

@@ -15,7 +15,7 @@ const server = createServer(async (req, res) => {
   const url = decodeURIComponent((req.url ?? "/").split("?")[0]);
   if (url === "/export.json") return res.writeHead(200, { "content-type": T[".json"] }).end(await readFile(EXPORT));
   if (url === "/harness.js") return res.writeHead(200, { "content-type": T[".js"] }).end(harness);
-  if (url === "/harness.html") return res.writeHead(200, { "content-type": T[".html"] }).end('<!doctype html><link rel="stylesheet" href="/app.css"><main id="main"></main><script type="module" src="/harness.js"></script>');
+  if (url === "/harness.html") return res.writeHead(200, { "content-type": T[".html"] }).end('<!doctype html><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/money/mv.css"><main id="main"></main><script type="module" src="/harness.js"></script>');
   let file = join("dist", normalize(url).replace(/^(\.\.[/\\])+/, ""));
   if (!extname(file)) file += ".html"; // like Firebase Hosting's cleanUrls
   try { res.writeHead(200, { "content-type": T[extname(file)] ?? "application/octet-stream" }).end(await readFile(file)); } catch { res.writeHead(404).end(); }
@@ -49,7 +49,8 @@ async function newText() {
   const f = await (await p.waitForSelector("#moneyFrame")).contentFrame();
   await f.waitForSelector("#view *", { timeout: 15000 });
   const out = {};
-  for (const v of VIEWS) { await p.evaluate((v) => { location.hash = `#/money/${v}`; }, v); await p.waitForTimeout(700); out[v] = clean(await f.innerText("#view")); }
+  // Pages Akhila Vrutta draws itself are read from the app, the rest from the planner's frame.
+  for (const v of VIEWS) { await p.evaluate((v) => { location.hash = `#/money/${v}`; }, v); await p.waitForTimeout(700); out[v] = clean(await (v === "activity" ? p.innerText("#moneyView #view") : f.innerText("#view"))); }
   await p.waitForTimeout(1200);
   const writes = await p.evaluate(() => window.FAKE.writes.map((w) => `${w.c}/${w.id}`));
   // An edit in the planner is saved once, converted to paise.

@@ -20,12 +20,27 @@ async function hOpenBackup(){ throw new Error("Open encrypted backups from Setti
   try { const f = await AVB.firebase(); if(f) Object.assign(H, f, { key: true, cfg: { ai: true, aiRegion: "asia-south1" } }); } catch(e){}
   S.data = merge({}, AVB.load()); S.dirty = false; carryReady = true;
   const h = readHash(); if(VIEWS[h]) S.view = h;
+  /* Transactions is drawn by Akhila Vrutta itself now (app/modules/money/views); the planner keeps its
+     state (filters, month, selection) and still opens the forms and sheets for it. */
+  VIEWS.activity = () => "";
+  const toast0 = toast;
+  toast = t => { if(!(AVB.toast && AVB.toast(t))) toast0(t); };
+  new MutationObserver(() => AVB.sheet && AVB.sheet(!!$("#modal").firstElementChild)).observe($("#modal"), { childList: true });
   const draw = render;
   render = function(){ draw(); AVB.onView(S.view); };
   AVB.ready({
     go: v => { if(S.view !== v) go(v); else render(); },
     add: () => { const b = document.querySelector("[data-add]"); if(b) b.click(); },
     replace: data => { S.data = merge({}, data); MEMO = new Map(); render(); },
+    state: () => { txFilter(); return S; },
+    openTx: id => openTxItem(id),
+    filters: () => txFilterSheet(),
+    cleanup: () => cleanupSheet(),
+    bulk: k => bulkAct(k),
+    /* "full": the frame fills the screen while a sheet is open (offsets keep the page where it was);
+       "only": just the sheet, over a screen Akhila Vrutta draws. */
+    chrome: (mode, o) => { const r = document.documentElement; r.classList.toggle("avfull", mode !== ""); r.classList.toggle("avonly", mode === "only");
+      if(o) for(const k of ["t","l","b"]) r.style.setProperty("--av"+k, (o[k]||0)+"px"); },
   });
   render(); setSync("ok", "Saved");
   AVB.save(S.data);   /* anything the first render filled in (carry-overs, card EMIs, snapshots) */

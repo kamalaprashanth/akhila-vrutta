@@ -4,6 +4,7 @@
 import { build } from "esbuild";
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { scopeCss } from "./scope-css.mjs";
 
 const out = "dist";
 rmSync(out, { recursive: true, force: true });
@@ -22,6 +23,8 @@ const LEG = "app/modules/money/legacy";
 const parts = readdirSync(LEG).filter((f) => f.endsWith(".js")).sort();
 writeFileSync(`${out}/money/legacy.js`, parts.map((f) => `/* ${f} */\n${readFileSync(`${LEG}/${f}`, "utf8")}`).join("\n"));
 writeFileSync(`${out}/money/money.css`, readFileSync(`${LEG}/money.css`, "utf8") + "\n" + readFileSync(`${LEG}/embed.css`, "utf8"));
+// Screens rewritten into the app keep the planner's look: its stylesheet, scoped to the money area.
+writeFileSync(`${out}/money/mv.css`, scopeCss(readFileSync(`${LEG}/money.css`, "utf8")) + "\n" + readFileSync("app/modules/money/views/mv-fixes.css", "utf8"));
 
 /** Reads `key: "value"` pairs out of a pasted firebaseConfig snippet. */
 function parseConfig(text) {

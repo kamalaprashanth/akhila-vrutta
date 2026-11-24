@@ -1,0 +1,14 @@
+/* Screens moved out of the planner's frame: its stylesheet is scoped to .mv (scripts/scope-css.mjs).
+   These few rules are the frame's own layout, and the fixes agreed for the moved screens. */
+.mv{height:auto;min-height:100%}
+.mv .wrap{padding-top:12px}
+@container mv (min-width:900px){
+  .mv .wrap{padding:16px 32px 64px}
+  /* The planner's header used to sit above this column; without it, 96px pushed the column below the list. */
+  .mv .cols.tx>div:first-child{top:16px}
+}
+/* The bar for selected rows sits above the app's tabs (phone) and in the money area (laptop). */
+.mv .bulkbar{bottom:calc(146px + env(safe-area-inset-bottom))}
+@container mv (min-width:900px){ .mv .bulkbar{bottom:24px;left:calc(50% + 48px)} }
+.mv .toast{bottom:calc(162px + env(safe-area-inset-bottom))}
+@container mv (min-width:900px){ .mv .toast{bottom:32px;left:calc(50% + 48px)} }

@@ -3,3 +3,7 @@
 .app { display: block !important; min-height: 100%; }
 .wrap { padding-top: 12px !important; }
 @media (min-width: 900px) { .wrap { padding: 16px 32px 64px !important; } }
+/* While a sheet is open the frame fills the screen: the page keeps its place, the app shows around it. */
+html.avfull, html.avfull body { background: transparent !important; }
+html.avfull .app { padding: var(--avt, 0) 0 var(--avb, 0) var(--avl, 0); box-sizing: border-box; }
+html.avonly .app { visibility: hidden; }

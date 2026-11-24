@@ -11,6 +11,10 @@ import { ctx } from "../../core/app.ts";
 import { META, MONEY_COLLECTIONS, stableJSON, type Changes, type Rec, type WriteOp } from "../../core/store.ts";
 import { AMOUNTS_VERSION, fromStored, toStored, unclassified } from "./paise.ts";
 import { callable, initFirebase } from "../../core/firebase.ts";
+import { mountTransactions, moneyData, type PlannerState } from "./views/transactions.ts";
+
+/** Planner pages that Akhila Vrutta now draws itself (the planner keeps their state and sheets). */
+const MOVED = new Set(["activity"]);
 
 const ICON = "M3 7h18v12H3zM3 11h18M7 15h3";
 
@@ -31,6 +35,12 @@ interface FrameApi {
   go(v: string): void;
   add(): void;
   replace(d: LegacyData): void;
+  state(): PlannerState;
+  openTx(id: string): void;
+  filters(): void;
+  cleanup(): void;
+  bulk(k: string): void;
+  chrome(mode: "" | "full" | "only", offsets?: { t: number; l: number; b: number }): void;
 }
 
 let frame: HTMLIFrameElement | null = null;
@@ -40,6 +50,11 @@ let view = "home";
 let seen = new Map<string, string>();
 let saveTimer = 0;
 let pendingData: LegacyData | null = null;
+/** The area where moved screens are drawn (same place as the frame), and whether a planner sheet is open. */
+let box: HTMLElement | null = null;
+let txPage: { render(first?: boolean): void } | null = null;
+let sheetOpen = false;
+let onMoved = false;
 
 const key = (c: string, id: string) => `${c}/${id}`;
 
@@ -110,6 +125,10 @@ declare global {
       save(d: LegacyData): void;
       onView(v: string): void;
       ready(a: FrameApi): void;
+      /** A planner sheet opened or closed. */
+      sheet(open: boolean): void;
+      /** A planner message; shown by Akhila Vrutta when the planner's page isn't on screen. */
+      toast(t: string): boolean;
       /** What the planner's price and Advisor code needs from Firebase (signed in, same session). */
       firebase(): Promise<{ fb: { fs: unknown }; db: unknown; appI: unknown; user: { uid: string } } | null>;
       callable(name: string, timeout: number): Promise<(data: unknown) => Promise<{ data: unknown }>>;
@@ -135,6 +154,18 @@ function ensureFrame(): HTMLIFrameElement {
       });
       const want = `#/money/${v}`;
       if (location.hash.startsWith("#/money") && location.hash !== want) history.replaceState(null, "", want);
+      showMoved(MOVED.has(v));
+    },
+    sheet: (open) => setSheet(open),
+    toast: (t) => {
+      if (!onMoved || !box) return false;
+      const el = document.createElement("div");
+      el.className = "toast";
+      el.setAttribute("role", "status");
+      el.textContent = t;
+      box.querySelector(".mv")!.appendChild(el);
+      window.setTimeout(() => el.remove(), 3800);
+      return true;
     },
     ready: (a) => { api = a; },
     firebase: async () => {
@@ -154,6 +185,53 @@ function ensureFrame(): HTMLIFrameElement {
   frame.src = `/money/app#${encodeURIComponent(start)}`;
   document.body.appendChild(frame);
   return frame;
+}
+
+/** Shows a moved screen (drawn here) or the planner's own page. */
+function showMoved(on: boolean): void {
+  const first = on && !onMoved;
+  onMoved = on;
+  ensureBox().hidden = !on;
+  if (frame) frame.hidden = on && !sheetOpen;
+  if (!on) return;
+  // Anything the planner just changed is saved first, so the page is drawn from current data.
+  if (pendingData) { clearTimeout(saveTimer); flush(); }
+  txPage?.render(first);
+}
+
+/** A planner sheet: the frame fills the screen while it's open, so the sheet reaches the bottom and nothing covers it. */
+function setSheet(open: boolean): void {
+  if (!frame || !api || open === sheetOpen) return;
+  sheetOpen = open;
+  document.body.classList.toggle("msheet", open);
+  if (open) {
+    const r = (onMoved ? ensureBox() : frame).getBoundingClientRect();
+    api.chrome(onMoved ? "only" : "full", { t: r.top, l: r.left, b: window.innerHeight - r.bottom });
+    frame.classList.add("over");
+    frame.hidden = false;
+  } else {
+    frame.classList.remove("over");
+    api.chrome("");
+    frame.hidden = onMoved;
+  }
+}
+
+function ensureBox(): HTMLElement {
+  if (box) return box;
+  box = document.createElement("div");
+  box.id = "moneyView";
+  box.hidden = true;
+  box.innerHTML = '<div class="mv"><div class="wrap" id="view" role="main"></div></div>';
+  document.body.appendChild(box);
+  txPage = mountTransactions(box, {
+    state: () => (api ? api.state() : null),
+    data: () => moneyData((c) => ctx.store!.all(c), MONEY_COLLECTIONS),
+    openTx: (id) => api?.openTx(id),
+    filters: () => api?.filters(),
+    cleanup: () => api?.cleanup(),
+    bulk: (k) => api?.bulk(k),
+  });
+  return box;
 }
 
 export const money: Module = {
@@ -183,12 +261,16 @@ export const money: Module = {
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`;
     root.querySelector("#moneyAdd")!.addEventListener("click", () => api?.add());
     const f = ensureFrame();
-    f.hidden = false;
+    ensureBox();
     if (want && api && want !== view) api.go(want);
+    else showMoved(MOVED.has(view) && !!api);
+    if (!MOVED.has(view) || !api) f.hidden = false;
   },
 };
 
 /** Called by the shell when another tab is shown. */
 export function hideMoney(): void {
   if (frame) frame.hidden = true;
+  if (box) box.hidden = true;
+  onMoved = false;
 }
