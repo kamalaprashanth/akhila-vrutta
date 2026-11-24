@@ -145,7 +145,115 @@ const report = await f.evaluate(() => {
   const accSynth = compareAccounts(N.dataFrom(S.data, T), "made-up");
   S.data = real;
   MEMO = new Map();
-  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth };
+  const planReal = comparePlan(d, "yours");
+
+  // Made-up plan items: every frequency, month changes and skips, a budget with spends, trading-day shifts,
+  // SIPs with and without charges, transfers, a card EMI, family repayment plans (monthly and one-off, one paid).
+  const ymP = ymOf(T);
+  const cats = real.categories;
+  const anyCat = (cats.find((c) => !c.deleted && c.kind === "expense") || {}).id;
+  const R = (id, x) => ({ id, name: id, updatedAt: 1, type: "expense", amount: 1000, start: addM(ymP, -3), day: 5, accountId: "pb", categoryId: anyCat, ...x });
+  const synthRec = [
+    R("monthly", { freq: "monthly", amount: 2499.5 }),
+    R("quarterly", { freq: "quarterly", start: addM(ymP, -1), day: 31 }),
+    R("half", { freq: "halfyearly", start: addM(ymP, -5) }),
+    R("yearly-ends", { freq: "yearly", start: addM(ymP, -12), end: addM(ymP, 12) }),
+    R("biennial", { freq: "biennial", start: addM(ymP, -24) }),
+    R("triennial", { freq: "triennial", start: addM(ymP, 1) }),
+    R("once", { freq: "once", start: addM(ymP, 2) }),
+    R("ended", { freq: "monthly", end: addM(ymP, 1) }),
+    R("ov", { freq: "monthly", ov: { [addM(ymP, 1)]: 0, [addM(ymP, 2)]: 3333.33, [ymP]: 1500 } }),
+    R("budget", { freq: "monthly", budget: true, amount: 8000 }),
+    R("sip-mf", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 10000, day: 7, shift: "trading" }),
+    R("sip-chg", { type: "investment", invType: "Stocks", freq: "monthly", amount: 5000, charges: 15.9, day: 14, shift: "trading" }),
+    R("sip-zero", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 3000, charges: "", day: 1 }),
+    R("salary", { type: "income", freq: "monthly", amount: 185000, day: 30 }),
+    R("move", { type: "transfer", freq: "monthly", amount: 20000, accountId: "pb", toAccountId: "pc", day: 28 }),
+    R("holiday-shift", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 2000, day: 24, shift: "trading" }),
+    // month-end on a weekend or holiday: the next trading day is in the next month, so the day stays
+    R("eom-shift", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 1500, day: 31, shift: "trading" }),
+    R("eom-shift-30", { type: "income", freq: "monthly", amount: 700, day: 30, shift: "trading" }),
+  ];
+  const synthAcc2 = [
+    { id: "pb", name: "Plan bank", type: "bank", opening: 50000, updatedAt: 1 },
+    { id: "pc", name: "Plan card", type: "card", opening: -4200, stmtDay: 18, dueDay: 7, payFrom: "pb", updatedAt: 1 },
+    { id: "pc2", name: "Plan card 2", type: "card", opening: 0, stmtDay: 3, dueDay: 23, updatedAt: 1 },
+  ];
+  const synthLoans2 = [
+    { id: "cemi", name: "Phone", kind: "cardemi", principal: 59999, rate: 15, tenure: 6, start: addM(ymP, -1), accountId: "pc", fee: 199, categoryId: anyCat, updatedAt: 1 },
+    { id: "cemi2", name: "Laptop", kind: "cardemi", principal: 90000, rate: 13, tenure: 9, start: ymP, accountId: "pc2", gstRate: 0, updatedAt: 1 },
+    { id: "fam", name: "Uncle", lender: "Uncle", kind: "family", updatedAt: 1, plans: [
+      { id: "m", freq: "monthly", amount: 25000, start: ymP, end: addM(ymP, 10), accountId: "pb" },
+      { id: "o", freq: "once", amount: 40000, start: addM(ymP, 3), accountId: "pb" } ] },
+    // leaves 30 paise owed: too small for a final repayment
+    { id: "fam-dust", name: "Aunt", lender: "Aunt", kind: "family", updatedAt: 1, plans: [{ id: "m", freq: "monthly", amount: 25000, start: ymP, accountId: "pb" }] },
+    { id: "emi", name: "Car", kind: "emi", principal: 700000, rate: 9.1, tenure: 60, start: addM(ymP, -10), accountId: "pb", day: 10, updatedAt: 1 },
+  ];
+  let n3 = 0; const Y = (x) => ({ id: `q${++n3}`, updatedAt: n3, ...x });
+  const synthTx2 = [
+    Y({ type: "loan", loanId: "fam", act: "borrow", amount: 200000, date: `${addM(ymP, -6)}-01`, accountId: "pb" }),
+    Y({ type: "loan", loanId: "fam-dust", act: "borrow", amount: 100000.3, date: `${addM(ymP, -2)}-01`, accountId: "pb" }),
+    Y({ type: "loan", loanId: "fam", act: "repay", amount: 25000, date: `${ymP}-02`, accountId: "pb", link: `p:fam:m|${ymP}` }),
+    Y({ type: "expense", amount: 1999, date: `${ymP}-02`, accountId: "pb", budgetId: "budget" }),
+    Y({ type: "transfer", amount: 500, date: `${ymP}-03`, accountId: "pb", toAccountId: "pc", budgetId: "budget" }),
+    Y({ type: "expense", amount: 700, date: `${addM(ymP, -1)}-20`, accountId: "pb", budgetId: "budget" }),
+    Y({ type: "expense", amount: 1234.5, date: `${addM(ymP, -1)}-20`, accountId: "pc" }),
+    Y({ type: "expense", amount: 88.8, date: T, accountId: "pc" }),
+    Y({ type: "expense", amount: 250, date: `${addM(ymP, -1)}-05`, accountId: "pc2" }),
+  ];
+  S.data = { ...real, accounts: synthAcc2, recurring: synthRec, loans: synthLoans2, txns: synthTx2, settings: [{ id: "app", holidays: [`${ymP}-07`, `${addM(ymP, 1)}-14`] }] };
+  MEMO = new Map();
+  const planSynth = comparePlan(N.dataFrom(S.data, T), "made-up");
+  S.data = real;
+  MEMO = new Map();
+  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth, planReal, planSynth };
+
+  function comparePlan(d, label) {
+    const NP = N.plan, months = [];
+    for (let k = -3; k <= 24; k++) months.push(addM(ymOf(T), k));
+    const MONEY = ["amount", "budget", "spent", "chg"];
+    const norm = (it, scale) => { const o = {}; for (const [k, v] of Object.entries(it)) { if (k === "plan" || k === "l") continue; o[k] = MONEY.includes(k) ? (v == null ? v : Math.round((scale ? v / 100 : v) * 1e6) / 1e6) : v ?? null; } return o; };
+    const cmpItems = (a, b, what) => {
+      same(a.length, b.length, `${what}: count`);
+      a.forEach((x, i) => { const y = b[i]; if (!y) return; const A = norm(x, false), B = norm(y, true);
+        for (const k of new Set([...Object.keys(A), ...Object.keys(B)])) {
+          if (MONEY.includes(k)) close(x[k], y[k], `${what} ${x.key}: ${k}`);
+          else same(A[k] ?? null, B[k] ?? null, `${what} ${x.key}: ${k}`);
+        } });
+    };
+    let items = 0;
+    for (const ym of months) {
+      const o = planned(ym), n = NP.planned(d, ym); items += o.length;
+      cmpItems(o, n, `${label} planned ${ym}`);
+      cmpItems(planFor(ym), NP.planFor(d, ym), `${label} planFor ${ym}`);
+      cmpItems(cardBills(ym), NP.cardBills(d, ym), `${label} card bills ${ym}`);
+      const cd = cemiDue(ym), nd = NP.cemiDue(d, ym);
+      same(cd.length, nd.length, `${label} card EMI due ${ym}: count`);
+      cd.forEach((x, i) => { if (nd[i]) { close(x.v, nd[i].v, `${label} card EMI due ${ym} #${i}`); same([x.card, x.cat ?? null], [nd[i].card, nd[i].cat ?? null], `${label} card EMI due ${ym} #${i}: where`); } });
+      for (const r of S.data.recurring.filter((x) => !x.deleted)) {
+        const nr = d.byId("recurring", r.id);
+        same(recurs(r, ym), NP.recurs(nr, ym), `${label} ${r.name}: recurs ${ym}`);
+        same(recDay(r, ym), NP.recDay(d, nr, ym), `${label} ${r.name}: day in ${ym}`);
+        if (r.budget) close(budgetSpent(r.id, ym), NP.budgetSpent(d, r.id, ym), `${label} ${r.name}: budget spent ${ym}`);
+      }
+    }
+    for (const l of S.data.loans.filter((x) => !x.deleted)) {
+      const nl = d.byId("loans", l.id);
+      const a = famPlan(l), b = NP.famPlan(d, nl);
+      same(a.map((x) => [x.ym, x.key]), b.map((x) => [x.ym, x.key]), `${label} ${l.name}: repayment plan`);
+      a.forEach((x, i) => b[i] && close(x.amount, b[i].amount, `${label} ${l.name}: repayment ${x.key}`));
+      if (kindOf(l) === "cardemi") {
+        const p = cemiParts(l), q = NP.cemiParts(d, nl);
+        same(p.map((x) => [x.ym, x.stmt, x.k, x.n]), q.map((x) => [x.ym, x.stmt, x.k, x.n]), `${label} ${l.name}: card EMI statements`);
+        p.forEach((x, i) => { if (q[i]) for (const k of ["prin", "intg", "fee"]) close(x[k], q[i][k], `${label} ${l.name} ${x.ym}: ${k}`); });
+      }
+    }
+    for (const c of S.data.categories.filter((x) => !x.deleted)) same(catName(c.id), NP.catName(d, c.id), `${label} category name ${c.id}`);
+    for (const a of S.data.accounts) same(accName(a.id), NP.accName(d, a.id), `${label} account name ${a.id}`);
+    for (const amt of [0, 1, 99.99, 1000, 2499.5, 10000, 123456.78]) close(stampDuty(amt), NP.stampDuty(Math.round(amt * 100)), `stamp duty on ${amt}`);
+    for (const dd of months.flatMap((m) => [`${m}-01`, `${m}-07`, `${m}-14`, `${m}-24`, `${m}-26`])) { same(isTradingDay(dd), NP.isTradingDay(d, dd), `${label} trading day ${dd}`); same(nextTrading(dd), NP.nextTrading(d, dd), `${label} next trading ${dd}`); }
+    return items;
+  }
 
   function compareAccounts(d, label) {
     const NA = N.accounts, accs = S.data.accounts.filter((a) => !a.deleted), txs = S.data.txns.filter((t) => !t.deleted);
@@ -216,6 +324,6 @@ const report = await f.evaluate(() => {
 });
 await browser.close();
 server.close();
-console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up`);
+console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up · plan items over 28 months: ${report.planReal} yours + ${report.planSynth} made-up`);
 if (report.diffs.length) { console.error(`✗ ${report.diffs.length} differences:\n  ${report.diffs.slice(0, 30).join("\n  ")}`); process.exit(1); }
-console.log("✓ dates, loans, balances, month totals, card cycles and bills match the planner exactly");
+console.log("✓ dates, loans, balances, month totals, card cycles, bills and plan items match the planner exactly");
