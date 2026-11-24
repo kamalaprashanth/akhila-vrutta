@@ -23,5 +23,7 @@ Each step ships on its own: branch → CI (cloud tests) → main → release, ch
 5. Plan page (views/plan.ts) — done. Still in the planner: regular item / goal / emergency forms, marking paid
    (markPaid, undo, missed), Move / Put aside, market holidays; goals are created from the profile by the planner.
    AMOUNTS_VERSION is paise-6 (goal school/ug/pg/spend are money): the owner re-imports once, at the end.
-6. Overview. 7. Insights. 8. Advisor. 9. Money settings (more).
+6. Overview (views/home.ts) — done. Pay/Move/Set aside/Invest buttons, Change account and the Advisor still
+   open in the planner.
+7. Insights. 8. Advisor. 9. Money settings (more).
 10. Remove the frame; switch-over (import button goes, old app read-only for a month).

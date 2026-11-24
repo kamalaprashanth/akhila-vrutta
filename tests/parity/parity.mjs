@@ -47,7 +47,7 @@ async function newText() {
   p.on("console", (m) => { if (m.type() === "error" && !/fonts|ERR_FAILED/.test(m.text())) errors.push(m.text()); });
   await p.goto(`${base}/harness.html#/money/home`);
   const f = await (await p.waitForSelector("#moneyFrame")).contentFrame();
-  await f.waitForSelector("#view *", { timeout: 15000 });
+  await f.waitForFunction(() => typeof S === "object" && !!S.data, null, { timeout: 20000 });
   const out = {};
   // Pages Akhila Vrutta draws itself are read from the app, the rest from the planner's frame.
   for (const v of VIEWS) { await p.evaluate((v) => { location.hash = `#/money/${v}`; }, v); await p.waitForTimeout(700); const drawnByApp = await p.$eval("#moneyView", (e) => !e.hidden).catch(() => false); out[v] = clean(await (drawnByApp ? p.innerText("#moneyView #view") : f.innerText("#view"))); }

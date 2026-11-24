@@ -98,7 +98,7 @@ async function unlockWithPass(page, pass) {
   await page.click("#lock .btn.pri");
 }
 /** Pages the app draws itself (the frame stays blank on them). */
-const MOVED = ["activity", "accounts", "plan"];
+const MOVED = ["home", "activity", "accounts", "plan"];
 async function moneyFrame(page, view = "more") {
   await page.goto(`${BASE}/#/money/${view}`);
   const f = await (await page.waitForSelector("#moneyFrame", { state: "attached", timeout: 20000 })).contentFrame();

@@ -27,7 +27,7 @@ const page = await browser.newPage();
 await page.route(/fonts\.g/, (r) => r.abort());
 await page.goto(`http://127.0.0.1:${server.address().port}/harness.html#/money/home`);
 const f = await (await page.waitForSelector("#moneyFrame")).contentFrame();
-await f.waitForSelector("#view *", { timeout: 20000 });
+await f.waitForFunction(() => typeof S === "object" && !!S.data, null, { timeout: 20000 });
 await f.addScriptTag({ content: screens });
 
 const report = await f.evaluate(() => {
@@ -211,11 +211,20 @@ const report = await f.evaluate(() => {
     Object.assign(S, keep);
   };
   planPages(d2, "made-up");
+  const homePages = (dx, tag) => {
+    const keep = { ptNext: S.ptNext, insOpen: S.insOpen, view: S.view };
+    const host = { pref: (k, v) => prefGet(k, v) };
+    for (const st of [{}, { ptNext: true }, { insOpen: true }, { ptNext: true, insOpen: true }])
+      page(`${tag} overview ${JSON.stringify(st)}`, () => { Object.assign(S, { ptNext: undefined, insOpen: undefined, view: "home" }, st); return vHome(); }, () => N.home.homeHtml(dx, { ...st }, host));
+    Object.assign(S, keep);
+  };
+  homePages(d2, "made-up");
   sheets(d2, "made-up");
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
   accPages(d, "yours");
   planPages(d, "yours");
+  homePages(d, "yours");
   Object.assign(S, save); MEMO = new Map();
   // Also the money formats, on awkward amounts.
   for (const r of [0, 0.004, 0.005, -0.5, 0.5, 1.5, 2.5, -2.5, 999.995, 1234.56, -1234.56, 12345678.9, 1e9]) {
@@ -229,4 +238,4 @@ await browser.close(); server.close();
 const SHOW = +(process.env.SHOW || 6);
 console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with an estimate ₹1 apart (half-rupee rounding)` : ""}`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
-console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section) and Plan (every tab) are identical to the planner's");
+console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab) and Overview are identical to the planner's");

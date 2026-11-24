@@ -27,7 +27,7 @@ const page = await browser.newPage();
 await page.route(/fonts\.g/, (r) => r.abort());
 await page.goto(`http://127.0.0.1:${server.address().port}/harness.html#/money/home`);
 const f = await (await page.waitForSelector("#moneyFrame")).contentFrame();
-await f.waitForSelector("#view *", { timeout: 20000 });
+await f.waitForFunction(() => typeof S === "object" && !!S.data, null, { timeout: 20000 });
 await f.addScriptTag({ content: calc });
 
 const report = await f.evaluate(() => {
