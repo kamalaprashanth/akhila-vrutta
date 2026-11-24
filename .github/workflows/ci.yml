@@ -49,6 +49,8 @@ jobs:
           FIREBASE_WEB_CONFIG: ${{ vars.FIREBASE_WEB_CONFIG }}
           AUTH_DOMAIN: kp-akhila-vrutta.web.app
       - run: npm run test:e2e
+      - name: Calculations match the planner (made-up sample)
+        run: npm run test:calc
       - uses: actions/upload-artifact@v4
         with:
           name: dist

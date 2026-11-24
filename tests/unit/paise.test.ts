@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { fromStored, toStored, MONEY_FIELDS } from "../../app/modules/money/paise.ts";
+import { fromStored, toStored, unclassified, MONEY_FIELDS } from "../../app/modules/money/paise.ts";
 
 test("converts listed fields only, both ways", () => {
   const t = { id: "t", amount: 1234.56, funds: [{ amt: 0.1 }], price: 12.3456, note: "x" };
@@ -34,4 +34,26 @@ test("the owner's real export round-trips exactly", { skip: !real || !existsSync
     for (const r of list) { assert.deepEqual(fromStored(c, toStored(c, r)), r, `${c}/${r.id}`); n++; }
   }
   assert.ok(n > 8000);
+});
+
+test("statement matches, goals, limits, fees and charges are money", () => {
+  const l = toStored("loans", { id: "l", fee: 199, syncs: [{ ym: "2026-01", bal: 512345.67, was: 500000 }], bank: { syncs: [{ bal: 1.5 }] } }) as any;
+  assert.deepEqual([l.fee, l.syncs[0].bal, l.syncs[0].was, l.bank.syncs[0].bal], [19900, 51234567, 50000000, 150]);
+  assert.deepEqual(toStored("goals", { id: "g", target: 2000000, saved: 12.5, pri: 2 }), { id: "g", target: 200000000, saved: 1250, pri: 2 });
+  assert.equal((toStored("categories", { id: "c", limit: 5000 }) as any).limit, 500000);
+  assert.equal((toStored("accounts", { id: "a", minBal: 10000 }) as any).minBal, 1000000);
+  assert.equal((toStored("txns", { id: "t", charges: 0.25 }) as any).charges, 25);
+});
+
+test("unknown number fields are reported, known ones aren't", () => {
+  assert.deepEqual(unclassified("loans", { id: "a", principal: 1, rate: 9, syncs: [{ bal: 2, mystery: 4 }], updatedAt: 5 }), ["syncs[].mystery"]);
+  assert.deepEqual(unclassified("holdings", { id: "h", epf: { books: { X1: { fys: { "2024": { close: [1], rows: [{ emp: 1 }] } } } } }, navHist: [[1, 2]] }), []);
+  assert.deepEqual(unclassified("trades", { id: "t", amt: 10.5, qty: 2 }), []);
+});
+
+test("every number field in the owner's real export is classified", { skip: !real || !existsSync(real) }, () => {
+  const d = JSON.parse(readFileSync(real!, "utf8")).data;
+  const all = new Set<string>();
+  for (const [c, list] of Object.entries(d)) if (Array.isArray(list)) for (const r of list) for (const p of unclassified(c, r)) all.add(`${c}: ${p}`);
+  assert.deepEqual([...all], []);
 });

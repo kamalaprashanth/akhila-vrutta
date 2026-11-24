@@ -264,6 +264,8 @@ try {
   console.error("  console:\n    " + consoleLines.slice(-25).join("\n    "));
 }
 await browser.close();
+const unclassifiedLines = consoleLines.filter((l) => /not classified as money/.test(l));
+if (unclassifiedLines.length) bad(`number fields saved that aren't classified as money or not:\n  ${unclassifiedLines.join("\n  ")}`);
 if (pageErrors.length) bad(`errors on the pages:\n  ${pageErrors.join("\n  ")}`);
 console.log(failed ? `cloud: ${failed} check(s) failed` : "cloud: all passed");
 process.exit(failed ? 1 : 0);

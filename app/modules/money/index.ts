@@ -9,7 +9,7 @@ import type { Module } from "../types.ts";
 import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
 import { META, MONEY_COLLECTIONS, stableJSON, type Changes, type Rec, type WriteOp } from "../../core/store.ts";
-import { fromStored, toStored } from "./paise.ts";
+import { AMOUNTS_VERSION, fromStored, toStored, unclassified } from "./paise.ts";
 import { callable, initFirebase } from "../../core/firebase.ts";
 
 const ICON = "M3 7h18v12H3zM3 11h18M7 15h3";
@@ -43,6 +43,14 @@ let pendingData: LegacyData | null = null;
 
 const key = (c: string, id: string) => `${c}/${id}`;
 
+/** A number field the paise lists don't know: saved as-is, and reported so the list gets fixed. */
+const warned = new Set<string>();
+function warnOnce(path: string): void {
+  if (warned.has(path)) return;
+  warned.add(path);
+  console.error(`[money] number field not classified as money or not: ${path}. Add it to paise.ts.`);
+}
+
 function loadForPlanner(): LegacyData {
   const s = ctx.store!;
   const meta = s.get(META, "money");
@@ -72,7 +80,10 @@ function flush(): void {
       const k = key(c, r.id);
       const j = stableJSON(r);
       next.set(k, j);
-      if (seen.get(k) !== j) ops.push({ c, id: r.id, r: toStored(c, JSON.parse(j) as Rec) });
+      if (seen.get(k) !== j) {
+        ops.push({ c, id: r.id, r: toStored(c, JSON.parse(j) as Rec) });
+        for (const p of unclassified(c, r)) warnOnce(`${c}: ${p}`);
+      }
     }
   }
   for (const k of seen.keys()) if (!next.has(k)) { const [c, id] = [k.slice(0, k.indexOf("/")), k.slice(k.indexOf("/") + 1)]; ops.push({ c, id, r: null }); }
@@ -156,9 +167,9 @@ export const money: Module = {
       return;
     }
     const meta = s.get(META, "money");
-    if (!meta || meta.amounts !== "paise") {
+    if (!meta || meta.amounts !== AMOUNTS_VERSION) {
       root.innerHTML = html`<section class="card"><h2>Bring in your money data</h2>
-        <p>${meta ? "Your data was imported before amounts moved to paise. Import it once more to open the planner." : "Import your KP Money Planner export to start."}</p>
+        <p>${meta ? "This version stores a few more amounts in paise. Import your KP Money Planner export once more to open the planner." : "Import your KP Money Planner export to start."}</p>
         <div class="btns"><a class="btn pri" href="#/settings">Go to Settings › Import</a></div></section>`;
       return;
     }

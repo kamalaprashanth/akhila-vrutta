@@ -9,20 +9,45 @@ import type { Rec } from "../../core/store.ts";
 
 const EPF_ROW = ["emp", "eps", "epsw", "er", "wage"];
 const EPF_FY = "epf.books.*.fys.*";
+const SYNCS = ["syncs[].bal", "syncs[].was"];
+
+/** Bumped whenever MONEY_FIELDS changes: stored data from an older list must be imported again. */
+export const AMOUNTS_VERSION = "paise-2";
 
 export const MONEY_FIELDS: Record<string, string[]> = {
-  accounts: ["opening"],
-  txns: ["amount", "carry", "fundAmt", "funds[].amt"],
-  recurring: ["amount", "ov.*"],
-  loans: ["principal", "emi", "bank.principal", "bank.emi", "plans[].amount"],
+  accounts: ["opening", "minBal"],
+  categories: ["limit"],
+  txns: ["amount", "carry", "fundAmt", "funds[].amt", "charges"],
+  recurring: ["amount", "ov.*", "charges"],
+  loans: ["principal", "emi", "fee", "bank.principal", "bank.emi", "plans[].amount", ...SYNCS, ...SYNCS.map((x) => `bank.${x}`)],
   holdings: [
     "openInvested", "value", "history[].value", "epfEmp", "epfEr", "yearly",
     "nps.contrib", "nps.value", "nps.charges", "ppf.rows[].amt",
     `${EPF_FY}.close[]`, `${EPF_FY}.int[]`, `${EPF_FY}.ob[]`, ...EPF_ROW.map((f) => `${EPF_FY}.rows[].${f}`),
   ],
-  props: ["value", "cur", "plan[].amt", "plan[].gst", "stmt.chg", "stmt.int", "stmt.out", "stmt.pemi", "stmt.prin", "fund.start"],
+  props: ["value", "cur", "plan[].amt", "plan[].gst", "plan[].youAmt", "plan[].bankAmt",
+    "stmt.chg", "stmt.int", "stmt.out", "stmt.pemi", "stmt.prin", "fund.start"],
   propItems: ["amt"],
   snaps: ["banks", "cards", "inv", "loans", "prop", "total"],
+  goals: ["target", "saved"],
+};
+
+/**
+ * Numbers that are not rupee amounts and stay as they are: days, rates and percentages, units, per-unit
+ * prices (rupees per unit, with decimals), foreign-currency amounts, times. Anything numeric in neither
+ * list is reported by `unclassified`, so a new money field can't slip through unconverted.
+ */
+export const NOT_MONEY: Record<string, string[]> = {
+  "*": ["updatedAt"],
+  accounts: ["dueDay", "stmtDay"],
+  goals: ["pri"],
+  recurring: ["day", "remind"],
+  loans: ["day", "rate", "tenure", "rates[].rate", "bank.day", "bank.rate", "bank.tenure", "bank.rates[].rate", "plans[].day"],
+  holdings: ["rate", "fx", "price", "openUnits", "usdCost", "navHist[][]", "priceJump.from", "priceJump.to",
+    "epf.raise", "epf.rate", "epf.retireAge", "nps.alloc.*", "nps.xirr", "npsLines[].hist[][]", "npsLines[].price", "npsLines[].units"],
+  props: ["fund.ltv"],
+  // Broker trades are in their own currency (ccy), with per-unit prices.
+  trades: ["amt", "fee", "price", "qty"],
 };
 
 type Conv = (n: number) => number;
@@ -53,6 +78,28 @@ function convert(c: string, r: Rec, fn: Conv): Rec {
   const out = structuredClone(r);
   if (paths) for (const p of paths) walk(out, tokens(p), fn);
   return out;
+}
+
+function pathRegex(p: string): RegExp {
+  const esc = tokens(p).map((t) => (t === "*" ? "[^.]+" : t === "[]" ? "\\[\\]" : t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  return new RegExp(`^${esc.join("\\.").replace(/\\.\\\[\\\]/g, "\\[\\]")}$`);
+}
+const known = new Map<string, RegExp[]>();
+function patterns(c: string): RegExp[] {
+  if (!known.has(c)) known.set(c, [...(MONEY_FIELDS[c] ?? []), ...(NOT_MONEY[c] ?? []), ...(NOT_MONEY["*"] ?? [])].map(pathRegex));
+  return known.get(c)!;
+}
+
+/** Number fields in a record that are in neither list (each path once, e.g. "loans: syncs[].bal"). */
+export function unclassified(c: string, r: Rec): string[] {
+  const found = new Set<string>();
+  const leaf = (node: unknown, path: string): void => {
+    if (typeof node === "number") { if (!patterns(c).some((re) => re.test(path))) found.add(path); return; }
+    if (Array.isArray(node)) { for (const x of node) leaf(x, `${path}[]`); return; }
+    if (node && typeof node === "object") for (const [k, v] of Object.entries(node)) leaf(v, path ? `${path}.${k}` : k);
+  };
+  leaf(r, "");
+  return [...found];
 }
 
 /** A planner record (rupees) as it is stored (paise). */

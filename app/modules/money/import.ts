@@ -4,7 +4,7 @@
  */
 import { aesKey, deriveRaw, open, TD, type Sealed } from "../../core/crypto.ts";
 import { META, MONEY_COLLECTIONS, type Rec } from "../../core/store.ts";
-import { toStored } from "./paise.ts";
+import { AMOUNTS_VERSION, toStored } from "./paise.ts";
 
 export interface OldExport {
   app?: string;
@@ -62,6 +62,6 @@ export function parseOldExport(j: unknown): Parsed {
   }
   const unknown = Object.keys(x.data).filter((k) => k !== "schema" && !(MONEY_COLLECTIONS as readonly string[]).includes(k));
   if (unknown.length) throw new Error(`The file has parts this version doesn't know yet: ${unknown.join(", ")}.`);
-  records[META] = [{ id: "money", schema: x.data.schema ?? 1, amounts: "paise", source: "KP Money Planner", exported: x.exported ?? null, imported: new Date().toISOString() }];
+  records[META] = [{ id: "money", schema: x.data.schema ?? 1, amounts: AMOUNTS_VERSION, source: "KP Money Planner", exported: x.exported ?? null, imported: new Date().toISOString() }];
   return { records, counts, exported: x.exported ?? null };
 }
