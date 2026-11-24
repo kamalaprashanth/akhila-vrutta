@@ -98,8 +98,8 @@ async function unlockWithPass(page, pass) {
   await page.click("#lock .btn.pri");
 }
 /** Pages the app draws itself (the frame stays blank on them). */
-const MOVED = ["home", "activity", "accounts", "plan", "insights", "advisor"];
-async function moneyFrame(page, view = "more") {
+const MOVED = ["home", "activity", "accounts", "plan", "insights", "advisor", "more"];
+async function moneyFrame(page, view = "accounts") {
   await page.goto(`${BASE}/#/money/${view}`);
   const f = await (await page.waitForSelector("#moneyFrame", { state: "attached", timeout: 20000 })).contentFrame();
   // Transactions is drawn by the app itself; the planner pages are drawn in the frame.
@@ -132,8 +132,10 @@ try {
   const styled = await f.evaluate(() => {
     const sheets = [...document.styleSheets].filter((s) => { try { return s.cssRules.length > 50; } catch { return false; } }).length;
     const bodyFont = getComputedStyle(document.body).fontFamily;
-    const card = document.querySelector(".card");
-    return { sheets, bodyFont, radius: card ? getComputedStyle(card).borderRadius : "none", script: typeof S === "object" };
+    // Every page is drawn by the app now, so the frame's styles are checked on a card made for the purpose.
+    const card = document.createElement("div"); card.className = "card"; document.body.appendChild(card);
+    const radius = getComputedStyle(card).borderRadius; card.remove();
+    return { sheets, bodyFont, radius, script: typeof S === "object" };
   });
   check(styled.sheets >= 1 && styled.radius !== "0px" && styled.radius !== "none" && styled.script, `money frame has its styles and script (${JSON.stringify(styled)})`);
   await moneyFrame(A.page, "accounts");
@@ -142,6 +144,8 @@ try {
   const imported = (await plannerTxns(fT)).find((t) => t.note === "sample expense 1234.56");
   check(imported?.amount === 1234.56, `an imported transaction is back in rupees (₹${imported?.amount})`);
   await shot(A.page, "money-accounts");
+  await moneyFrame(A.page, "more");
+  check(/Setup checklist/.test(await A.page.innerText("#moneyView #view")) && /\d+ transactions/.test(await A.page.innerText("#moneyView #view")), "Money settings (drawn by the app) shows the imported data");
 
   progress("functions from the planner");
   /* 3b. The planner reaches the Cloud Functions through the main app's sign-in (Advisor, price refresh) */

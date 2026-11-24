@@ -166,7 +166,7 @@ const report = await f.evaluate(() => {
     try { b = newFn(); } catch (e) { b = "new threw: " + e.message; }
     if (a !== b && sameButEstimates(a, b)) { estRounding++; return; }
     if (a.startsWith("old threw") && !b.includes("threw")) { fixedCrash.push(label); return; }
-    if (a !== b) { let i = 0; while (i < a.length && a[i] === b[i]) i++; out.push(`${label}: differs at ${i}\n    old …${a.slice(Math.max(0, i - 100), i + 140)}\n    new …${b.slice(Math.max(0, i - 100), i + 140)}`); }
+    if (a !== b) { let i = 0; while (i < a.length && a[i] === b[i]) i++; out.push(`${label}: differs at ${i} ${JSON.stringify([a.slice(i - 5, i + 30), b.slice(i - 5, i + 30)])}\n    old …${a.slice(Math.max(0, i - 100), i + 140)}\n    new …${b.slice(Math.max(0, i - 100), i + 140)}`); }
   };
   // Rupee decimals summed in the planner can land just under a half rupee (52,012.4999 for an exact 52,012.50), so
   // a rounded total can be ₹1 apart. Accepted only in a table row or a chart's coordinates, only by ₹1, and counted.
@@ -262,6 +262,8 @@ const report = await f.evaluate(() => {
     S.advChat = keep;
   };
   advPages(d2, "made-up");
+  const morePages = (dx, tag) => { for (const nOn of [false, true]) { prefSet("notify", nOn); page(`${tag} money settings (notify ${nOn})`, () => vMore(), () => N.more.moreHtml(dx, nOn)); } localStorage.removeItem("kpmp.ui.notify"); };
+  morePages(d2, "made-up");
   sheets(d2, "made-up");
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
@@ -270,6 +272,7 @@ const report = await f.evaluate(() => {
   homePages(d, "yours");
   insPages(d, "yours");
   advPages(d, "yours");
+  morePages(d, "yours");
   Object.assign(S, save); MEMO = new Map();
   // Also the money formats, on awkward amounts.
   for (const r of [0, 0.004, 0.005, -0.5, 0.5, 1.5, 2.5, -2.5, 999.995, 1234.56, -1234.56, 12345678.9, 1e9]) {
@@ -284,4 +287,4 @@ const SHOW = +(process.env.SHOW || 6);
 console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with a total ₹1 apart (half-rupee rounding)` : ""}`);
 if (report.fixedCrash.length) console.log(`  (the old planner crashes on ${report.fixedCrash.length} of these — ${[...new Set(report.fixedCrash.map((l) => l.replace(/^(made-up|yours) /, "")))].join(", ")} — the new page shows them)`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
-console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview, Insights (every tab) and the Advisor (page and what Claude is sent) are identical to the planner's");
+console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview, Insights (every tab) the Advisor (page and what Claude is sent) and Money settings are identical to the planner's");
