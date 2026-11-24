@@ -11,6 +11,7 @@ import { rs0, short, shortR } from "./accounts.ts";
 import { barChart, chartCard, fmtMoney, legendHtml, lineChart, tableHtml, type Series } from "./charts.ts";
 import type { Page } from "./pages.ts";
 import { accountsPage } from "./accounts.ts";
+import { epfPdfToHolding } from "../ui/epfpdf.ts";
 
 type Epf = NonNullable<ReturnType<typeof epfCalc>>;
 type Row = Epf["rows"][number] & { k: string; wm?: string; d?: string; from?: string; note?: string; manual?: boolean; mid?: string; internal?: boolean; fy: number };
@@ -143,7 +144,7 @@ export const epfPage: Page = {
     return false;   // add entry, assumptions, an entry you added: the planner's forms for now
   },
   change(el, h) {
-    if (el.id === "epfPdfV") { h.plannerFiles("epfPdf", [...(el.files ?? [])]); el.value = ""; return; }
+    if (el.id === "epfPdfV") { const files = [...(el.files ?? [])], S = h.state() as unknown as EpfState, hh = epfHold(h.data(), S); el.value = ""; if (hh) void epfPdfToHolding(hh.id, files); return; }
     return false;
   },
 };

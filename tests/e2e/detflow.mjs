@@ -33,6 +33,18 @@ const PLAN_PDF = await (async () => {
     <tr><td>Grand Total</td><td></td><td>9500000</td><td></td></tr></table>`);
   const buf = await pg.pdf({ format: "A4" }); await b.close(); return buf;
 })();
+// An EPFO member passbook, printed by the browser.
+const PB_PDF = await (async () => {
+  const b = await chromium.launch(), pg = await b.newPage();
+  const row = (...c) => `<tr>${c.map((x) => `<td>${x}</td>`).join("")}</tr>`;
+  await pg.setContent(`<style>td{white-space:nowrap}</style><table style="font:9px sans-serif;border-spacing:14px 8px">
+    ${row("Member ID / Name", "KNBNG00123450000012345 / KP")}${row("Establishment ID/Name", "KNBNG0012345 / TEST EMPLOYER PVT LTD")}${row("Date of Birth", "15-06-1990")}
+    ${row("Financial Year - 2025 - 2026")}${row("OB Int. Updated upto 31/03/2025", "1,00,000", "30,000", "50,000")}
+    ${row("Apr-2025", "15-05-2025", "CR", "Cont. For Due-Month 052025", "50,000", "15,000", "6,000", "1,833", "1,250")}
+    ${row("May-2025", "15-06-2025", "CR", "Cont. For Due-Month 062025", "50,000", "15,000", "6,000", "1,833", "1,250")}
+    ${row("Int. Updated upto 31/03/2026", "9,000", "2,700", "0")}${row("Closing Balance as on 31/03/2026", "1,21,000", "36,366", "52,500")}</table>`);
+  const buf = await pg.pdf({ format: "A4" }); await b.close(); return buf;
+})();
 const ADD = () => {
   const nowM = ymOf(today()), ym1 = addM(nowM, -1), acc = live("accounts")[0].id;
   upsert("holdings", { id: "hp", type: "PPF", instrument: "PPF2", name: "PPF2", rate: 7.1, ppf: { opened: "2018-05-01", stmtDate: `${addM(nowM, -3)}-01`, rows: [{ k: "dep", d: "2025-05-01", amt: 1000 }, { k: "int", d: "2026-03-31", amt: 71.25 }],
@@ -93,10 +105,14 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.fill("#mvLayer #f_emp", "2,000"); await p.fill("#mvLayer #f_er", "611"); await p.click("#mvLayer #modal #sv"); await p.waitForTimeout(900);
   ok(await f.evaluate(() => (byId("holdings", "he").epf.manual || []).some((m) => m.emp === 2000 && m.er === 611 && m.k === "cont")), "…a ₹2,000 + ₹611 month is saved");
   ok(await p.$eval(`${V} #epfPdfV`, (e) => e.type === "file" && e.multiple), "Load passbooks has its file picker");
-  // The PDF reading is still the planner's: the chosen files reach it (stubbed here; no real passbook in the test).
-  await f.evaluate(() => { window.__got = null; window.epfPdfToHolding = (h, files) => { window.__got = [h.id, files.length, files[0].name]; }; });
-  await p.setInputFiles(`${V} #epfPdfV`, { name: "passbook.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") }); await settle();
-  ok(JSON.stringify(await f.evaluate(() => window.__got)) === '["he",1,"passbook.pdf"]', "chosen passbooks reach the planner's reader");
+  // A real EPF passbook PDF (made here), read by the app on this device and added to the holding.
+  if (process.env.DBG) p.on("console", (m) => console.log("console:", m.text()));
+  await p.setInputFiles(`${V} #epfPdfV`, { name: "passbook.pdf", mimeType: "application/pdf", buffer: PB_PDF }); await p.waitForTimeout(3000);
+  if (process.env.DBG) console.log("lines:", await p.evaluate(async (b64) => { const pdfjs = await import("/money/vendor/pdfjs/pdf.min.mjs"); pdfjs.GlobalWorkerOptions.workerSrc = "/money/vendor/pdfjs/pdf.worker.min.mjs"; const u = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); const doc = await pdfjs.getDocument({ data: u }).promise; const tc = await (await doc.getPage(1)).getTextContent(); return tc.items.map((i) => `${Math.round(i.transform[5])}:${i.str}`).join(" ~ "); }, PB_PDF.toString("base64")));
+  if (process.env.DBG) console.log("toasts:", await p.$$eval(".toast", (t) => t.map((x) => x.textContent)));
+  const bk = await f.evaluate(() => byId("holdings", "he").epf.books["KNBNG00123450000012345"]);
+  ok(bk && bk.est === "TEST EMPLOYER PVT LTD" && bk.fys["2025"] && bk.fys["2025"].rows.length === 2 && bk.fys["2025"].ob[0] === 100000, `a passbook PDF is read and added (${JSON.stringify(bk && { est: bk.est, rows: bk.fys["2025"]?.rows.length, ob: bk.fys["2025"]?.ob })})`);
+  ok(/KNBNG00123450000012345/.test(await p.textContent(V)) || (await p.$$(`${V} [data-et]`)).length === 4, "…and the EPF page shows it");
   await p.click(`${V} .monthbar [data-go="accounts"]`); await settle();
   ok((await view()) === "accounts", "‹ back to Accounts");
 
@@ -131,6 +147,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   // A real payment-plan PDF (made here), read on this device by the app: the rows it finds go into Expected.
   p.on("console", (m) => { if (process.env.DBG) console.log("console:", m.text()); });
   await p.setInputFiles(`${V} #planPdf`, { name: "plan.pdf", mimeType: "application/pdf", buffer: PLAN_PDF }); await p.waitForTimeout(2500);
+  if (process.env.DBG) console.log("lines:", await p.evaluate(async (b64) => { const pdfjs = await import("/money/vendor/pdfjs/pdf.min.mjs"); pdfjs.GlobalWorkerOptions.workerSrc = "/money/vendor/pdfjs/pdf.worker.min.mjs"; const u = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); const doc = await pdfjs.getDocument({ data: u }).promise; const tc = await (await doc.getPage(1)).getTextContent(); return tc.items.map((i) => `${Math.round(i.transform[5])}:${i.str}`).join(" ~ "); }, PB_PDF.toString("base64")));
   if (process.env.DBG) console.log("toasts:", await p.$$eval(".toast", (t) => t.map((x) => x.textContent)));
   const L = "#mvLayer #modal";
   ok(/Payment plan found/.test(await p.textContent(`${L} h3`).catch(() => "")) && (await p.$$(`${L} .list .row`)).length === 3, "a payment plan PDF is read: 3 payments found");
