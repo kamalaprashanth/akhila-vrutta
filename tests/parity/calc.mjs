@@ -146,6 +146,7 @@ const report = await f.evaluate(() => {
   S.data = real;
   MEMO = new Map();
   const planReal = comparePlan(d, "yours");
+  const fcReal = compareForecast(d, "yours");
 
   // Made-up plan items: every frequency, month changes and skips, a budget with spends, trading-day shifts,
   // SIPs with and without charges, transfers, a card EMI, family repayment plans (monthly and one-off, one paid).
@@ -169,6 +170,9 @@ const report = await f.evaluate(() => {
     R("sip-zero", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 3000, charges: "", day: 1 }),
     R("salary", { type: "income", freq: "monthly", amount: 185000, day: 30 }),
     R("move", { type: "transfer", freq: "monthly", amount: 20000, accountId: "pb", toAccountId: "pc", day: 28 }),
+    // money leaving the counted accounts for one left out of totals
+    R("to-broker", { type: "transfer", freq: "monthly", amount: 15000, accountId: "pb", toAccountId: "pinv", day: 2 }),
+    R("from-broker", { type: "transfer", freq: "quarterly", amount: 4000, accountId: "pinv", toAccountId: "pb", day: 9 }),
     R("holiday-shift", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 2000, day: 24, shift: "trading" }),
     // month-end on a weekend or holiday: the next trading day is in the next month, so the day stays
     R("eom-shift", { type: "investment", invType: "Mutual Fund", freq: "monthly", amount: 1500, day: 31, shift: "trading" }),
@@ -178,6 +182,7 @@ const report = await f.evaluate(() => {
     { id: "pb", name: "Plan bank", type: "bank", opening: 50000, updatedAt: 1 },
     { id: "pc", name: "Plan card", type: "card", opening: -4200, stmtDay: 18, dueDay: 7, payFrom: "pb", updatedAt: 1 },
     { id: "pc2", name: "Plan card 2", type: "card", opening: 0, stmtDay: 3, dueDay: 23, updatedAt: 1 },
+    { id: "pinv", name: "Brokerage (not in totals)", type: "invest", opening: 0, noTotal: true, updatedAt: 1 },
   ];
   const synthLoans2 = [
     { id: "cemi", name: "Phone", kind: "cardemi", principal: 59999, rate: 15, tenure: 6, start: addM(ymP, -1), accountId: "pc", fee: 199, categoryId: anyCat, updatedAt: 1 },
@@ -195,6 +200,9 @@ const report = await f.evaluate(() => {
     Y({ type: "loan", loanId: "fam-dust", act: "borrow", amount: 100000.3, date: `${addM(ymP, -2)}-01`, accountId: "pb" }),
     Y({ type: "loan", loanId: "fam", act: "repay", amount: 25000, date: `${ymP}-02`, accountId: "pb", link: `p:fam:m|${ymP}` }),
     Y({ type: "expense", amount: 1999, date: `${ymP}-02`, accountId: "pb", budgetId: "budget" }),
+    // paid early: next month's and the month after's items already settled
+    Y({ type: "expense", amount: 2499.5, date: `${ymP}-04`, accountId: "pb", link: `r:monthly|${addM(ymP, 1)}` }),
+    Y({ type: "income", amount: 185000, date: `${ymP}-04`, accountId: "pb", link: `r:salary|${addM(ymP, 2)}` }),
     Y({ type: "transfer", amount: 500, date: `${ymP}-03`, accountId: "pb", toAccountId: "pc", budgetId: "budget" }),
     Y({ type: "expense", amount: 700, date: `${addM(ymP, -1)}-20`, accountId: "pb", budgetId: "budget" }),
     Y({ type: "expense", amount: 1234.5, date: `${addM(ymP, -1)}-20`, accountId: "pc" }),
@@ -203,10 +211,36 @@ const report = await f.evaluate(() => {
   ];
   S.data = { ...real, accounts: synthAcc2, recurring: synthRec, loans: synthLoans2, txns: synthTx2, settings: [{ id: "app", holidays: [`${ymP}-07`, `${addM(ymP, 1)}-14`] }] };
   MEMO = new Map();
-  const planSynth = comparePlan(N.dataFrom(S.data, T), "made-up");
+  const dP = N.dataFrom(S.data, T);
+  const planSynth = comparePlan(dP, "made-up");
+  const fcSynth = compareForecast(dP, "made-up");
   S.data = real;
   MEMO = new Map();
-  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth, planReal, planSynth };
+  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth, planReal, planSynth, fcReal, fcSynth };
+
+  function compareForecast(d, label) {
+    const NF = N.forecast;
+    same(mainAcc()?.id ?? null, NF.mainAcc(d)?.id ?? null, `${label}: main account`);
+    const o = forecast(36), n = NF.forecast(d, 36);
+    close(o.start, n.start, `${label} forecast: starting balance`);
+    o.months.forEach((m, i) => { const q = n.months[i]; if (!q) return;
+      for (const k of ["inc", "out", "inv", "emi", "net", "bal"]) close(m[k], q[k], `${label} forecast ${m.ym}: ${k}`);
+      same(m.rows.map((r) => [r.key, r.paid, r.missed]), q.rows.map((r) => [r.key, r.paid, r.missed]), `${label} forecast ${m.ym}: rows`);
+      same(m.ending.map((r) => r.key), q.ending.map((r) => r.key), `${label} forecast ${m.ym}: ending`);
+    });
+    // Carry-overs: run the planner's own ensureCarry on a copy and compare what it adds with what the new code would make.
+    const keep = S.data;
+    S.data = JSON.parse(JSON.stringify(keep)); MEMO = new Map();
+    const before = new Set(S.data.txns.map((t) => t.id));
+    const ids = new Set(keep.txns.map((t) => t.id));
+    try { ensureCarry(); } catch (e) { out.push(`${label}: ensureCarry threw ${e.message}`); }
+    const made = S.data.txns.filter((t) => !before.has(t.id));
+    S.data = keep; MEMO = new Map();
+    const want = NF.carriesToMake(d, ids);
+    same(made.map((t) => [t.id, t.dir, t.date, t.ym, t.accountId]), want.map((t) => [t.id, t.dir, t.date, t.ym, t.accountId]), `${label}: carry-overs to make`);
+    made.forEach((t, i) => { if (want[i]) { close(t.carry, want[i].carry, `${label} ${t.id}: carry`); close(t.amount, want[i].amount, `${label} ${t.id}: amount`); } });
+    return made.length;
+  }
 
   function comparePlan(d, label) {
     const NP = N.plan, months = [];
@@ -324,6 +358,6 @@ const report = await f.evaluate(() => {
 });
 await browser.close();
 server.close();
-console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up · plan items over 28 months: ${report.planReal} yours + ${report.planSynth} made-up`);
+console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up · plan items over 28 months: ${report.planReal} yours + ${report.planSynth} made-up · carry-overs to make: ${report.fcReal} yours, ${report.fcSynth} made-up`);
 if (report.diffs.length) { console.error(`✗ ${report.diffs.length} differences:\n  ${report.diffs.slice(0, 30).join("\n  ")}`); process.exit(1); }
-console.log("✓ dates, loans, balances, month totals, card cycles, bills and plan items match the planner exactly");
+console.log("✓ dates, loans, balances, month totals, card cycles, bills, plan items, carry-overs and the 36-month forecast match the planner exactly");
