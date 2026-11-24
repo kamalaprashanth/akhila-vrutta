@@ -132,13 +132,13 @@ jobs:
       - name: Roll back if the live check failed
         if: failure() && steps.live.outcome == 'failure' && steps.before.outputs.version != ''
         run: |
-          $FT hosting:clone "$SITE:@${{ steps.before.outputs.version }}" "$SITE:live" --project "$PROJECT"
+          node scripts/release-version.mjs live "${{ steps.before.outputs.version }}"
           echo "::error::The live check failed, so the site was rolled back to the previous version."
-      - name: Rehearse the rollback (copies the previous version to a throwaway preview, never to live)
+      - name: Rehearse the rollback (releases the previous version on a throwaway preview, never on live)
         if: success() && steps.before.outputs.version != ''
         run: |
           $FT hosting:channel:create rollback-rehearsal --site "$SITE" --project "$PROJECT" --expires 1d || true
-          $FT hosting:clone "$SITE:@${{ steps.before.outputs.version }}" "$SITE:rollback-rehearsal" --project "$PROJECT"
+          node scripts/release-version.mjs rollback-rehearsal "${{ steps.before.outputs.version }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
