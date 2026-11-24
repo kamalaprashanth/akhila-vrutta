@@ -11,11 +11,34 @@ const EPF_ROW = ["emp", "eps", "epsw", "er", "wage"];
 const EPF_FY = "epf.books.*.fys.*";
 const SYNCS = ["syncs[].bal", "syncs[].was"];
 
-/** Bumped whenever MONEY_FIELDS changes: stored data from an older list must be imported again. */
-export const AMOUNTS_VERSION = "paise-6";
+/** Bumped whenever MONEY_FIELDS changes: stored data from an older list must be imported again (or upgraded, below). */
+export const AMOUNTS_VERSION = "paise-7";
+/**
+ * Stored data one version behind that can be brought up to date in place, without importing again:
+ * the fields that became money (stored in rupees until then), per collection.
+ */
+export const UPGRADES: Record<string, { to: string; fields: Record<string, string[]> }> = {
+  "paise-6": { to: "paise-7", fields: { accounts: ["limit", "fee", "feeWaive"] } },
+};
+/** The writes that bring stored data from `meta.amounts` up to AMOUNTS_VERSION, or null if it can't be. */
+export function upgradeWrites(meta: Rec & { amounts?: unknown }, all: (c: string) => Rec[], now = Date.now()): { ops: { c: string; id: string; r: Rec }[]; meta: Rec } | null {
+  const ops: { c: string; id: string; r: Rec }[] = [];
+  let m: Rec & { amounts?: unknown } = meta;
+  for (let up = UPGRADES[String(m.amounts)]; up; up = UPGRADES[String(m.amounts)]) {
+    for (const [c, fields] of Object.entries(up.fields)) for (const r of all(c)) {
+      const x: Record<string, unknown> = { ...r }; let changed = false;
+      for (const f of fields) if (typeof x[f] === "number") { x[f] = rupeesToPaise(x[f] as number); changed = true; }
+      if (changed) ops.push({ c, id: r.id, r: { ...(x as Rec), updatedAt: now } });
+    }
+    m = { ...m, amounts: up.to, upgraded: new Date(now).toISOString() };
+  }
+  if (m.amounts !== AMOUNTS_VERSION) return null;
+  return { ops: [...ops, { c: "meta", id: String(m.id), r: m }], meta: m };
+}
 
 export const MONEY_FIELDS: Record<string, string[]> = {
-  accounts: ["opening", "minBal", "reserveStart", "emTarget"],
+  // A card's credit limit, annual fee and the spend that waives it are money too.
+  accounts: ["opening", "minBal", "reserveStart", "emTarget", "limit", "fee", "feeWaive"],
   categories: ["limit"],
   txns: ["amount", "carry", "fundAmt", "funds[].amt", "charges"],
   recurring: ["amount", "ov.*", "charges"],
@@ -41,7 +64,7 @@ export const MONEY_FIELDS: Record<string, string[]> = {
  */
 export const NOT_MONEY: Record<string, string[]> = {
   "*": ["updatedAt"],
-  accounts: ["dueDay", "stmtDay"],
+  accounts: ["dueDay", "stmtDay", "apr", "reward"],
   goals: ["pri", "kid", "inf", "ret", "life", "pre", "post"],
   recurring: ["day", "remind"],
   loans: ["day", "rate", "tenure", "gstRate", "rates[].rate", "bank.day", "bank.rate", "bank.tenure", "bank.rates[].rate", "plans[].day"],

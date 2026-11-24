@@ -5,6 +5,7 @@
  * Sheets live in their own layer (#mvLayer) above the app's tabs and + button.
  */
 import { esc } from "../../../core/dom.ts";
+import { E } from "./env.ts";
 import type { MoneyData, Paise, Rec } from "../calc/data.ts";
 import { balances, type Account } from "../calc/accounts.ts";
 import { catName } from "../calc/plan.ts";
@@ -53,6 +54,8 @@ export function openSheet(title: string, bodyHtml: string, onMount?: (s: HTMLEle
   $("#scrim")!.addEventListener("click", (e) => { if ((e.target as HTMLElement).id === "scrim") closeModal(); });
   const s = modal().querySelector<HTMLElement>(".sheet")!;
   onMount?.(s);
+  // Like the planner: a category or account field gets its picker once the sheet is drawn.
+  try { attachPickers(E().data(), s); } catch { /* no money data yet */ }
   afterOpen?.(s);
   const f = modal().querySelector<HTMLElement>("input, select");
   f?.focus({ preventScroll: true });
@@ -157,6 +160,7 @@ const newestFirst = (d: MoneyData): Txn[] => [...d.live<Txn>("txns")].sort((a, b
 /** Money Manager-style category picker over the hidden #f_categoryId select. */
 export function attachCatPicker(d: MoneyData, sheet: HTMLElement): void {
   const sel = sheet.querySelector<HTMLSelectElement>("#f_categoryId")!;
+  if (sheet.querySelector("#cp_btn")) return;   // already attached
   sel.hidden = true;
   sel.insertAdjacentHTML("afterend", `<button type="button" class="cpbtn" id="cp_btn" aria-expanded="false"><span id="cp_lbl"></span><span aria-hidden="true">▾</span></button>
     <div class="cppanel" id="cp_panel" hidden><input type="search" id="cp_q" placeholder="Search categories" autocomplete="off"><div id="cp_body"></div></div>`);
@@ -220,6 +224,7 @@ export function attachCatPicker(d: MoneyData, sheet: HTMLElement): void {
 /** Account picker over a hidden account <select>: bank accounts and cards in groups, balances, search, recent. */
 export function attachAccPicker(d: MoneyData, sheet: HTMLElement, sel: HTMLSelectElement): void {
   const k = sel.id;
+  if (sheet.querySelector("#ap_btn_" + k)) return;   // already attached
   sel.hidden = true;
   sel.insertAdjacentHTML("afterend", `<button type="button" class="cpbtn" id="ap_btn_${k}" aria-expanded="false"><span class="aplbl"></span><span aria-hidden="true">▾</span></button>
     <div class="cppanel" hidden><input type="search" placeholder="Search accounts" autocomplete="off"><div class="apbody"></div></div>`);

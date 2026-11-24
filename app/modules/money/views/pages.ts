@@ -6,6 +6,7 @@
 import type { MoneyData } from "../calc/data.ts";
 import { dress } from "./txlist.ts";
 import { resetCharts } from "./charts.ts";
+import { appAct } from "../ui/actions.ts";
 import type { PlannerState } from "./transactions.ts";
 
 export interface PageHost {
@@ -68,6 +69,7 @@ export function mountPages(box: HTMLElement, pages: Record<string, Page>, host: 
     const p = page();
     if (!p) return;
     if (p.act && p.act(el, host, redraw) !== false) return;
+    if (appAct(el, host.data())) return;
     const a = attrsOf(el);
     if (Object.keys(a).length) host.plannerClick(a);
   }

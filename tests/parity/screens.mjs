@@ -344,8 +344,91 @@ const report = await f.evaluate(() => {
   };
   propPages(d2, "made-up");
   sheets(d2, "made-up");
+  // Forms, saved: the same values typed into the planner's form and the new one must store the same records
+  // (the planner's in rupees, converted to paise as an import would; new ids and save times aside).
+  let formN = 0;
+  const fillIn = (root, vals) => {
+    for (const [k, v] of Object.entries(vals)) {
+      const e = k.startsWith("#") || k.startsWith("input") ? root.querySelector(k) : root.querySelector("#f_" + k);
+      if (!e) { out.push(`form fill: no field ${k}`); continue; }
+      if (e.type === "checkbox" || e.type === "radio") e.checked = !!v; else e.value = v;
+      e.dispatchEvent(new Event("input", { bubbles: true })); e.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  };
+  const sortK = (o) => Object.keys(o).sort().reduce((a, k) => ((a[k] = o[k]), a), {});
+  // A record saved again unchanged (only its time) isn't a change.
+  const norm = (ops, before, dx) => ops.map(({ c, r }) => { const o = { ...r }; delete o.updatedAt; const was = dx.all(c).find((x) => x.id === o.id); if (was) { const w = { ...was }; delete w.updatedAt; if (JSON.stringify(sortK(w)) === JSON.stringify(sortK(o))) return null; } if (!before.has(c + ":" + o.id)) o.id = "NEW"; return JSON.stringify([c, sortK(o)]); }).filter(Boolean).sort();
+  const cmpForm = (dx, label, openOld, openNew, vals, steps = ["#sv"]) => {
+    n++; formN++;
+    const keepData = S.data, snap = JSON.parse(JSON.stringify(S.data)), ids = new Set();
+    S.data = JSON.parse(JSON.stringify(keepData)); MEMO = new Map();   // the planner's forms change records in place
+    for (const c of Object.keys(snap)) if (Array.isArray(snap[c])) for (const r of snap[c]) ids.add(c + ":" + r.id);
+    openOld(); const m1 = document.querySelector("#modal"); fillIn(m1, vals);
+    for (const st of steps) document.querySelector("#modal " + st)?.click();
+    const oldOps = [];
+    for (const c of Object.keys(S.data)) if (Array.isArray(S.data[c])) for (const r of S.data[c]) {
+      const b = (snap[c] || []).find((x) => x.id === r.id), strip = (x) => { const y = { ...x }; delete y.updatedAt; return JSON.stringify(y); };
+      if (!b || strip(b) !== strip(r)) oldOps.push({ c, r: N.toStored(c, r) });
+    }
+    closeModal(); S.data = keepData; MEMO = new Map();
+    const newOps = [];
+    N.setEnv({ data: () => dx, state: () => S, write: (o) => newOps.push(...o), refresh: () => {}, planner: () => {} });
+    openNew(); const m2 = document.querySelector("#mvLayer #modal"); fillIn(m2, vals);
+    for (const st of steps) document.querySelector("#mvLayer #modal " + st)?.click();
+    N.kit.closeModal();
+    const A = norm(oldOps, ids, dx), B = norm(newOps, ids, dx);
+    if (!A.length && !/unchanged|no name|already used|nothing/.test(label)) out.push(`form ${label}: nothing saved by either (the test didn't reach Save)`);
+    if (JSON.stringify(A) !== JSON.stringify(B)) out.push(`form ${label}: saves differ\n    old ${A.join("\n        ").slice(0, 900)}\n    new ${B.join("\n        ").slice(0, 900)}`);
+  };
+  const formCases = (dx, tag) => {
+    const F = N.forms, accs = live("accounts"), banks = accs.filter((a) => a.type !== "card"), cards = accs.filter((a) => a.type === "card");
+    // As drawn first.
+    N.setEnv({ data: () => dx, state: () => S, write: () => {}, refresh: () => {}, planner: () => {} });
+    cmpSheet(`${tag} new account`, () => accForm(), () => F.accForm());
+    for (const a of accs) cmpSheet(`${tag} edit account ${a.name}`, () => accForm({ ...a }), () => F.accForm({ ...dx.byId("accounts", a.id) }));
+    cmpSheet(`${tag} new payer`, () => payerForm(), () => F.payerForm());
+    for (const p of live("payers")) cmpSheet(`${tag} edit payer ${p.name}`, () => payerForm({ ...p }), () => F.payerForm({ ...dx.byId("payers", p.id) }));
+    cmpSheet(`${tag} new category`, () => catForm(), () => F.catForm());
+    for (const c of live("categories").slice(0, 25)) cmpSheet(`${tag} edit category ${c.name}`, () => catForm({ ...c }), () => F.catForm({ ...dx.byId("categories", c.id) }));
+    cmpSheet(`${tag} Home balance account`, () => pickMainSheet(), () => F.pickMainSheet());
+    for (const g of allTags().slice(0, 3)) cmpSheet(`${tag} tag ${g}`, () => tagSheet(g), () => F.tagSheet(g));
+    // Taps the app now answers itself: the planner's handler for the same tap must open the same sheet.
+    const mk = (attrs) => { const b = document.createElement("button"); for (const [k, v] of Object.entries(attrs)) b.setAttribute(k, v); return b; };
+    const oldTap = (attrs) => { const b = mk(attrs); b.hidden = true; document.querySelector("#view").appendChild(b); b.click(); b.remove(); };
+    const cmpTap = (label, attrs, st = {}) => cmpSheet(`${tag} tap ${label}`, () => { Object.assign(S, st); oldTap(attrs); if (!document.querySelector("#modal .sheet")) out.push(`tap ${label}: the planner opened nothing`); }, () => { Object.assign(S, st); N.actions.appAct(mk(attrs), dx); });
+    for (const a of cards) for (const ca of ["pay", "spend", "edit"]) cmpTap(`card ${a.name} ${ca}`, { "data-ca": ca }, { cardId: a.id });
+    for (const a of cards.slice(0, 3)) cmpTap(`Plan card bill ${a.name}`, { "data-cpay": a.id });
+    for (const a of accs.slice(0, 3)) cmpTap(`account ${a.name}`, { "data-acc": a.id });
+    for (const [id] of [["addAcc"], ["addCat"], ["addPayer"], ["pickMain"]]) cmpTap(id, { id });
+    cmpForm(dx, `${tag} new bank account`, () => accForm(), () => F.accForm(), { name: "Test bank", type: "bank", group: "Savings", opening: "12,345.67", minBal: "5000", reserve: true, reserveStart: "1000.5", emTarget: "" });
+    cmpForm(dx, `${tag} new card`, () => accForm(), () => F.accForm(), { name: "Test card", type: "card", opening: "-12000", stmtDay: "5", dueDay: "25", payFrom: banks[0]?.id ?? "", limit: "2,00,000", apr: "3.75", fee: "499", feeWaive: "150000", reward: "1.5", rewardNote: "5% on Swiggy", hidden: true });
+    cmpForm(dx, `${tag} new account, no name`, () => accForm(), () => F.accForm(), { name: "" });
+    for (const a of accs.slice(0, 8)) {
+      cmpForm(dx, `${tag} edit ${a.name} unchanged`, () => accForm({ ...a }), () => F.accForm({ ...dx.byId("accounts", a.id) }), {});
+      cmpForm(dx, `${tag} edit ${a.name} changed`, () => accForm({ ...a }), () => F.accForm({ ...dx.byId("accounts", a.id) }), { opening: "777.77", noTotal: true, ...(a.type === "card" ? { limit: "", reward: "0" } : { minBal: "" }) });
+    }
+    for (const a of cards.slice(0, 2)) cmpForm(dx, `${tag} card ${a.name} made a bank`, () => accForm({ ...a }), () => F.accForm({ ...dx.byId("accounts", a.id) }), { type: "bank" });
+    cmpForm(dx, `${tag} new payer`, () => payerForm(), () => F.payerForm(), { name: "Test payer", 'input[name="own"][value="0"]': true, tag: "Home" });
+    for (const p of live("payers").slice(0, 3)) cmpForm(dx, `${tag} edit payer ${p.name}`, () => payerForm({ ...p }), () => F.payerForm({ ...dx.byId("payers", p.id) }), { tag: "Trip" });
+    if (live("payers")[0]) cmpForm(dx, `${tag} payer, a name already used`, () => payerForm(), () => F.payerForm(), { name: live("payers")[0].name.toUpperCase() });
+    const top = live("categories").find((c) => c.kind === "expense" && !c.parentId);
+    cmpForm(dx, `${tag} new category with a limit`, () => catForm(), () => F.catForm(), { name: "Test cat", kind: "expense", limit: "5,000" });
+    if (top) cmpForm(dx, `${tag} new subcategory (limit dropped)`, () => catForm(), () => F.catForm(), { name: "Sub", kind: "expense", parentId: top.id, limit: "100" });
+    cmpForm(dx, `${tag} new income category`, () => catForm(), () => F.catForm(), { name: "Bonus", kind: "income", limit: "100" });
+    for (const c of live("categories").filter((c) => c.kind === "expense" && (c.limit > 0 || !c.parentId)).slice(0, 4)) cmpForm(dx, `${tag} edit category ${c.name}`, () => catForm({ ...c }), () => F.catForm({ ...dx.byId("categories", c.id) }), { limit: "2500.5" });
+    if (top) cmpForm(dx, `${tag} delete category ${top.name}`, () => catForm({ ...top }), () => F.catForm({ ...dx.byId("categories", top.id) }), {}, ["#dl", "#cy"]);
+    if (accs[0]) cmpForm(dx, `${tag} delete account ${accs[0].name}`, () => accForm({ ...accs[0] }), () => F.accForm({ ...dx.byId("accounts", accs[0].id) }), {}, ["#dl", "#cy"]);
+    const other = banks.find((a) => !a.hidden && a.id !== mainAcc()?.id);
+    if (other) cmpForm(dx, `${tag} Home balance account`, () => pickMainSheet(), () => F.pickMainSheet(), { acc: other.id });
+    for (const g of allTags().slice(0, 2)) {
+      cmpForm(dx, `${tag} rename tag ${g}`, () => tagSheet(g), () => F.tagSheet(g), { name: g + " X" });
+      cmpForm(dx, `${tag} remove tag ${g}`, () => tagSheet(g), () => F.tagSheet(g), {}, ["#dl", "#cy"]);
+    }
+  };
+  formCases(d2, "made-up");
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
+  formCases(d, "yours");
   accPages(d, "yours");
   planPages(d, "yours");
   homePages(d, "yours");
@@ -365,11 +448,11 @@ const report = await f.evaluate(() => {
     if (money(p / 100) !== N.txlist.money(p)) out.push(`money(${r}): old ${money(p / 100)} new ${N.txlist.money(p)}`);
     if (moneyP(p / 100) !== N.txlist.moneyP(p)) out.push(`moneyP(${r}): old ${moneyP(p / 100)} new ${N.txlist.moneyP(p)}`);
   }
-  return { n, txns: live("txns").length, out, estRounding, fixedCrash };
+  return { n, formN, txns: live("txns").length, out, estRounding, fixedCrash };
 });
 await browser.close(); server.close();
 const SHOW = +(process.env.SHOW || 6);
-console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with a total ₹1 apart (half-rupee rounding)` : ""}`);
+console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets, ${report.formN} of them forms saved (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with a total ₹1 apart (half-rupee rounding)` : ""}`);
 if (report.fixedCrash.length) console.log(`  (the old planner crashes on ${report.fixedCrash.length} of these — ${[...new Set(report.fixedCrash.map((l) => l.replace(/^(made-up|yours) /, "")))].join(", ")} — the new page shows them)`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
 console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview, Insights (every tab) the Advisor (page and what Claude is sent), Money settings, credit cards, loans, EPF, PPF, NPS and properties are identical to the planner's");

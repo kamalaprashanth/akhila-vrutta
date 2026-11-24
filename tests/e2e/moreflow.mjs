@@ -43,7 +43,16 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok((await p.$$(`${V} [data-prof]`)).length === 7, "seven profile sections");
   ok(/\d+ transactions · \d+ regular items/.test(await p.innerText(V)), "the backup card counts the data");
   ok(!(await p.$(`${V} #syncNow`)) && !(await p.$(`${V} #imp25`)), "no Drive or old import sections here");
-  for (const [sel, what] of [[`${V} [data-prof="about"]`, "About me"], [`${V} #addPayer`, "Add payer"], [`${V} [data-payer]`, "a payer"], [`${V} #addCat`, "Add category"], [`${V} #restore`, "Restore from backup"]]) {
+  const appSheet = () => p.$eval("#mvLayer #modal", (e) => !!e.querySelector(".sheet")).catch(() => false);
+  for (const [sel, what] of [[`${V} #addPayer`, "Add payer"], [`${V} [data-payer]`, "a payer"], [`${V} #addCat`, "Add category"]]) {
+    if (!(await p.$(sel))) { ok(false, `${what}: not on the page`); continue; }
+    await p.evaluate((s) => { const el = document.querySelector(s); el.closest("details")?.setAttribute("open", ""); el.scrollIntoView(); }, sel);
+    await p.click(sel); await settle();
+    ok(await appSheet() && !(await frameShown()), `${what} opens the app's form`);
+    await p.click("#mvLayer #modal #cx"); await settle();
+    ok(!(await appSheet()), "…and closes");
+  }
+  for (const [sel, what] of [[`${V} [data-prof="about"]`, "About me"], [`${V} #restore`, "Restore from backup"]]) {
     if (!(await p.$(sel))) { ok(false, `${what}: not on the page`); continue; }
     await p.evaluate((s) => { const el = document.querySelector(s); el.closest("details")?.setAttribute("open", ""); el.scrollIntoView(); }, sel);
     await p.click(sel); await settle();
@@ -54,12 +63,14 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   // A category from the list.
   await p.evaluate(() => document.querySelectorAll("#moneyView details.fm").forEach((d) => d.setAttribute("open", "")));
   await p.click(`${V} .row[data-cat]`); await settle();
-  ok(await plannerSheet(), "a category opens its form"); await closeIt();
+  ok(await appSheet() && /Edit category/.test(await p.textContent("#mvLayer #modal h3")), "a category opens its form"); await p.click("#mvLayer #modal #cx"); await settle();
   // Something the app saves elsewhere, drawn again here: a new payer saved through the planner shows up.
   const before = (await p.$$(`${V} [data-payer]`)).length;
   await p.click(`${V} #addPayer`); await settle();
-  await f.evaluate(() => { const n = document.querySelector("#modal input[type=text], #modal input:not([type])"); n.value = "Test payer"; n.dispatchEvent(new Event("input", { bubbles: true })); document.querySelector("#modal #sv").click(); });
-  await settle(); await settle();
+  await p.fill("#mvLayer #modal #f_name", "Test payer"); await p.click('#mvLayer #modal input[name="own"][value="0"]'); await p.fill("#mvLayer #modal #f_tag", "Home");
+  await p.click("#mvLayer #modal #sv"); await settle(); await settle();
+  const np = await f.evaluate(() => S.data.payers.find((x) => x.name === "Test payer"));
+  ok(np && np.own === false && np.tag === "Home", "…saved as someone else's money, tagged Home");
   ok((await p.$$(`${V} [data-payer]`)).length === before + 1 && (await p.innerText(V)).includes("Test payer"), "a new payer shows on the page");
   ok(errors.length === 0, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   await ctx.close();

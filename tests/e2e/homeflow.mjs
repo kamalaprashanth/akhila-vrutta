@@ -48,7 +48,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${V} .advbtn`); await p.waitForTimeout(700);
   ok(!(await frameShown()) && await f.evaluate(() => S.view === "advisor") && await p.$("#moneyView .advpills") !== null, "Ask your advisor opens the Advisor");
   await p.evaluate(() => { location.hash = "#/money/home"; }); await p.waitForTimeout(700);
-  if (await p.$(`${V} #pickMain`)) { await p.click(`${V} #pickMain`); await settle(); ok(await frameShown() && await f.$("#modal .sheet") !== null, "Change account opens the planner's sheet"); await f.evaluate(() => closeModal()); await settle(); }
+  if (await p.$(`${V} #pickMain`)) { await p.click(`${V} #pickMain`); await settle(); ok(!(await frameShown()) && /Home balance/.test(await p.textContent("#mvLayer #modal h3")), "Change account opens the app's sheet"); await p.click("#mvLayer #modal #cx"); await settle(); }
   ok(errors.length === 0, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   await ctx.close();
 }

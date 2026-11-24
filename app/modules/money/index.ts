@@ -9,7 +9,7 @@ import type { Module } from "../types.ts";
 import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
 import { META, MONEY_COLLECTIONS, stableJSON, type Changes, type Rec, type WriteOp } from "../../core/store.ts";
-import { AMOUNTS_VERSION, fromStored, toStored, unclassified } from "./paise.ts";
+import { AMOUNTS_VERSION, fromStored, toStored, unclassified, upgradeWrites } from "./paise.ts";
 import { callable, initFirebase } from "../../core/firebase.ts";
 import { moneyData, txPage, type PlannerState } from "./views/transactions.ts";
 import { accountsPage } from "./views/accounts.ts";
@@ -315,7 +315,9 @@ export const money: Module = {
       root.innerHTML = html`<section class="card"><h2>Money</h2><p>Your money planner opens here once the app is unlocked.</p></section>`;
       return;
     }
-    const meta = s.get(META, "money");
+    let meta = s.get(META, "money");
+    // One version behind: the new money fields are converted where they are (no import needed).
+    if (meta && meta.amounts !== AMOUNTS_VERSION) { const up = upgradeWrites(meta, (c) => s.all(c)); if (up) { s.writeMany(up.ops); meta = up.meta; } }
     if (!meta || meta.amounts !== AMOUNTS_VERSION) {
       root.innerHTML = html`<section class="card"><h2>Bring in your money data</h2>
         <p>${meta ? "This version stores a few more amounts in paise. Import your KP Money Planner export once more to open the planner." : "Import your KP Money Planner export to start."}</p>

@@ -146,6 +146,15 @@ try {
   await shot(A.page, "money-accounts");
   await moneyFrame(A.page, "more");
   check(/Setup checklist/i.test(await A.page.innerText("#moneyView #view")) && /\d+ transactions/i.test(await A.page.innerText("#moneyView #view")), "Money settings (drawn by the app) shows the imported data");
+  // A card's limit and fee are saved in paise (since paise-7) and read back as the same rupees after a reload.
+  const fC = await moneyFrame(A.page, "accounts");
+  await fC.evaluate(() => upsert("accounts", { id: "cloudcard", name: "Cloud card", type: "card", opening: -1000, limit: 50000, fee: 499, stmtDay: 5, dueDay: 25 }));
+  await A.page.waitForTimeout(3000);
+  await A.page.reload(); await unlockWithPass(A.page, PASS1); await A.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
+  const fC2 = await moneyFrame(A.page, "accounts");
+  await fC2.evaluate(() => { S.cardId = "cloudcard"; go("card"); }); await A.page.waitForTimeout(800);
+  const cardTxt = await A.page.innerText("#moneyView #view");
+  check(/of ₹50,000/.test(cardTxt) && /₹499/.test(cardTxt) && await fC2.evaluate(() => S.data.accounts.find((a) => a.id === "cloudcard")?.limit === 50000), "a card's ₹50,000 limit and ₹499 fee come back the same after a reload (stored in paise)");
 
   progress("functions from the planner");
   /* 3b. The planner reaches the Cloud Functions through the main app's sign-in (Advisor, price refresh) */

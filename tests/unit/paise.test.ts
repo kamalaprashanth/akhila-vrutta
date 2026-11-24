@@ -57,3 +57,17 @@ test("every number field in the owner's real export is classified", { skip: !rea
   for (const [c, list] of Object.entries(d)) if (Array.isArray(list)) for (const r of list) for (const p of unclassified(c, r)) all.add(`${c}: ${p}`);
   assert.deepEqual([...all], []);
 });
+
+test("stored data one version behind is upgraded in place", async () => {
+  const { upgradeWrites, AMOUNTS_VERSION } = await import("../../app/modules/money/paise.ts");
+  const recs: Record<string, { id: string; [k: string]: unknown }[]> = {
+    accounts: [{ id: "c", type: "card", limit: 200000, fee: 499.5, opening: -120000 }, { id: "b", type: "bank", opening: 5000 }],
+  };
+  const up = upgradeWrites({ id: "money", amounts: "paise-6" }, (c) => recs[c] ?? [], 1000)!;
+  assert.equal(up.meta.amounts, AMOUNTS_VERSION);
+  assert.equal(up.ops.length, 2, "the card that had amounts, and the meta record");
+  assert.deepEqual(up.ops[0], { c: "accounts", id: "c", r: { id: "c", type: "card", limit: 20000000, fee: 49950, opening: -120000, updatedAt: 1000 } });
+  assert.equal(up.ops[1]!.c, "meta");
+  assert.equal(upgradeWrites({ id: "money", amounts: "paise-5" }, () => []), null, "older than that: import again");
+  assert.equal(upgradeWrites({ id: "money", amounts: AMOUNTS_VERSION }, () => [])!.ops.length, 1, "already current: nothing to convert");
+});

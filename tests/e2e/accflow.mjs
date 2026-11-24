@@ -62,18 +62,35 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
     ok((await p.textContent(`${V} .monthbar .m`)) !== span && await p.$eval(`${V} [data-cyc="-1"]`, (e) => !e.disabled), "‹ shows the earlier statement");
   }
   await p.click(`${V} [data-ca="pay"]`); await settle();
-  ok(await frameShown() && await p.$eval("#moneyFrame", (e) => e.classList.contains("over")) && /transfer|pay/i.test(await f.textContent("#modal")), "Pay bill opens the planner's form over the page");
-  await f.evaluate(() => closeModal()); await settle();
-  ok(!(await frameShown()) && await f.evaluate(() => S.view === "card"), "…and closes back to the card");
+  ok(!(await frameShown()) && await p.$eval("#mvLayer #tseg [data-k=transfer]", (e) => e.getAttribute("aria-pressed") === "true") && /bill/.test(await p.inputValue("#mvLayer #f_note")), "Pay bill opens the app's transfer form, noted as the bill");
+  await p.click("#mvLayer #modal #cx"); await settle();
+  ok(!(await p.$("#mvLayer #modal .sheet")) && await f.evaluate(() => S.view === "card"), "…and closes back to the card");
   await p.click(`${V} .monthbar [data-go="accounts"]`); await p.waitForTimeout(700);
   ok(!(await frameShown()) && (await pressed()) === "banks", "back on Accounts, same section");
 
-  // + Add account: the planner's form, over the whole screen.
+  // + Add account: the app's own form. A new card, saved in paise, then listed.
+  const L = "#mvLayer #modal";
   await p.click(`${V} #addAcc`); await settle();
-  ok(await frameShown() && await p.$eval("#moneyFrame", (e) => e.classList.contains("over")), "+ Add account opens the planner's form over the page");
-  ok(/account/i.test(await f.textContent("#modal h3")), "…the account form");
-  await f.evaluate(() => closeModal()); await settle();
-  ok(!(await frameShown()), "closing it returns to the app's page");
+  ok(!(await frameShown()) && /Add account/.test(await p.textContent(`${L} h3`)), "+ Add account opens the app's form");
+  ok(await p.$eval(`${L} #g_card`, (e) => e.hidden), "…card settings hidden for a bank");
+  await p.selectOption(`${L} #f_type`, "card"); await settle();
+  ok(await p.$eval(`${L} #g_card`, (e) => !e.hidden) && await p.$eval(`${L} #g_bank`, (e) => e.hidden), "…shown once the type is Credit card");
+  await p.fill(`${L} #f_name`, "Flow card"); await p.fill(`${L} #f_opening`, "1500"); await p.click(`${L} [data-neg="f_opening"]`);
+  await p.fill(`${L} #f_stmtDay`, "5"); await p.fill(`${L} #f_dueDay`, "25"); await p.fill(`${L} #f_limit`, "100000");
+  const before = await f.evaluate(() => S.data.accounts.length);
+  await p.click(`${L} #sv`); await p.waitForTimeout(900);
+  const nc = await f.evaluate(() => S.data.accounts.find((a) => a.name === "Flow card"));
+  ok(await f.evaluate(() => S.data.accounts.length) === before + 1 && nc?.opening === -1500 && nc?.limit === 100000 && nc?.stmtDay === 5, `saved: owes ₹1,500, limit ₹1,00,000, statement on the 5th (${JSON.stringify(nc && { o: nc.opening, l: nc.limit, s: nc.stmtDay })})`);
+  ok(!(await p.$(`${L} .sheet`)) && /Flow card/.test(await p.textContent(V)), "…the sheet closes and the card is listed");
+  // Editing it: Delete asks first, Cancel keeps it.
+  await p.click(`${V} [data-card="${nc.id}"]`); await settle();
+  await p.click(`${V} [data-ca="edit"]`); await settle();
+  ok(/Edit account/.test(await p.textContent(`${L} h3`)) && (await p.inputValue(`${L} #f_limit`)) === "1,00,000", "Edit card opens the app's form with the limit");
+  await p.click(`${L} #dl`); await settle();
+  ok(/Are you sure/.test(await p.textContent(`${L} h3`)), "Delete asks first");
+  await p.click(`${L} #cn`); await settle();
+  ok(await f.evaluate((id) => !S.data.accounts.find((a) => a.id === id).deleted, nc.id), "…Cancel keeps it");
+  await p.click(`${V} .monthbar [data-go="accounts"]`); await settle();
 
   // Loans: the payoff plan's settings are remembered and redraw the plan.
   await p.click(`${V} .accseg [data-acct="loans"]`); await settle();
