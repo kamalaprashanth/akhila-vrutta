@@ -17,13 +17,27 @@ const SAMPLE = "tests/fixtures/sample-export.json";
 mkdirSync(SHOTS, { recursive: true });
 
 let failed = 0, step = 0;
+let lastStep = "start";
+const progress = (m) => { lastStep = m; console.log(`… ${m}`); };
+// A stuck step must fail with details, never hang the pipeline.
+const watchdog = setTimeout(async () => {
+  console.error(`✗ watchdog: stuck after "${lastStep}" for too long`);
+  for (const [name, page] of openPages) {
+    const t = await page.locator("#lock").innerText({ timeout: 1000 }).catch(() => "(no lock screen)");
+    console.error(`  ${name} screen: ${t.replace(/\s+/g, " ").slice(0, 300)}`);
+    await page.screenshot({ path: `${SHOTS}/stuck-${name.replace(/\W/g, "")}.png` }).catch(() => {});
+  }
+  console.error("  console:\n    " + consoleLines.slice(-30).join("\n    "));
+  process.exit(1);
+}, 6 * 60 * 1000);
+watchdog.unref();
 const ok = (m) => console.log(`✓ ${m}`);
 const bad = (m) => { failed++; console.error(`✗ ${m}`); };
 const check = (cond, m) => (cond ? ok(m) : bad(m));
 
 async function api(url, opts = {}, token = "owner") {
   const auth = token ? { authorization: `Bearer ${token}` } : {};
-  const r = await fetch(url, { ...opts, headers: { "content-type": "application/json", ...auth, ...(opts.headers ?? {}) } });
+  const r = await fetch(url, { signal: AbortSignal.timeout(30000), ...opts, headers: { "content-type": "application/json", ...auth, ...(opts.headers ?? {}) } });
   const text = await r.text();
   let body; try { body = JSON.parse(text); } catch { body = text; }
   return { status: r.status, body };
@@ -92,12 +106,14 @@ async function moneyFrame(page, view = "accounts") {
 const plannerTxns = (f) => f.evaluate(() => S.data.txns.filter((t) => !t.deleted).map((t) => ({ note: t.note, amount: t.amount })));
 
 try {
+  progress("first device");
   /* 1. First device: sign in, create the passphrase, choose "passphrase every time" */
   const A = await device("device 1");
   await signInAndSetup(A.page, { create: true, pass: PASS1 });
   ok("first device: signed in, passphrase created, unlocked");
   await shot(A.page, "unlocked");
 
+  progress("import");
   /* 2. Import the sample export */
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.setInputFiles("#impFile", SAMPLE);
@@ -106,6 +122,7 @@ try {
   check(true, `import finished: "${await A.page.innerText("#toast")}"`);
   await shot(A.page, "imported");
 
+  progress("money frame");
   /* 3. The Money tab: the planner frame loads with its styles (today's bug) and shows the data */
   const f = await moneyFrame(A.page);
   const styled = await f.evaluate(() => {
@@ -121,13 +138,16 @@ try {
   check(imported?.amount === 1234.56, `an imported transaction is back in rupees (₹${imported?.amount})`);
   await shot(A.page, "money-accounts");
 
+  progress("functions from the planner");
   /* 3b. The planner reaches the Cloud Functions through the main app's sign-in (Advisor, price refresh) */
   const viaFrame = await f.evaluate(async () => {
-    try { const fn = await AVB.callable("askClaude", 30000); await fn({ messages: [] }); return "no error"; }
+    const limit = new Promise((_, rej) => setTimeout(() => rej({ code: "test-timeout" }), 60000));
+    try { const fn = await Promise.race([AVB.callable("askClaude", 30000), limit]); await Promise.race([fn({ messages: [] }), limit]); return "no error"; }
     catch (e) { return String(e && e.code); }
   });
   check(viaFrame === "functions/invalid-argument", `Advisor: the planner's call reaches askClaude as the owner (answer: ${viaFrame})`);
 
+  progress("edit and reload");
   /* 4. An edit in the planner is saved: encrypted, in paise, and comes back after a reload */
   await f.evaluate(() => upsert("txns", { id: uid(), type: "expense", amount: 777.77, date: new Date().toISOString().slice(0, 10), accountId: S.data.accounts.find((a) => a.name === "Test Bank").id, note: "cloud test 42", updatedAt: Date.now() }));
   await A.page.waitForTimeout(3000);
@@ -157,6 +177,7 @@ try {
   const back = (await plannerTxns(fA)).find((t) => t.note === "cloud test 42");
   check(back?.amount === 777.77, `after reload the edit is back as ₹777.77 (got ${back?.amount})`);
 
+  progress("second device");
   /* 5. Second device: "welcome back", same data, and changes flow between devices */
   const B = await device("device 2");
   await signInAndSetup(B.page, { create: false, pass: PASS1 });
@@ -168,6 +189,7 @@ try {
   check(seen, "a change on device 2 reaches device 1 without reloading");
   await shot(B.page, "device2");
 
+  progress("passphrase change");
   /* 6. Change the passphrase on device 1; device 2 must use the new one */
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.click("#secPass");
@@ -182,6 +204,7 @@ try {
   await B.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
   ok("device 2: old passphrase refused, new one works");
 
+  progress("fingerprint");
   /* 7. Fingerprint unlock (virtual authenticator with PRF) */
   const C = await device("device 3", { bio: true });
   try {
@@ -196,6 +219,7 @@ try {
     await shot(C.page, "bio");
   }
 
+  progress("intruder and rules");
   /* 8. Another Google account is turned away, and the rules refuse it directly too */
   const X = await device("intruder", { user: "intruder" });
   await X.page.goto(BASE);
@@ -219,7 +243,7 @@ try {
   const pw = await api(`${FS}/priceWatch/${OWNER_UID}`, { method: "PATCH", body: JSON.stringify({ fields: { us: { arrayValue: { values: [{ stringValue: "AAPL" }] } }, at: { stringValue: "now" } } }) }, owner);
   check(pw.status === 200, `rules: the owner can save their US ticker list (HTTP ${pw.status})`);
   const fnAs = async (name, token, data) => {
-    const r = await fetch(`${FN}/${name}`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ data }) });
+    const r = await fetch(`${FN}/${name}`, { signal: AbortSignal.timeout(60000), method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ data }) });
     return { status: r.status, body: await r.json().catch(() => ({})) };
   };
   const a1 = await fnAs("askClaude", intr, { messages: [{ role: "user", content: "hi" }] });

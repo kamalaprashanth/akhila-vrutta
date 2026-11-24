@@ -37,6 +37,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:unit
       - name: Cloud tests on the Firebase emulators
+        timeout-minutes: 12
         run: |
           (cd functions && npm ci --no-audit --no-fund)
           printf 'ANTHROPIC_API_KEY=test-not-a-key\nALPHAVANTAGE_KEY=test-not-a-key\n' > functions/.secret.local
