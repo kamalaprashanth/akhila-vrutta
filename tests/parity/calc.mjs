@@ -12,7 +12,7 @@ const EXPORT = process.env.AV_EXPORT && existsSync(process.env.AV_EXPORT) ? proc
 const bundle = async (e, fmt) => (await build({ entryPoints: [e], bundle: true, format: fmt, write: false, target: "es2022" })).outputFiles[0].text;
 const harness = await bundle("tests/parity/harness.ts", "esm");
 const calc = await bundle("tests/parity/calc-entry.ts", "iife");
-const T = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json" };
+const T = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json" };
 const server = createServer(async (req, res) => {
   const url = decodeURIComponent((req.url ?? "/").split("?")[0]);
   if (url === "/export.json") return res.writeHead(200).end(await readFile(EXPORT));

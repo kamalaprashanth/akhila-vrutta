@@ -8,7 +8,7 @@ import { extname, join, normalize } from "node:path";
 
 const EXPORT = "tests/fixtures/sample-export.json";
 const harness = (await build({ entryPoints: ["tests/parity/harness.ts"], bundle: true, format: "esm", write: false, target: "es2022" })).outputFiles[0].text;
-const T = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json" };
+const T = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json" };
 const server = createServer(async (req, res) => {
   const url = decodeURIComponent((req.url ?? "/").split("?")[0]);
   if (url === "/export.json") return res.writeHead(200, { "content-type": T[".json"] }).end(await readFile(EXPORT));
@@ -23,6 +23,16 @@ const browser = await chromium.launch();
 let failed = 0;
 const ok = (cond, what) => { if (cond) console.log(`  ✓ ${what}`); else { failed++; console.error(`  ✗ ${what}`); } };
 
+// A payment-plan PDF like a builder's agreement, printed by the browser.
+const PLAN_PDF = await (async () => {
+  const b = await chromium.launch(), pg = await b.newPage();
+  await pg.setContent(`<h3>PAYMENT PLAN</h3><table style="font:14px sans-serif;border-spacing:40px 6px">
+    <tr><td>On Booking</td><td>10%</td><td>900000</td><td>45000</td></tr>
+    <tr><td>On Agreement</td><td>10%</td><td>900000</td><td>45000</td></tr>
+    <tr><td>On Completion of 6th Floor Slab</td><td>6.0%</td><td>1217655</td><td>60883</td></tr>
+    <tr><td>Grand Total</td><td></td><td>9500000</td><td></td></tr></table>`);
+  const buf = await pg.pdf({ format: "A4" }); await b.close(); return buf;
+})();
 const ADD = () => {
   const nowM = ymOf(today()), ym1 = addM(nowM, -1), acc = live("accounts")[0].id;
   upsert("holdings", { id: "hp", type: "PPF", instrument: "PPF2", name: "PPF2", rate: 7.1, ppf: { opened: "2018-05-01", stmtDate: `${addM(nowM, -3)}-01`, rows: [{ k: "dep", d: "2025-05-01", amt: 1000 }, { k: "int", d: "2026-03-31", amt: 71.25 }],
@@ -102,14 +112,28 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${V} [data-prop="pz"]`); await settle();
   ok(!(await frameShown()) && (await view()) === "prop" && /Test flat/.test(await p.textContent(`${V} .monthbar`)), "a property opens (drawn by the app)");
   for (const t of ["payments", "loan", "expected"]) { await p.click(`${V} [data-ptab="${t}"]`); await settle(); ok(await pressed(`${V} [data-ptab="${t}"]`), `property ${t} tab`); }
-  await f.evaluate(() => { window.__got = null; window.propPlanLoad = (pp, file) => { window.__got = [pp.id, file.name]; }; });
-  await p.setInputFiles(`${V} #planPdf`, { name: "plan.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") }); await settle();
-  ok(JSON.stringify(await f.evaluate(() => window.__got)) === '["pz","plan.pdf"]', "a chosen payment plan reaches the planner's reader");
+  // A real payment-plan PDF (made here), read on this device by the app: the rows it finds go into Expected.
+  p.on("console", (m) => { if (process.env.DBG) console.log("console:", m.text()); });
+  await p.setInputFiles(`${V} #planPdf`, { name: "plan.pdf", mimeType: "application/pdf", buffer: PLAN_PDF }); await p.waitForTimeout(2500);
+  if (process.env.DBG) console.log("toasts:", await p.$$eval(".toast", (t) => t.map((x) => x.textContent)));
+  const L = "#mvLayer #modal";
+  ok(/Payment plan found/.test(await p.textContent(`${L} h3`).catch(() => "")) && (await p.$$(`${L} .list .row`)).length === 3, "a payment plan PDF is read: 3 payments found");
+  ok(await p.$eval(`${L} .list input[data-i="0"]`, (e) => e.checked) && !(await p.$eval(`${L} .list input[data-i="2"]`, (e) => e.checked)), "…booking ticked as paid, the slab not");
+  await p.click(`${L} #sv`); await p.waitForTimeout(900);
+  const plan = await f.evaluate(() => S.data.props.find((x) => x.id === "pz").plan);
+  ok(plan.length === 5 && plan.some((r) => r.name === "Booking" && r.done && r.amt === 900000) && plan.some((r) => /6th Floor Slab/.test(r.name) && !r.done && r.gst === 60883), "…saved to Expected (₹9,00,000 booking done; slab with its GST)");
   await p.fill(`${V} [data-lsearch]`, "slab"); await settle();
-  ok(await p.$$eval(`${V} [data-pplan]`, (r) => r.filter((x) => !x.hidden).length === 1 && r.length === 2), "searching the expected payments");
+  ok(await p.$$eval(`${V} [data-pplan]`, (r) => r.filter((x) => !x.hidden).length === 2 && r.length === 5), "searching the expected payments");
   await p.fill(`${V} [data-lsearch]`, ""); await settle();
-  await formOpens(`${V} [data-pplan="a"]`, /payment|slab/i, "an expected payment");
-  await formOpens(`${V} [data-pact="edit"]`, /property/i, "Edit");
+  // An expected payment, changed and saved (the planner couldn't save this form).
+  await p.click(`${V} [data-pplan="c"]`); await settle();
+  ok(!(await frameShown()) && /Interiors/.test(await p.textContent(`${L} h3`)), "an expected payment opens the app's form");
+  await p.fill(`${L} #f_xa`, "3,50,000"); await p.selectOption(`${L} #f_xwho`, "split"); await p.click(`${L} #sv`); await p.waitForTimeout(900);
+  const c1 = await f.evaluate(() => S.data.props.find((x) => x.id === "pz").plan.find((r) => r.id === "c"));
+  ok(c1.amt === 350000 && c1.who === "split", `…saved: ₹3,50,000, bank / you (${JSON.stringify({ amt: c1.amt, who: c1.who })})`);
+  await p.click(`${V} [data-pact="edit"]`); await settle();
+  ok(/Edit property/.test(await p.textContent(`${L} h3`)) && (await p.inputValue(`${L} #f_pv`)) === "90,00,000", "Edit opens the app's form with the agreement value");
+  await p.click(`${L} #cx`); await settle();
   await p.click(`${V} .monthbar [data-acct="props"]`); await settle();
   ok((await view()) === "accounts" && await pressed(`${V} .accseg [data-acct="props"]`), "‹ back to Properties");
   ok(errors.length === 0, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);

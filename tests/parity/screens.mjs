@@ -12,7 +12,7 @@ const EXPORT = process.env.AV_EXPORT && existsSync(process.env.AV_EXPORT) ? proc
 const bundle = async (e, fmt) => (await build({ entryPoints: [e], bundle: true, format: fmt, write: false, target: "es2022" })).outputFiles[0].text;
 const harness = await bundle("tests/parity/harness.ts", "esm");
 const screens = await bundle("tests/parity/screens-entry.ts", "iife");
-const T = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
+const T = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json" };
 const server = createServer(async (req, res) => {
   const url = decodeURIComponent((req.url ?? "/").split("?")[0]);
   if (url === "/export.json") return res.writeHead(200).end(await readFile(EXPORT));
@@ -346,7 +346,7 @@ const report = await f.evaluate(() => {
   sheets(d2, "made-up");
   // Forms, saved: the same values typed into the planner's form and the new one must store the same records
   // (the planner's in rupees, converted to paise as an import would; new ids and save times aside).
-  let formN = 0;
+  let formN = 0; const fixedSaves = [];
   const fillIn = (root, vals) => {
     for (const [k, v] of Object.entries(vals)) {
       if (k.startsWith("click:")) { const b = root.querySelector(k.slice(6)); if (b) b.click(); else out.push(`form fill: nothing to click at ${k}`); continue; }
@@ -358,10 +358,11 @@ const report = await f.evaluate(() => {
   };
   const sortK = (o) => Object.keys(o).sort().reduce((a, k) => ((a[k] = o[k]), a), {});
   // A record saved again unchanged (only its time) isn't a change.
-  const norm = (ops, before, dx) => ops.map(({ c, r }) => { const o = { ...r }; delete o.updatedAt; const was = dx.all(c).find((x) => x.id === o.id); if (was) { const w = { ...was }; delete w.updatedAt; if (JSON.stringify(sortK(w)) === JSON.stringify(sortK(o))) return null; } if (!before.has(c + ":" + o.id)) o.id = "NEW"; return JSON.stringify([c, sortK(o)]).replace(/"(id|mid|loanId|prop|txnId|budgetId|splitOf)":"([^"]+)"/g, (m, k, v) => (knownIds.has(v) ? m : `"${k}":"NEW"`)); }).filter(Boolean).sort();
+  const norm = (ops, before, dx) => ops.map(({ c, r }) => { const o = { ...r }; delete o.updatedAt; const was = dx.all(c).find((x) => x.id === o.id); if (was) { const w = { ...was }; delete w.updatedAt; if (JSON.stringify(sortK(w)) === JSON.stringify(sortK(o))) return null; } if (!before.has(c + ":" + o.id)) o.id = "NEW"; return JSON.stringify([c, sortK(o)]).replace(/"(id|mid|loanId|prop|txnId|budgetId|splitOf)":"([^"]+)"/g, (m, k, v) => (knownIds.has(v) ? m : `"${k}":"NEW"`)).replace(/"k":"(c[a-z0-9]{10,})"/g, (m, v) => (knownIds.has(v) ? m : `"k":"NEW"`)); }).filter(Boolean).sort();
   // ids already in the data (nested ones too, e.g. a loan's rate changes); any other id was just made
-  const knownIds = new Set(JSON.stringify(S.data).match(/"(?:id|mid)":"[^"]+"/g)?.map((x) => x.split('":"')[1].slice(0, -1)) ?? []);
-  const cmpForm = (dx, label, openOld, openNew, vals, steps = ["#sv"]) => {
+  const knownIds = new Set(JSON.stringify(S.data).match(/"(?:id|mid|k)":"[^"]+"/g)?.map((x) => x.split('":"')[1].slice(0, -1)) ?? []);
+  // fix: the planner's known fault for this form, applied to what it saved (or "crash": it couldn't save at all)
+  const cmpForm = (dx, label, openOld, openNew, vals, steps = ["#sv"], fix) => {
     n++; formN++;
     const keepData = S.data, snap = JSON.parse(JSON.stringify(S.data)), ids = new Set();
     S.data = JSON.parse(JSON.stringify(keepData)); MEMO = new Map();   // the planner's forms change records in place
@@ -379,6 +380,8 @@ const report = await f.evaluate(() => {
     openNew(); const m2 = document.querySelector("#mvLayer #modal"); fillIn(m2, vals);
     for (const st of steps) document.querySelector("#mvLayer #modal " + st)?.click();
     N.kit.closeModal();
+    if (fix === "crash") { if (!newOps.length) out.push(`form ${label}: the new form saved nothing either`); else fixedSaves.push(label); return; }
+    if (fix) { fix(oldOps); fixedSaves.push(label); }
     const A = norm(oldOps, ids, dx), B = norm(newOps, ids, dx);
     if (!A.length && !/unchanged|no name|already used|nothing/.test(label)) out.push(`form ${label}: nothing saved by either (the test didn't reach Save)`);
     if (JSON.stringify(A) !== JSON.stringify(B)) out.push(`form ${label}: saves differ\n    old ${A.join("\n        ").slice(0, 900)}\n    new ${B.join("\n        ").slice(0, 900)}`);
@@ -404,7 +407,8 @@ const report = await f.evaluate(() => {
     for (const a of accs.slice(0, 3)) cmpTap(`account ${a.name}`, { "data-acc": a.id });
     for (const [id] of [["addAcc"], ["addCat"], ["addPayer"], ["pickMain"], ["addLoan"]]) cmpTap(id, { id });
     // Loans: every button and row on each loan's page, as drawn, then saved with typed values.
-    const tapSave = (label, attrs, st, vals, steps) => cmpForm(dx, `${tag} ${label}`, () => { Object.assign(S, st); oldTap(attrs); }, () => { Object.assign(S, st); N.actions.appAct(mk(attrs), dx); }, vals, steps);
+    const tapSave = (label, attrs, st, vals, steps, fix) => cmpForm(dx, `${tag} ${label}`, () => { Object.assign(S, st); oldTap(attrs); }, () => { Object.assign(S, st); N.actions.appAct(mk(attrs), dx); }, vals, steps, fix);
+    const lastPlanAcc = (acc) => (ops) => { const r = ops.find((o) => o.c === "loans")?.r; if (r?.plans?.length) r.plans[r.plans.length - 1].accountId = acc; };
     const nowM = ymOf(today()), b0 = banks[0]?.id ?? "";
     for (const l of live("loans")) {
       const st = { loanId: l.id }, k = l.kind || "emi", bk = k === "hybrid" ? l.bank || {} : l;
@@ -425,7 +429,7 @@ const report = await f.evaluate(() => {
       if (las.has("borrow")) {
         tapSave(`loan ${l.name} borrow`, { "data-la": "borrow" }, st, { amount: "5000", accountId: b0 });
         tapSave(`loan ${l.name} repay`, { "data-la": "repay" }, st, { amount: "1", date: today() });
-        tapSave(`loan ${l.name} plan monthly`, { "data-la": "plan" }, st, { "click:#fseg [data-k=monthly]": 1, amount: "2,500", start: nowM, end: addM(nowM, 12), accountId: b0 });
+        tapSave(`loan ${l.name} plan monthly`, { "data-la": "plan" }, st, { "click:#fseg [data-k=monthly]": 1, amount: "2,500", start: nowM, end: addM(nowM, 12), accountId: b0 }, undefined, lastPlanAcc(b0));
         tapSave(`loan ${l.name} plan once`, { "data-la": "plan" }, st, { amount: "10000", start: addM(nowM, 3) });
       }
       for (const r of bk.rates || []) tapSave(`loan ${l.name} delete rate change ${r.ym}`, { "data-rc": r.id }, st, {}, ["#dl", "#cy"]);
@@ -495,6 +499,32 @@ const report = await f.evaluate(() => {
     for (const c of live("categories").filter((c) => c.kind === "expense" && !c.parentId).slice(0, 2)) tapSave(`emergency fund leaves out ${c.name}`, { "data-emcat": c.id }, {}, {});
     void ek;
     for (const r of findRepeats().slice(0, 4)) { cmpTap(`add repeat ${r.name}`, { "data-repadd": r.key }); tapSave(`add repeat ${r.name}`, { "data-repadd": r.key }, {}, {}); }
+    // Properties: the page's buttons and rows, typed payments, picking from Transactions, categories, expected payments, demands, the fund.
+    cmpTap("add a property", { "data-pact": "newprop" }); cmpTap("property categories", { "data-pact": "cats" });
+    tapSave("new property", { "data-pact": "newprop" }, {}, { pn: "Test plot", pk: "plot", ps: "booked", pp: "Kanakapura Road", pd: "2025-01-10", pv: "45,00,000", pnw: true, pcur: "50,00,000", pcd: today(), pnote: "Corner plot" });
+    tapSave("property categories renamed", { "data-pact": "cats" }, {}, { "input[data-nm=token]": "Booking amount", 'input[data-new="legal"]': "Notary", "input[data-hd=club]": false });
+    for (const p of live("props").filter((p) => p.rec !== "cats")) {
+      const st = { propId: p.id };
+      for (const pa of ["edit", "add", "pick", "planadd", "planfund"]) cmpTap(`property ${p.name} ${pa}`, { "data-pact": pa }, st);
+      for (const r of p.plan || []) { cmpTap(`property ${p.name} expected ${r.name}`, { "data-pplan": r.id }, st); tapThen(`property ${p.name} demand ${r.name}`, { "data-pplan": r.id }, ["#dm"], st); }
+      for (const it of live("propItems").filter((i) => i.prop === p.id).slice(0, 6)) { cmpTap(`property ${p.name} payment ${it.id}`, { "data-pitem": it.id }); tapSave(`property ${p.name} payment ${it.id} note`, { "data-pitem": it.id }, {}, { pnt: "changed note" }); }
+      tapSave(`property ${p.name} edit`, { "data-pact": "edit" }, st, { pn: p.name + " X", pv: "1,23,45,678", pnw: !p.nw, pl: "" });
+      tapSave(`property ${p.name} payment with transaction`, { "data-pact": "add" }, st, { pa: "1,50,000", pdt: today(), pacc: b0, pnt: "Khata", phist: true });
+      tapSave(`property ${p.name} payment, no transaction`, { "data-pact": "add" }, st, { pa: "25000.5", pacc: "", ptx: false });
+      tapSave(`property ${p.name} pick from transactions`, { "data-pact": "pick" }, st, { "click:#pkList input": 1 });
+      tapSave(`property ${p.name} new expected`, { "data-pact": "planadd" }, st, { xn: "Slab 9", xa: "9,00,000", xg: "45000", "click:#xw [data-k=date]": 1, xd: addM(nowM, 2) + "-10", xwho: "split", xs: "confirmed", xt: true }, undefined, "crash");
+      tapSave(`property ${p.name} new expected, around a month`, { "data-pact": "planadd" }, st, { xn: "Registration", xa: "6,00,000", "click:#xw [data-k=month]": 1, xm: addM(nowM, 8), xwho: "you" }, undefined, "crash");
+      for (const r of (p.plan || []).slice(0, 2)) { tapSave(`property ${p.name} change expected ${r.name}`, { "data-pplan": r.id }, st, { xa: "123456" }, undefined, "crash"); tapSave(`property ${p.name} demand for ${r.name}`, { "data-pplan": r.id }, st, { "click:#dm": 1, dA: "9,45,000", dD: addM(nowM, 1) + "-15", dB: "7,00,000" }, ["#sv"]); }
+      if ((p.plan || [])[0]) tapSave(`property ${p.name} delete expected`, { "data-pplan": p.plan[0].id }, st, {}, ["#dl"]);
+      tapSave(`property ${p.name} fund`, { "data-pact": "planfund" }, st, { fb: addM(nowM, 11), fl: "80", fs: "30,000" }, undefined, (ops) => { const r = ops.find((o) => o.c === "props")?.r; if (r?.fund) r.fund.start = 3000000; });
+      tapSave(`property ${p.name} usual costs`, { "data-pact": "planest" }, st, {}, []);
+    }
+    for (const o of obligations(21).filter((o) => o.src === "pp").slice(0, 4)) { cmpTap(`Pay by Tuesday property ${o.name}`, { "data-ptpay": o.key }); tapSave(`Pay by Tuesday property ${o.name}`, { "data-ptpay": o.key }, {}, o.tds ? {} : { pacc: b0 }, o.tds ? [] : ["#sv"]); }
+    // The PDF readers, on the same text lines.
+    const planLines = ["Some agreement text", "PAYMENT PLAN", "On Booking | 10% | 900000 | 45000", "On Agreement | 10.0% | 900000 | 45000", "On Completion of 6th Floor Slab | 6.0% | 1217655 | 60883", "Advance Maintenance | charges", "| 79,200 | 14256", "Total | 100% | 9000000", "Grand Total | 9500000"];
+    const stmtLines = ["ICICI Bank", "Statement for LBBLR00012345678", "Loan Account Details As on 15-Oct-2026", "Debits | 1,23,456.00 | 2,34,567.89 | 12,345.00 | 0.00 | 0.00 | 5,900.00 | 0.00", "10-Sep-2026 | ref | EMI | Due for Sep", "10-Oct-26 | ref | Pre-EMI | Due for Oct", "Current OS", "1,000.00 | 2,000.00 | 3,000.00 | 4,000.00 | 5,000.00 | 6,000.00 | 98,76,543.21 | 8,000.00"];
+    n++; if (JSON.stringify(propPlanParse(planLines)) !== JSON.stringify(N.propforms.propPlanParse(planLines))) out.push(`payment plan PDF: read differently\n    old ${JSON.stringify(propPlanParse(planLines))}\n    new ${JSON.stringify(N.propforms.propPlanParse(planLines))}`);
+    n++; if (JSON.stringify(propStmtParse(stmtLines)) !== JSON.stringify(N.propforms.propStmtParse(stmtLines))) out.push(`loan statement PDF: read differently\n    old ${JSON.stringify(propStmtParse(stmtLines))}\n    new ${JSON.stringify(N.propforms.propStmtParse(stmtLines))}`);
     cmpForm(dx, `${tag} new bank account`, () => accForm(), () => F.accForm(), { name: "Test bank", type: "bank", group: "Savings", opening: "12,345.67", minBal: "5000", reserve: true, reserveStart: "1000.5", emTarget: "" });
     cmpForm(dx, `${tag} new card`, () => accForm(), () => F.accForm(), { name: "Test card", type: "card", opening: "-12000", stmtDay: "5", dueDay: "25", payFrom: banks[0]?.id ?? "", limit: "2,00,000", apr: "3.75", fee: "499", feeWaive: "150000", reward: "1.5", rewardNote: "5% on Swiggy", hidden: true });
     cmpForm(dx, `${tag} new account, no name`, () => accForm(), () => F.accForm(), { name: "" });
@@ -543,11 +573,12 @@ const report = await f.evaluate(() => {
     if (money(p / 100) !== N.txlist.money(p)) out.push(`money(${r}): old ${money(p / 100)} new ${N.txlist.money(p)}`);
     if (moneyP(p / 100) !== N.txlist.moneyP(p)) out.push(`moneyP(${r}): old ${moneyP(p / 100)} new ${N.txlist.moneyP(p)}`);
   }
-  return { n, formN, txns: live("txns").length, out, estRounding, fixedCrash };
+  return { n, formN, fixedSaves, txns: live("txns").length, out, estRounding, fixedCrash };
 });
 await browser.close(); server.close();
 const SHOW = +(process.env.SHOW || 6);
 console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets, ${report.formN} of them forms saved (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with a total ₹1 apart (half-rupee rounding)` : ""}`);
+if (report.fixedSaves.length) console.log(`  (${report.fixedSaves.length} saves where the old planner lost a field or couldn't save — the new form keeps them: ${[...new Set(report.fixedSaves.map((l) => l.replace(/^(made-up|yours) /, "").replace(/^(loan|property) \S+( \S+)? /, "")))].slice(0, 6).join(", ")})`);
 if (report.fixedCrash.length) console.log(`  (the old planner crashes on ${report.fixedCrash.length} of these — ${[...new Set(report.fixedCrash.map((l) => l.replace(/^(made-up|yours) /, "")))].join(", ")} — the new page shows them)`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
 console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview, Insights (every tab) the Advisor (page and what Claude is sent), Money settings, credit cards, loans, EPF, PPF, NPS and properties are identical to the planner's");

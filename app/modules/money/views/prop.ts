@@ -11,6 +11,7 @@ import { PG, pcHow, pcOf, propCalc, propCats, propFundHeld, propFundNeed, propNw
 import { money } from "./txlist.ts";
 import { accountsPage, PROP_ST, rs0, short, shortR } from "./accounts.ts";
 import type { Page } from "./pages.ts";
+import { propPlanLoad, propStmtLoad } from "../ui/propforms.ts";
 
 export interface PropState { propId?: string; propTab?: string; accTab?: string }
 type P = Property & { kind?: string; place?: string; note?: string };
@@ -155,7 +156,11 @@ export const propPage: Page = {
     });
   },
   change(el, h) {
-    if (el.id === "planPdf" || el.id === "propStmt") { const f = el.files?.[0]; el.value = ""; if (f) h.plannerFiles(el.id === "planPdf" ? "propPlan" : "propStmt", [f]); return; }
+    if (el.id === "planPdf" || el.id === "propStmt") {
+      const f = el.files?.[0], p = h.data().byId<P>("props", String((h.state() as PropState).propId)); el.value = "";
+      if (f && p) void (el.id === "planPdf" ? propPlanLoad(p, f) : propStmtLoad(p, f));
+      return;
+    }
     return false;
   },
 };

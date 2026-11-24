@@ -10,7 +10,7 @@ import { extname, join, normalize } from "node:path";
 const EXPORT = process.env.AV_EXPORT, OLD = process.env.OLD_APP;
 if (!EXPORT || !OLD) { console.log("parity: skipped (set AV_EXPORT and OLD_APP)"); process.exit(0); }
 const harness = (await build({ entryPoints: ["tests/parity/harness.ts"], bundle: true, format: "esm", write: false, target: "es2022" })).outputFiles[0].text;
-const T = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json" };
+const T = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json" };
 const server = createServer(async (req, res) => {
   const url = decodeURIComponent((req.url ?? "/").split("?")[0]);
   if (url === "/export.json") return res.writeHead(200, { "content-type": T[".json"] }).end(await readFile(EXPORT));

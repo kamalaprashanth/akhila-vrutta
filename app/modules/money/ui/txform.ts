@@ -27,7 +27,7 @@ const payerNote = (p: Payer): string => p.own
   : `Paid by ${p.name} with their own money. It isn't in your balances or totals; it shows in the list and under its tags${p.tag ? `, tagged ${p.tag} automatically` : ""}.`;
 const payerLbl = (d: MoneyData, t: Tx): string => (t.paidBy ? (payersAll(d).find((p) => p.id === t.paidBy)?.name ?? t.paidBy) : "");
 const loanLbl = (l: Loan & { name?: string; lender?: string }): string => `${l.name}${l.lender ? ` · ${l.lender}` : ""}`;
-const legacyLoanOpt = (d: MoneyData, id?: string): [string, string][] => { const l = id ? d.byId<Loan & { name?: string; lender?: string }>("loans", id) : undefined; return l ? [["~" + l.id, `${loanLbl(l)} · loan`]] : []; };
+export const legacyLoanOpt = (d: MoneyData, id?: string): [string, string][] => { const l = id ? d.byId<Loan & { name?: string; lender?: string }>("loans", id) : undefined; return l ? [["~" + l.id, `${loanLbl(l)} · loan`]] : []; };
 export const instruments = (d: MoneyData): string[] => [...new Set([
   ...d.live<Rec & { instrument?: string; name?: string }>("holdings").map((h) => String(h.instrument || h.name)),
   ...[...d.live<Rec & { type?: string; instrument?: string }>("txns"), ...d.live<Rec & { type?: string; instrument?: string }>("recurring")].filter((x) => x.type === "investment" && x.instrument).map((x) => x.instrument!),
@@ -44,9 +44,9 @@ export function fundsOf(t: Tx): Fund[] {
   return [];
 }
 const fundLoanOpts = (d: MoneyData): [string, string][] => [["", "No, my own money"], ...d.live<Loan & { name?: string; lender?: string }>("loans").filter((l) => kindOf(l) !== "cardemi").map((l) => [l.id, loanLbl(l)] as [string, string])];
-const fundsBox = (): string => `<div class="f" id="w_funds"><label>Money from loans</label><div class="fundList"></div><button type="button" class="btn sm fundAdd">+ Add a loan</button><div class="note fundOwn" style="margin:6px 0 0"></div><div class="hint">For borrowed money (from Dad, LP, Monisha…) that came into your account and paid for this.</div></div>`;
+export const fundsBox = (): string => `<div class="f" id="w_funds"><label>Money from loans</label><div class="fundList"></div><button type="button" class="btn sm fundAdd">+ Add a loan</button><div class="note fundOwn" style="margin:6px 0 0"></div><div class="hint">For borrowed money (from Dad, LP, Monisha…) that came into your account and paid for this.</div></div>`;
 /** The "Money from loans" rows. Amounts typed in rupees; `get` returns paise. */
-function fundsUI(d: MoneyData, host: HTMLElement, init: Fund[], totalFn: () => number) {
+export function fundsUI(d: MoneyData, host: HTMLElement, init: Fund[], totalFn: () => number) {
   const L = fundLoanOpts(d).slice(1);
   let rows = init.map((f) => ({ loan: f.loan, amt: f.amt ? String(f.amt / 100) : "", part: f.part || "own" }));
   const tot = (): number => Math.abs(totalFn() || 0), sum = (): number => rows.reduce((a, r) => a + (parseFloat(String(r.amt).replace(/,/g, "")) || 0), 0);

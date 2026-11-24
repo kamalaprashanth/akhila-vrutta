@@ -332,7 +332,8 @@ export function planForm(l: L, p0: Partial<Plan> = {}): void {
       if (!(amount > 0)) { toast("Enter an amount above zero."); return; }
       if (!/^\d{4}-\d{2}$/.test(start)) { toast("Pick the month."); return; }
       if (end && end < start) { toast("The end month is before the start month."); return; }
-      closeModal(); save(([...(l.plans || [])] as Plan[]).filter((x) => x.id !== p.id).concat({ id: p.id || uid(), freq, amount, start, end: end || null, accountId: val("accountId") || null }));
+      const accountId = val("accountId") || null;   // read before the sheet closes (the planner lost it)
+      closeModal(); save(([...(l.plans || [])] as Plan[]).filter((x) => x.id !== p.id).concat({ id: p.id || uid(), freq, amount, start, end: end || null, accountId }));
       toast(isNew ? "Added to plan" : "Saved");
     };
   });
