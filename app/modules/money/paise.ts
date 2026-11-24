@@ -12,7 +12,7 @@ const EPF_FY = "epf.books.*.fys.*";
 const SYNCS = ["syncs[].bal", "syncs[].was"];
 
 /** Bumped whenever MONEY_FIELDS changes: stored data from an older list must be imported again. */
-export const AMOUNTS_VERSION = "paise-4";
+export const AMOUNTS_VERSION = "paise-5";
 
 export const MONEY_FIELDS: Record<string, string[]> = {
   accounts: ["opening", "minBal", "reserveStart", "emTarget"],
@@ -22,7 +22,8 @@ export const MONEY_FIELDS: Record<string, string[]> = {
   loans: ["principal", "emi", "fee", "bank.principal", "bank.emi", "plans[].amount", ...SYNCS, ...SYNCS.map((x) => `bank.${x}`)],
   holdings: [
     "openInvested", "value", "history[].value", "epfEmp", "epfEr", "yearly",
-    "nps.contrib", "nps.value", "nps.charges", "ppf.rows[].amt",
+    "nps.contrib", "nps.value", "nps.charges", "ppf.rows[].amt", "ppf.manual[].amt",
+    ...["emp", "er", "eps", "epsw"].map((f) => `epf.manual[].${f}`),
     `${EPF_FY}.close[]`, `${EPF_FY}.int[]`, `${EPF_FY}.ob[]`, ...EPF_ROW.map((f) => `${EPF_FY}.rows[].${f}`),
   ],
   props: ["value", "cur", "plan[].amt", "plan[].gst", "plan[].youAmt", "plan[].bankAmt",
@@ -44,10 +45,12 @@ export const NOT_MONEY: Record<string, string[]> = {
   recurring: ["day", "remind"],
   loans: ["day", "rate", "tenure", "gstRate", "rates[].rate", "bank.day", "bank.rate", "bank.tenure", "bank.rates[].rate", "plans[].day"],
   holdings: ["rate", "fx", "price", "openUnits", "usdCost", "navHist[][]", "priceJump.from", "priceJump.to",
-    "epf.raise", "epf.rate", "epf.retireAge", "nps.alloc.*", "nps.xirr", "npsLines[].hist[][]", "npsLines[].price", "npsLines[].units"],
+    "epf.raise", "epf.rate", "epf.retireAge", "epf.manual[].fy", "nps.retireAge", "nps.alloc.*", "nps.xirr", "npsLines[].hist[][]", "npsLines[].price", "npsLines[].units"],
   props: ["fund.ltv"],
   // App settings: months of spending for the emergency fund. (Profile amounts are kept as typed text.)
   settings: ["emMonths"],
+  // Units bought with an investment entry
+  txns: ["units"],
   // Broker trades are in their own currency (ccy), with per-unit prices.
   trades: ["amt", "fee", "price", "qty"],
 };

@@ -149,6 +149,7 @@ const report = await f.evaluate(() => {
   const fcReal = compareForecast(d, "yours");
   const propReal = compareProps(d, "yours");
   const resReal = compareReserve(d, "yours");
+  const invReal = compareInvest(d, "yours");
 
   // Made-up plan items: every frequency, month changes and skips, a budget with spends, trading-day shifts,
   // SIPs with and without charges, transfers, a card EMI, family repayment plans (monthly and one-off, one paid).
@@ -308,9 +309,116 @@ const report = await f.evaluate(() => {
   const dQ = N.dataFrom(S.data, T);
   const propSynth = compareProps(dQ, "made-up");
   const resSynth = compareReserve(dQ, "made-up");
+  compareInvest(dQ, "made-up (property set)");
   S.data = real;
   MEMO = new Map();
-  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth, planReal, planSynth, fcReal, fcSynth, propReal, propSynth, resReal, resSynth };
+  // Made-up investments: every kind of holding.
+  const ymI = ymOf(T), dI = (k, dd) => `${addM(ymI, k)}-${String(dd).padStart(2, "0")}`;
+  const fyNowI = (() => { const m = +ymI.slice(5); const y = +ymI.slice(0, 4); return m >= 4 ? y : y - 1; })();
+  const H = (id, x) => ({ id, name: id, instrument: id, updatedAt: 1, ...x });
+  const epfRow = (k, wm, d, emp, er, eps, extra) => ({ k, wm, d, wage: 30000, epsw: 15000, emp, er, eps, ...extra });
+  const IH = [
+    H("Axis Bluechip", { type: "Mutual Fund", openInvested: 100000, openUnits: 2000.5, price: 61.2345, priceDate: dI(0, 1), unitsAsOf: dI(-2, 1) }),
+    H("Infosys", { type: "Stock", openInvested: 150000, openUnits: 100, price: 1834.55, priceDate: dI(-1, 28) }),
+    H("Apple", { type: "US Stocks", ccy: "USD", openInvested: 210000, openUnits: 12.345, price: 187.42, fx: 83.4567, priceDate: dI(-1, 27) }),
+    H("Nvidia", { type: "US Stocks", ccy: "USD", openInvested: 50000, openUnits: 3, price: 450.1, priceDate: dI(-1, 27) }),
+    H("SGB", { type: "Gold", openInvested: 60000, openUnits: 10, price: 6900.25 }),
+    H("FD", { type: "Fixed Deposit", value: 250000.75, valueDate: dI(-3, 10), openInvested: 200000, history: [{ date: dI(-12, 1), value: 210000 }] }),
+    H("Old fund", { type: "Mutual Fund", openUnits: 5, price: 10, excludeNW: true }),
+    H("NPS", { type: "NPS", npsMode: "units", unitsAsOf: dI(-2, 15), yearly: 50000,
+      npsLines: [{ k: "E", units: 3456.789, price: 45.6789, priceDate: dI(-1, 20) }, { nm: "Scheme C - Tier I", units: 1200.1, price: 38.12, priceDate: dI(-1, 18) }, { nm: "Scheme G Tier I", units: 900, price: 29.5 }],
+      nps: { alloc: { E: 75, C: 10, G: 15 }, retireAge: 60, dob: "1990-06-15", contrib: 300000, charges: 1234.5, stmtDate: dI(-2, 15) } }),
+    H("PPF", { type: "PPF", rate: 7.1, yearly: 150000, ppf: { opened: `${fyNowI - 8}-05-10`, stmtDate: dI(-2, 25),
+      rows: [{ k: "dep", d: `${fyNowI - 8}-05-10`, amt: 150000 }, { k: "int", d: `${fyNowI - 7}-03-31`, amt: 9876.5 }, { k: "dep", d: `${fyNowI - 2}-04-04`, amt: 150000 },
+        { k: "wd", d: `${fyNowI - 1}-06-15`, amt: 40000 }, { k: "dep", d: dI(-3, 3), amt: 12500 }, { k: "dep", d: dI(-2, 7), amt: 12500 }],
+      manual: [{ id: "m1", k: "dep", d: dI(-1, 4), amt: 12500 }, { id: "m2", k: "dep", d: dI(-4, 4), amt: 99 }] } }),
+    H("EPF", { type: "EPF", epf: { rate: 8.25, raise: 5, retireAge: 58, dob: "1988-02-20",
+      books: {
+        OLD123: { est: "Old employer", fys: {
+          [fyNowI - 3]: { ob: [100000, 80000, 30000], int: [8000, 6400, 0], close: [108000 + 3600, 86400 + 1100, 30000 + 1250], rows: [epfRow("cont", `${fyNowI - 3}-05`, `${fyNowI - 3}-06-15`, 3600, 1100, 1250)] },
+          [fyNowI - 2]: { ob: [111600, 87500, 31250], int: [0, 0, 0], rows: [epfRow("dr", null, `${fyNowI - 2}-08-01`, 111600, 87500, 0)] } } },
+        // Moved out with a small gap (within ₹10) and with a big gap (a withdrawal, not the transfer).
+        OLD2: { est: "Second job", fys: { [fyNowI - 2]: { ob: [200, 100, 0], rows: [epfRow("dr", null, `${fyNowI - 2}-07-01`, 200, 100, 0)] } } },
+        OLD3: { est: "Third job", fys: { [fyNowI - 2]: { ob: [40000, 10000, 0], rows: [epfRow("dr", null, `${fyNowI - 2}-07-02`, 40000, 10000, 0)] } } },
+        NEW456: { est: "New employer", fys: {
+          [fyNowI - 2]: { ob: [0, 0, 0], int: [9100, 7000, 0], rows: [epfRow("tin", null, `${fyNowI - 2}-09-01`, 111600, 87500, 0, { from: "OLD123" }), epfRow("tin", null, `${fyNowI - 2}-09-02`, 195, 97, 0, { from: "OLD2" }), epfRow("tin", null, `${fyNowI - 2}-09-03`, 30000, 5000, 0, { from: "OLD3" }), epfRow("cont", `${fyNowI - 2}-09`, `${fyNowI - 2}-10-15`, 3600, 1100, 1250)] },
+          [fyNowI - 1]: { ob: [124300, 95600, 0], int: [10500, 8200, 0], rows: [epfRow("cont", `${fyNowI - 1}-04`, `${fyNowI - 1}-05-15`, 3800, 1150, 1250), epfRow("ipr", null, `${fyNowI - 1}-04-01`, 0, 0, 0)] },
+          [fyNowI]: { ob: [138600, 104950, 0], rows: [epfRow("cont", `${addM(ymI, -3)}`, `${addM(ymI, -2)}-15`, 3800, 1150, 1250)] } } } },
+      manual: [{ id: "x1", k: "cont", wm: addM(ymI, -2), d: `${addM(ymI, -1)}-15`, emp: 3800, er: 1150, eps: 1250, epsw: 15000 }, { id: "x2", k: "wd", d: dI(-1, 20), emp: 5000, er: 0, eps: 0 }, { id: "x3", k: "int", fy: fyNowI - 2, emp: 1, er: 1 }] } }),
+    // Third year of PPF (loan window), a deposit on the 5th this year; EPF with no pension wage given.
+    H("PPF young", { type: "PPF", rate: 7.1, ppf: { opened: `${fyNowI - 2}-06-01`, stmtDate: dI(-1, 28),
+      rows: [{ k: "dep", d: `${fyNowI - 2}-06-01`, amt: 50000 }, { k: "dep", d: `${fyNowI - 1}-04-05`, amt: 50000 }, { k: "dep", d: dI(-1, 5), amt: 20000 }, { k: "dep", d: dI(-1, 6), amt: 1000 }] } }),
+    H("EPF no wage", { type: "EPF", epf: { rate: 8.25, retireAge: 58, dob: "1975-01-10", books: { ABC9: { est: "Long job", fys: {
+      [fyNowI - 1]: { ob: [900000, 700000, 400000], rows: [{ k: "cont", wm: `${fyNowI - 1}-04`, d: `${fyNowI - 1}-05-15`, wage: 0, epsw: 0, emp: 1800, er: 550, eps: 1250 }] } } } } } }),
+    H("NPS Tier II", { type: "NPS", npsMode: "units", npsLines: [{ k: "E", units: 100, price: 40 }], nps: { dob: "1985-03-03" } }),
+    H("EPF simple", { type: "EPF", value: 500000, rate: 8.1, epfEmp: 3600, epfEr: 1100, joined: addM(ymI, -30) }),
+    H("PPF simple", { type: "PPF", value: 300000, rate: 7.1, yearly: 100000, opened: `${fyNowI - 9}-07-01` }),
+  ];
+  let n5 = 0; const W = (x) => ({ id: `w${++n5}`, updatedAt: n5, accountId: "pb", ...x });
+  const IT = [
+    W({ type: "investment", instrument: "Axis Bluechip", amount: 5000, units: 81.2, date: dI(-1, 7) }),
+    W({ type: "investment", instrument: "Axis Bluechip", amount: 5000.25, charges: 0.25, date: dI(0, 7) }),
+    W({ type: "investment", instrument: "Apple", amount: 16000, units: 1, date: dI(-1, 3) }),
+    W({ type: "investment", instrument: "NPS", amount: 4166.67, date: dI(-1, 25) }),
+    W({ type: "investment", instrument: "NPS", amount: 10000, date: dI(-3, 1) }),
+    W({ type: "investment", instrument: "PPF", amount: 12500, date: dI(0, 3) }),
+    W({ type: "investment", instrument: "FD", amount: 1000, date: dI(-13, 1) }),
+    W({ type: "investment", instrument: "Infosys", amount: 9000, units: 5, date: dI(-2, 2), hist: true }),
+    W({ type: "investment", instrument: "Unknown", amount: 700, date: dI(-2, 2), invType: "PPF" }),
+  ];
+  const IR = [{ id: "nps2-sip", name: "NPS Tier II SIP", type: "investment", instrument: "NPS Tier II", invType: "NPS", amount: 9000, freq: "quarterly", start: addM(ymI, -9), day: 10, accountId: "pb", updatedAt: 1 }, { id: "nps-sip", name: "NPS SIP", type: "investment", instrument: "NPS", invType: "NPS", amount: 4166.67, freq: "monthly", start: addM(ymI, -6), day: 25, accountId: "pb", updatedAt: 1 }];
+  S.data = { ...real, holdings: IH, txns: IT, recurring: IR, accounts: [{ id: "pb", name: "HDFC", type: "bank", opening: 400000, updatedAt: 1 }], loans: [], props: [], propItems: [] };
+  MEMO = new Map();
+  const invSynth = compareInvest(N.dataFrom(S.data, T), "made-up");
+  S.data = real;
+  MEMO = new Map();
+  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth, planReal, planSynth, fcReal, fcSynth, propReal, propSynth, resReal, resSynth, invReal, invSynth };
+
+  function compareInvest(d, label) {
+    const NV = N.invest, hs = S.data.holdings.filter((h) => !h.deleted);
+    const num = (a, b, w) => { checked++; const x = a == null ? a : +a, y = b == null ? b : +b; if (x === y) return; if (typeof x === "number" && typeof y === "number" && Math.abs(x - y) <= 1e-6 * Math.max(1, Math.abs(x))) return; out.push(`${w}: old ${x} new ${y}`); };
+    for (const h of hs) {
+      const nh = d.byId("holdings", h.id), w = `${label} ${h.name || h.instrument}`;
+      const a = holdingSum(h), b = NV.holdingSum(d, nh);
+      for (const k of ["inv", "value", "gain", "atCost"]) close(a[k], b[k], `${w}: ${k}`);
+      for (const k of ["units", "usdValue", "pct"]) num(a[k], b[k], `${w}: ${k}`);
+      same([a.byUnits, a.isUsd, a.fxMissing, a.asOf ?? null, a.age ?? null, a.lastBuy], [b.byUnits, b.isUsd, b.fxMissing, b.asOf ?? null, b.age ?? null, b.lastBuy], `${w}: details`);
+      if (h.type === "EPF" && h.epf) {
+        const e = epfCalc(h), f = NV.epfCalc(d, nh);
+        same(!!e, !!f, `${w}: EPF calculated`);
+        if (e && f) {
+          for (const k of ["epfBal", "epsBal", "contEmp", "contEr", "contEps", "wd", "tinExt", "interest", "invested", "expAmt", "expEps", "value", "inv", "accrued", "corpus", "sal", "pension", "pensionLow", "partial"]) close(e[k], f[k], `${w} EPF: ${k}`);
+          same([e.issues, e.lastWm, e.fyNow, e.retYm, e.svcNow, e.svcAt58, e.svcYrs, e.bonus, e.pYrs, e.lastCredit, e.expected.map((r) => r.wm), e.rows.map((r) => [r.k, r.d ?? null]), e.manualOld.length, e.epsLeft.map((a) => a.acc)],
+               [f.issues, f.lastWm, f.fyNow, f.retYm, f.svcNow, f.svcAt58, f.svcYrs, f.bonus, f.pYrs, f.lastCredit, f.expected.map((r) => r.wm), f.rows.map((r) => [r.k, r.d ?? null]), f.manualOld.length, f.epsLeft.map((a) => a.acc)], `${w} EPF: details`);
+          e.proj.forEach((p, i) => { const q = f.proj[i]; if (q) { same(p[0], q[0], `${w} EPF projection ${i}: date`); close(p[1], q[1], `${w} EPF projection ${p[0]}`); } });
+          same(e.proj.length, f.proj.length, `${w} EPF: projection length`);
+          for (const [fy, v] of e.fyEnd) close(v, f.fyEnd.get(fy), `${w} EPF: FY ${fy} end`);
+        }
+      }
+      if (h.type === "PPF" && h.ppf) {
+        const p = ppfCalc(h), q = NV.ppfCalc(d, nh);
+        for (const k of ["bal", "dep", "int", "wd", "inv", "accrued", "fyDepNow", "yearly", "mv", "wdMax", "loanMax"]) close(p[k], q[k], `${w} PPF: ${k}`);
+        same([p.fy0, p.fyNow, p.idx, p.matures, p.wdOk, p.loanOk, p.rows.map((r) => [r.k, r.d, r.src]), p.proj.length], [q.fy0, q.fyNow, q.idx, q.matures, q.wdOk, q.loanOk, q.rows.map((r) => [r.k, r.d, r.src]), q.proj.length], `${w} PPF: details`);
+        p.proj.forEach((x, i) => q.proj[i] && close(x[1], q.proj[i][1], `${w} PPF projection ${x[0]}`));
+        for (const [fy, v] of p.fyEnd) close(v, q.fyEnd.get(fy), `${w} PPF: FY ${fy} end`);
+      }
+      if (h.type === "NPS") {
+        const p = npsCalc(h), q = NV.npsCalc(d, nh);
+        for (const k of ["yearly", "corpus", "lump", "annuity", "pension", "fyIn"]) close(p[k], q[k], `${w} NPS: ${k}`);
+        num(p.ret, q.ret, `${w} NPS: return`);
+        same([p.dob, p.at, p.retYm, p.unitsAsOf, p.lines.map((l) => l.key), p.entries.map((t) => t.id), p.proj.length], [q.dob, q.at, q.retYm, q.unitsAsOf, q.lines.map((l) => l.key), q.entries.map((t) => t.id), q.proj.length], `${w} NPS: details`);
+        p.lines.forEach((l, i) => { if (q.lines[i]) { close(l.value, q.lines[i].value, `${w} NPS ${l.key}: value`); num(l.pct, q.lines[i].pct, `${w} NPS ${l.key}: share`); } });
+        p.proj.forEach((x, i) => q.proj[i] && close(x[1], q.proj[i][1], `${w} NPS projection ${x[0]}`));
+      }
+      if (h.type === "EPF" && !(h.epf && h.epf.books)) { const p = epfInfo(h, a), q = NV.epfInfo(d, nh, b); for (const k of ["mon", "bal", "wd", "int", "p5", "p10"]) close(p[k], q[k], `${w} EPF info: ${k}`); same([p.svc, p.can], [q.svc, q.can], `${w} EPF info: service`); }
+      if (h.type === "PPF" && !h.ppf) { const p = ppfInfo(h, a), q = NV.ppfInfo(d, nh, b); for (const k of ["bal", "w", "ln", "mv"]) close(p[k], q[k], `${w} PPF info: ${k}`); same([p.fy0 ?? null, p.idx ?? null, p.matures ?? null, p.yrsLeft ?? null, p.wdOk ?? null, p.loanOk ?? null, p.haveDeps ?? null], [q.fy0 ?? null, q.idx ?? null, q.matures ?? null, q.yrsLeft ?? null, q.wdOk ?? null, q.loanOk ?? null, q.haveDeps ?? null], `${w} PPF info: details`); }
+    }
+    for (const t of S.data.txns.filter((x) => !x.deleted && x.type === "investment").slice(0, 400)) same(invTypeOf(t), NV.invTypeOf(d, d.byId("txns", t.id)), `${label} ${t.id}: investment type`);
+    const a = netWorth(), b = NV.netWorth(d);
+    for (const k of ["banks", "mainEnd", "otherBanks", "sipPend", "inv", "invested", "excluded", "prop", "propOff", "cards", "loans", "total"]) close(a[k], b[k], `${label} net worth: ${k}`);
+    same(a.mainAcc?.id ?? null, b.mainAcc?.id ?? null, `${label} net worth: main account`);
+    return hs.length;
+  }
 
   function compareReserve(d, label) {
     const NI = N.insights, NR = N.reserve, map = (m, scale) => Object.fromEntries([...m.entries()].map(([k, v]) => [k, scale ? v / 100 : v]));
@@ -523,6 +631,6 @@ const report = await f.evaluate(() => {
 });
 await browser.close();
 server.close();
-console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up · plan items over 28 months: ${report.planReal} yours + ${report.planSynth} made-up · carry-overs to make: ${report.fcReal} yours, ${report.fcSynth} made-up · properties: ${report.propReal} yours + ${report.propSynth} made-up · month figures: ${report.resReal} months`);
+console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up · plan items over 28 months: ${report.planReal} yours + ${report.planSynth} made-up · carry-overs to make: ${report.fcReal} yours, ${report.fcSynth} made-up · properties: ${report.propReal} yours + ${report.propSynth} made-up · month figures: ${report.resReal} months · holdings: ${report.invReal} yours + ${report.invSynth} made-up`);
 if (report.diffs.length) { console.error(`✗ ${report.diffs.length} differences:\n  ${report.diffs.slice(0, Number(process.env.SHOW || 30)).join("\n  ")}`); process.exit(1); }
-console.log("✓ dates, loans, balances, month totals, card cycles, bills, plan items, carry-overs, the 36-month forecast, properties, month figures, the emergency fund, the reserve and readiness match the planner exactly");
+console.log("✓ dates, loans, balances, month totals, card cycles, bills, plan items, carry-overs, the 36-month forecast, properties, month figures, the emergency fund, the reserve, readiness, investments and net worth match the planner exactly");

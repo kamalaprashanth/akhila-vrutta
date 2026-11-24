@@ -8,11 +8,12 @@ import * as forecast from "../../app/modules/money/calc/forecast.ts";
 import * as props from "../../app/modules/money/calc/properties.ts";
 import * as insights from "../../app/modules/money/calc/insights.ts";
 import * as reserve from "../../app/modules/money/calc/reserve.ts";
+import * as invest from "../../app/modules/money/calc/invest.ts";
 import { toStored, unclassified } from "../../app/modules/money/paise.ts";
 import { MONEY_COLLECTIONS } from "../../app/core/store.ts";
 
 (window as unknown as { NEW: unknown }).NEW = {
-  loans, dates, accounts, plan, forecast, props, insights, reserve,
+  loans, dates, accounts, plan, forecast, props, insights, reserve, invest,
   /** The planner's data (rupees) as stored (paise), wrapped for the new calculations. */
   dataFrom(legacy: Record<string, unknown>, today: string) {
     const cols: Record<string, { id: string }[]> = {};
