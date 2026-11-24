@@ -98,7 +98,92 @@ const report = await f.evaluate(() => {
   S.data = real;
   MEMO = new Map();
   const realRes = compareLoans(d, "yours");
-  return { checked, diffs: out, loans: realRes, synth };
+  const accReal = compareAccounts(d, "yours");
+
+  // Made-up accounts and transactions for the card and balance edge cases.
+  const ymA = addM(ymOf(T), -5);
+  const A = (id, x) => ({ id, name: id, updatedAt: 1, ...x });
+  const synthAcc = [
+    A("bank1", { type: "bank", opening: 125000.75 }),
+    A("bank2", { type: "bank", opening: 0, openingDate: `${addM(ymA, 2)}-10` }),
+    A("card31", { type: "card", opening: -15000, stmtDay: 31, dueDay: 20 }),
+    A("card5", { type: "card", opening: 0, stmtDay: 5, dueDay: 25 }),
+    A("cardNoDue", { type: "card", opening: -999.99, stmtDay: 15 }),
+    A("mm-card", { type: "card", opening: -42000, stmtDay: 12, dueDay: 2 }),
+    A("cardNoCycle", { type: "card", opening: -100 }),
+    A("hidden", { type: "bank", opening: 5000, hidden: true }),
+    A("cash", { type: "cash", opening: 2500 }),
+  ];
+  const day = (k, dd) => `${addM(ymA, k)}-${String(dd).padStart(2, "0")}`;
+  let n2 = 0; const X = (x) => ({ id: `t${++n2}`, updatedAt: n2, ...x });
+  const synthTx = [
+    X({ type: "income", amount: 90000, date: day(0, 1), accountId: "bank1" }),
+    X({ type: "expense", amount: 1234.56, date: day(0, 3), accountId: "card31" }),
+    X({ type: "expense", amount: 499, date: day(0, 31) > day(0, 28) ? day(0, 28) : day(0, 28), accountId: "card31" }),
+    X({ type: "expense", amount: 2500, date: day(1, 5), accountId: "card5" }),
+    X({ type: "expense", amount: 2600, date: day(1, 6), accountId: "card5" }),
+    X({ type: "transfer", amount: 15000, date: day(1, 20), accountId: "bank1", toAccountId: "card31" }),
+    X({ type: "transfer", amount: 2500, date: day(2, 24), accountId: "bank1", toAccountId: "card5" }),
+    X({ type: "expense", amount: 300, date: day(2, 15), accountId: "cardNoDue" }),
+    X({ type: "expense", amount: 700, date: day(3, 12), accountId: "mm-card" }),
+    X({ type: "expense", amount: 8800, date: day(-1, 20), accountId: "mm-card", hist: true }),
+    X({ type: "expense", amount: 450, date: day(2, 2), accountId: "bank1", paidBy: "spouse" }),
+    X({ type: "investment", amount: 5000.5, date: day(2, 10), accountId: "bank1" }),
+    X({ type: "loan", act: "borrow", amount: 20000, date: day(2, 12), accountId: "bank2" }),
+    X({ type: "loan", act: "repay", amount: 5000, date: day(3, 12), accountId: "bank2" }),
+    X({ type: "loan", act: "repay", amount: 100, date: day(3, 13), accountId: "ghost" }),
+    X({ type: "carry", dir: "out", carry: 1500.25, amount: 1500.25, date: `${lastDay(addM(ymA, 1))}`, accountId: "bank1", ym: addM(ymA, 1) }),
+    X({ type: "carry", dir: "in", carry: 1500.25, amount: 1500.25, date: day(2, 1), accountId: "bank1", ym: addM(ymA, 1) }),
+    X({ type: "income", amount: 1000, date: day(4, 2), accountId: "card5" }),
+    X({ type: "expense", amount: 60, date: day(4, 1), accountId: "hidden" }),
+    X({ type: "expense", amount: 75, date: day(3, 9), accountId: "cash", deleted: true }),
+    X({ type: "expense", amount: 333.33, date: ymOf(T) + "-01", accountId: "card5" }),
+    X({ type: "transfer", amount: 50, date: day(4, 6), accountId: "card5", toAccountId: "cash" }),
+  ];
+  S.data = { ...real, accounts: synthAcc, txns: synthTx, loans: [] };
+  MEMO = new Map();
+  const accSynth = compareAccounts(N.dataFrom(S.data, T), "made-up");
+  S.data = real;
+  MEMO = new Map();
+  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth };
+
+  function compareAccounts(d, label) {
+    const NA = N.accounts, accs = S.data.accounts.filter((a) => !a.deleted), txs = S.data.txns.filter((t) => !t.deleted);
+    const nAcc = (a) => d.byId("accounts", a.id), nTx = (t) => d.byId("txns", t.id);
+    const balAt = (upto) => { const o = balances(upto), n = NA.balances(d, upto); for (const a of accs) close(o.get(a.id) ?? 0, n.get(a.id) ?? 0, `${label} ${a.name}: balance at ${upto ?? "now"}`); };
+    balAt(undefined);
+    for (let k = 0; k <= 24; k++) balAt(lastDay(addM(ymOf(T), -k)));
+    const months = []; for (let k = -1; k <= 24; k++) months.push(addM(ymOf(T), -k));
+    for (const ym of months) {
+      const o = monthActuals(ym), n = NA.monthActuals(d, ym);
+      for (const k of ["income", "expense", "investment"]) close(o[k], n[k], `${label} ${ym}: actual ${k}`);
+      for (const a of accs) { close(monthNet(a.id, ym), NA.monthNet(d, a.id, ym), `${label} ${a.name} ${ym}: month net`); close(monthNet(a.id, ym, true), NA.monthNet(d, a.id, ym, true), `${label} ${a.name} ${ym}: month net w/o carry`); }
+    }
+    for (const a of accs) {
+      same(countsAcc(a), NA.countsAcc(nAcc(a)), `${label} ${a.name}: counts`);
+      same(openDateOf(a), NA.openDateOf(nAcc(a)), `${label} ${a.name}: opening date`);
+      for (const t of txs.slice(0, 400)) {
+        checked++; const o = accEff(a.id, t), n = NA.accEff(a.id, nTx(t)); if (Math.abs(o - n / 100) > 1e-6) out.push(`${label} ${a.name} ${t.id}: accEff ${o} vs ${n / 100}`);
+      }
+      if (a.type !== "card") continue;
+      if (+a.stmtDay >= 1) for (const t of txs.slice(0, 600)) {
+        same(stmtFor(a, t.date), NA.stmtFor(nAcc(a), t.date), `${label} ${a.name}: statement for ${t.date}`);
+        same(dueOf(a, stmtFor(a, t.date)), NA.dueOf(nAcc(a), NA.stmtFor(nAcc(a), t.date)), `${label} ${a.name}: due for ${t.date}`);
+      }
+      for (let k = 0; k <= 6; k++) {
+        if (+a.stmtDay >= 1) same(cardCycle(a, k), NA.cardCycle(d, nAcc(a), k), `${label} ${a.name}: cycle ${k}`);
+        const o = cardInfo(a, k), n = NA.cardInfo(d, nAcc(a), k);
+        same(!!o, !!n, `${label} ${a.name}: has card info`);
+        if (o && n) {
+          for (const f of ["billed", "paid", "dueLeft", "owed", "unbilled"]) close(o[f], n[f], `${label} ${a.name} cycle ${k}: ${f}`);
+          same([o.stmt, o.prev, o.next, o.due, o.days], [n.stmt, n.prev, n.next, n.due, n.days], `${label} ${a.name} cycle ${k}: dates`);
+          same(cardTx(a, o.stmt, k === 0 ? T : o.next).map((t) => t.id), NA.cardTx(d, nAcc(a), n.stmt, k === 0 ? T : n.next).map((t) => t.id), `${label} ${a.name} cycle ${k}: transactions`);
+        }
+      }
+    }
+    for (const t of txs) { same(expMonth(t), NA.expMonth(d, nTx(t)), `${label} ${t.id}: spending month`); same(histCovered(t), NA.histCovered(d, nTx(t)), `${label} ${t.id}: in opening balance`); }
+    return accs.length;
+  }
 
   function compareLoans(d, label) {
   let n = 0;
@@ -131,6 +216,6 @@ const report = await f.evaluate(() => {
 });
 await browser.close();
 server.close();
-console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons, ${report.loans} of your loans + ${report.synth} made-up loans covering every path`);
+console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up`);
 if (report.diffs.length) { console.error(`✗ ${report.diffs.length} differences:\n  ${report.diffs.slice(0, 30).join("\n  ")}`); process.exit(1); }
-console.log("✓ dates, EMI maths, schedules, amounts owed and loan summaries match the planner exactly");
+console.log("✓ dates, loans, balances, month totals, card cycles and bills match the planner exactly");
