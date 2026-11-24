@@ -12,6 +12,12 @@ import { META, MONEY_COLLECTIONS, stableJSON, type Changes, type Rec, type Write
 import { AMOUNTS_VERSION, fromStored, toStored, unclassified } from "./paise.ts";
 import { callable, initFirebase } from "../../core/firebase.ts";
 import { mountTransactions, moneyData, type PlannerState } from "./views/transactions.ts";
+import { ensureLayer, onSheet } from "./ui/kit.ts";
+import { setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
+import { carrySheet, txnForm } from "./ui/txform.ts";
+import { bulkAct, cleanupSheet, txFilterSheet } from "./ui/txsheets.ts";
+import { mainAcc } from "./calc/forecast.ts";
+import type { Tx } from "./views/txlist.ts";
 
 /** Planner pages that Akhila Vrutta now draws itself (the planner keeps their state and sheets). */
 const MOVED = new Set(["activity"]);
@@ -33,6 +39,8 @@ const tabOf = (v: string) => PARENT[v] ?? v;
 type LegacyData = Record<string, unknown> & { schema: number };
 interface FrameApi {
   go(v: string): void;
+  /** Runs one of the planner's own functions (for screens that still open its sheets). */
+  call(name: string, ...args: unknown[]): unknown;
   add(): void;
   replace(d: LegacyData): void;
   state(): PlannerState;
@@ -203,7 +211,8 @@ function showMoved(on: boolean): void {
 function setSheet(open: boolean): void {
   if (!frame || !api || open === sheetOpen) return;
   sheetOpen = open;
-  document.body.classList.toggle("msheet", open);
+  document.body.classList.toggle("msheet", open || !!document.querySelector("#mvLayer #modal > *"));
+  document.body.classList.toggle("fsheet", open);
   if (open) {
     const r = (onMoved ? ensureBox() : frame).getBoundingClientRect();
     api.chrome(onMoved ? "only" : "full", { t: r.top, l: r.left, b: window.innerHeight - r.bottom });
@@ -225,13 +234,47 @@ function ensureBox(): HTMLElement {
   document.body.appendChild(box);
   txPage = mountTransactions(box, {
     state: () => (api ? api.state() : null),
-    data: () => moneyData((c) => ctx.store!.all(c), MONEY_COLLECTIONS),
-    openTx: (id) => api?.openTx(id),
-    filters: () => api?.filters(),
-    cleanup: () => api?.cleanup(),
-    bulk: (k) => api?.bulk(k),
+    data: currentData,
+    openTx,
+    filters: txFilterSheet,
+    cleanup: cleanupSheet,
+    bulk: bulkAct,
   });
   return box;
+}
+
+const currentData = () => moneyData((c) => ctx.store!.all(c), MONEY_COLLECTIONS);
+
+/** Saves records changed by a screen Akhila Vrutta draws, then hands the planner the new data. */
+function writeMoney(ops: MoneyWrite[]): void {
+  if (!ctx.store || !ops.length) return;
+  if (pendingData) { clearTimeout(saveTimer); flush(); }
+  ctx.store.writeMany(ops.map(({ c, r }) => ({ c, id: r.id, r })));
+  if (api) api.replace(loadForPlanner());   // the planner redraws, which redraws a moved screen too
+  else refreshMoved();
+}
+function refreshMoved(): void { if (onMoved) txPage?.render(); }
+
+/** A Transactions row: the form or carry-over here; loan entries, EPF, PPF and trades still in the planner. */
+function openTx(id: string): void {
+  const t = currentData().byId<Tx>("txns", id);
+  if (t && t.type === "carry") return carrySheet(t);
+  if (t && ["expense", "income", "transfer", "investment"].includes(String(t.type))) return txnForm({ ...t });
+  api?.openTx(id);
+}
+
+function startEnv(): void {
+  setEnv({
+    data: currentData,
+    write: writeMoney,
+    state: () => (api ? api.state() : null),
+    refresh: refreshMoved,
+    planner: (name, ...args) => { if (api) api.call(name, ...args); },
+  });
+  ensureLayer();
+  onSheet((open) => {
+    document.body.classList.toggle("msheet", open || sheetOpen);
+  });
 }
 
 export const money: Module = {
@@ -259,8 +302,13 @@ export const money: Module = {
     </nav>
     <button class="fab" id="moneyAdd" type="button" aria-label="Add transaction">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`;
-    root.querySelector("#moneyAdd")!.addEventListener("click", () => api?.add());
+    // + : the add form (Akhila Vrutta's), into the main account, from every money page.
+    root.querySelector("#moneyAdd")!.addEventListener("click", () => {
+      if (!api) return;
+      txnForm({}, { accountId: mainAcc(currentData())?.id || currentData().live("accounts")[0]?.id });
+    });
     const f = ensureFrame();
+    if (!box) startEnv();
     ensureBox();
     if (want && api && want !== view) api.go(want);
     else showMoved(MOVED.has(view) && !!api);

@@ -33,6 +33,7 @@ async function hOpenBackup(){ throw new Error("Open encrypted backups from Setti
     add: () => { const b = document.querySelector("[data-add]"); if(b) b.click(); },
     replace: data => { S.data = merge({}, data); MEMO = new Map(); render(); },
     state: () => { txFilter(); return S; },
+    call: (name, ...args) => { if(name === "go") return go(args[0]); },
     openTx: id => openTxItem(id),
     filters: () => txFilterSheet(),
     cleanup: () => cleanupSheet(),

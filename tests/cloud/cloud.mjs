@@ -192,6 +192,16 @@ try {
   let drawn = false;
   for (let i = 0; i < 20 && !drawn; i++) { drawn = (await A.page.innerText("#moneyView #view").catch(() => "")).includes("from device 2"); if (!drawn) await A.page.waitForTimeout(500); }
   check(drawn, "…and shows on device 1's Transactions page (drawn by the app from the cloud data)");
+  // The app's own add form (not the planner's): saved encrypted, reaches the other device.
+  await A.page.click(".fab");
+  await A.page.waitForSelector("#mvLayer #modal .sheet #f_amount", { timeout: 10000 });
+  await A.page.fill("#mvLayer #f_amount", "321.5");
+  await A.page.evaluate(() => { const s = document.querySelector("#mvLayer #f_categoryId"); s.value = [...s.options].find((o) => o.value).value; });
+  await A.page.fill("#mvLayer #f_note", "added with the new form");
+  await A.page.click("#mvLayer #sv");
+  let formSeen = false;
+  for (let i = 0; i < 30 && !formSeen; i++) { await B.page.waitForTimeout(500); formSeen = (await plannerTxns(fB)).some((t) => t.note === "added with the new form" && t.amount === 321.5); }
+  check(formSeen, "an entry added with the app's own form reaches device 2 (₹321.50)");
   await shot(B.page, "device2");
 
   progress("passphrase change");

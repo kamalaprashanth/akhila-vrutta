@@ -108,7 +108,41 @@ const report = await f.evaluate(() => {
     ["paid by Amma", blank({ acc: "@sp2", period: "all" }), nowM], ["paid by removed payer", blank({ acc: "@old", period: "all" }), nowM], ["uncategorised", blank({ uncat: true }), nowM],
     ["search dinner", blank({ q: "dinner" }), nowM], ["search 400.5", blank({ q: "400.5", period: "all" }), nowM], ["investments", blank({ type: "investment" }), nowM]]) run2(l, f, m);
   run2("selecting", blank(), nowM, { selOn: true, sel: ["x1", "x5"] });
-  S.data = real;
+  // Sheets: the new ones against the planner's, as drawn (markup, values, pickers, balances).
+  const sheetHtml = (sel) => document.querySelector(sel)?.innerHTML ?? "(none)";
+  const cmpSheet = (label, openOld, openNew) => {
+    n++;
+    openOld(); const a = sheetHtml("#modal"); closeModal();
+    openNew(); const b = sheetHtml("#mvLayer #modal"); N.kit.closeModal();
+    if (a !== b) {
+      let i = 0; while (i < a.length && a[i] === b[i]) i++;
+      out.push(`sheet ${label}: differs at ${i}\n    old …${a.slice(Math.max(0, i - 100), i + 120)}\n    new …${b.slice(Math.max(0, i - 100), i + 120)}`);
+    }
+  };
+  const sheets = (dx, tag) => {
+    N.setEnv({ data: () => dx, state: () => S, write: () => {}, refresh: () => {}, planner: () => {} });
+    const stored = (id) => dx.byId("txns", id);
+    const pick = (f) => live("txns").filter(f).slice(-2);
+    const kinds = [["expense", (t) => t.type === "expense" && !t.paidBy && !t.funds && !t.fundLoan], ["income", (t) => t.type === "income"], ["transfer", (t) => t.type === "transfer"],
+      ["investment", (t) => t.type === "investment"], ["investment with charges", (t) => t.type === "investment" && t.charges > 0], ["paid by someone", (t) => !!t.paidBy], ["money from loans", (t) => !!(t.funds || t.fundLoan)],
+      ["paid from a loan", (t) => !!t.fromLoan], ["tagged", (t) => (t.tags || []).length > 0], ["budget", (t) => !!t.budgetId], ["history", (t) => !!t.hist], ["negative", (t) => t.amount < 0], ["split", (t) => !!t.splitOf]];
+    for (const [k, f] of kinds) for (const t of pick(f)) cmpSheet(`${tag} edit ${k} ${t.id}`, () => txnForm({ ...t }), () => N.txform.txnForm({ ...stored(t.id) }));
+    const acc0 = (mainAcc() || live("accounts")[0] || {}).id;
+    cmpSheet(`${tag} add`, () => txnForm({}, { accountId: acc0 }), () => N.txform.txnForm({}, { accountId: acc0 }));
+    for (const t of live("txns").filter((x) => x.type === "carry").slice(-2)) cmpSheet(`${tag} carry ${t.id}`, () => carrySheet(t), () => N.txform.carrySheet(stored(t.id)));
+    S.f = blank({ tag: allTags()[0] || "", min: "100" }); cmpSheet(`${tag} filters`, () => txFilterSheet(), () => N.txsheets.txFilterSheet());
+    S.f = blank(); cmpSheet(`${tag} clean up`, () => cleanupSheet(), () => N.txsheets.cleanupSheet());
+    const two = live("txns").filter((x) => x.type === "expense" || x.type === "income").slice(-3).map((x) => x.id);
+    S.selOn = true; S.sel = new Set(two);
+    cmpSheet(`${tag} bulk tag`, () => bulkAct("tag"), () => N.txsheets.bulkAct("tag"));
+    cmpSheet(`${tag} bulk category`, () => bulkAct("cat"), () => N.txsheets.bulkAct("cat"));
+    cmpSheet(`${tag} bulk delete`, () => bulkAct("del"), () => N.txsheets.bulkAct("del"));
+    for (const t of live("txns").filter((x) => x.type === "expense" && x.amount > 0).slice(-2)) cmpSheet(`${tag} split ${t.id}`, () => splitSheet({ ...t }), () => N.txform.splitSheet({ ...stored(t.id) }));
+    S.selOn = false; S.sel = new Set();
+  };
+  sheets(d2, "made-up");
+  S.data = real; MEMO = new Map();
+  sheets(d, "yours");
   Object.assign(S, save); MEMO = new Map();
   // Also the money formats, on awkward amounts.
   for (const r of [0, 0.004, 0.005, -0.5, 0.5, 1.5, 2.5, -2.5, 999.995, 1234.56, -1234.56, 12345678.9, 1e9]) {
@@ -122,4 +156,4 @@ await browser.close(); server.close();
 const SHOW = +(process.env.SHOW || 6);
 console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: Transactions in ${report.n} states (${report.txns} transactions)`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
-console.log("✓ the Transactions page is identical to the planner's, in every state");
+console.log("✓ the Transactions page and its sheets (form, split, carry-over, filters, clean-up, bulk) are identical to the planner's");
