@@ -16,7 +16,8 @@ const server = createServer(async (req, res) => {
   if (url === "/export.json") return res.writeHead(200, { "content-type": T[".json"] }).end(await readFile(EXPORT));
   if (url === "/harness.js") return res.writeHead(200, { "content-type": T[".js"] }).end(harness);
   if (url === "/harness.html") return res.writeHead(200, { "content-type": T[".html"] }).end('<!doctype html><link rel="stylesheet" href="/app.css"><main id="main"></main><script type="module" src="/harness.js"></script>');
-  const file = join("dist", normalize(url).replace(/^(\.\.[/\\])+/, ""));
+  let file = join("dist", normalize(url).replace(/^(\.\.[/\\])+/, ""));
+  if (!extname(file)) file += ".html"; // like Firebase Hosting's cleanUrls
   try { res.writeHead(200, { "content-type": T[extname(file)] ?? "application/octet-stream" }).end(await readFile(file)); } catch { res.writeHead(404).end(); }
 });
 await new Promise((r) => server.listen(0, r));

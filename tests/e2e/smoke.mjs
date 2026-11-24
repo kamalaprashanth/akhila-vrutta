@@ -8,7 +8,8 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
   ".png": "image/png", ".webmanifest": "application/manifest+json", ".map": "application/json" };
 const server = createServer(async (req, res) => {
   const path = normalize(decodeURIComponent((req.url ?? "/").split("?")[0])).replace(/^(\.\.[/\\])+/, "");
-  const file = join("dist", path.endsWith("/") ? `${path}index.html` : path);
+  let file = join("dist", path.endsWith("/") ? `${path}index.html` : path);
+  if (!extname(file)) file += ".html"; // like Firebase Hosting's cleanUrls
   try { res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" }).end(await readFile(file)); }
   catch { res.writeHead(404).end(); }
 });

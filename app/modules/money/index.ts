@@ -1,5 +1,5 @@
 /**
- * The Money tab. For now it runs the moved-over KP Money Planner in its own frame (money/index.html)
+ * The Money tab. For now it runs the moved-over KP Money Planner in its own frame (/money/app)
  * and is the bridge between that frame and the encrypted store:
  *   load  → stored records (paise) converted to the planner's rupees
  *   save  → whatever the planner changed, converted back and written in batches
@@ -130,7 +130,7 @@ function ensureFrame(): HTMLIFrameElement {
   frame.id = "moneyFrame";
   frame.title = "Money";
   const start = location.hash.split("/")[2] || "home";
-  frame.src = `money/index.html#${encodeURIComponent(start)}`;
+  frame.src = `/money/app#${encodeURIComponent(start)}`;
   document.body.appendChild(frame);
   return frame;
 }
