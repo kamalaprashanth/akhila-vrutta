@@ -5,7 +5,7 @@ import {
   bioCapable, createHome, currentUser, deviceInfo, forgetDevice, homeOf, setMode, signIn,
   unlockBio, unlockPass, unlockRemembered, type Device, type Session, type UnlockMode,
 } from "./vault.ts";
-import { signOutNow } from "./firebase.ts";
+import { signOutNow, type SignedInUser } from "./firebase.ts";
 
 let el: HTMLElement | null = null;
 
@@ -152,17 +152,16 @@ async function setup(): Promise<Session> {
     <div class="lockopts"><button class="btn pri" type="button" id="lk_g" data-lbl="Sign in with Google">Sign in with Google</button></div>
     <p class="lockm err" id="lk_e" hidden></p>`);
   const err = (t: string) => { const x = e.querySelector<HTMLElement>("#lk_e"); if (x) { x.hidden = false; x.textContent = t; } };
-  let user = await currentUser().catch(() => null);
-  if (!user) {
-    user = await new Promise((res) => {
-      e.querySelector("#lk_g")!.addEventListener("click", async () => {
-        busy(e, true, "Signing in…");
-        try { const u = await signIn(); busy(e, false); if (u) res(u); }
-        catch (x) { busy(e, false); err(`Sign-in didn't finish (${(x as { code?: string }).code ?? (x instanceof Error ? x.message : "error")}).`); }
-      });
+  // Listen for the tap straight away: a tap while Firebase is still loading must not be lost.
+  const tapped = new Promise<SignedInUser>((res) => {
+    e.querySelector("#lk_g")!.addEventListener("click", async () => {
+      busy(e, true, "Signing in…");
+      try { const u = await signIn(); busy(e, false); if (u) res(u); }
+      catch (x) { busy(e, false); err(`Sign-in didn't finish (${(x as { code?: string }).code ?? (x instanceof Error ? x.message : "error")}).`); }
     });
-  }
-  const uid = user!.uid;
+  });
+  const user = (await currentUser().catch(() => null)) ?? (await tapped);
+  const uid = user.uid;
   let home: string | null;
   try {
     lockProgress("Checking your account…");
