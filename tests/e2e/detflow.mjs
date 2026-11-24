@@ -63,6 +63,11 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   const frameShown = () => p.$eval("#moneyFrame", (e) => !e.hidden && getComputedStyle(e).display !== "none");
   const pressed = (sel) => p.$eval(sel, (e) => e.getAttribute("aria-pressed") === "true");
   const view = () => f.evaluate(() => S.view);
+  const appForm = async (sel, re, what) => {
+    await p.click(sel); await settle();
+    ok(!(await frameShown()) && re.test(await p.textContent("#mvLayer #modal h3").catch(() => "")), `${what} opens the app's form`);
+    await p.click("#mvLayer #modal #cx"); await settle();
+  };
   const formOpens = async (sel, re, what) => {
     await p.click(sel); await settle();
     ok(await frameShown() && re.test(await f.textContent("#modal h3").catch(() => "")), `${what} opens the planner's form`);
@@ -81,8 +86,12 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${V} [data-et="passbook"]`); await settle();
   const chip = await p.$(`${V} [data-efy]:not([aria-pressed="true"])`);
   if (chip) { const y = await chip.getAttribute("data-efy"); await chip.click(); await settle(); ok(await pressed(`${V} [data-efy="${y}"]`), "a passbook year"); }
-  if (await p.$(`${V} [data-epfm]`)) await formOpens(`${V} [data-epfm]`, /EPF entry/i, "an entry you added");
-  await formOpens(`${V} [data-ea="add"]`, /EPF entry/i, "Add entry");
+  if (await p.$(`${V} [data-epfm]`)) await appForm(`${V} [data-epfm]`, /EPF entry/i, "an entry you added");
+  await appForm(`${V} [data-ea="add"]`, /EPF entry/i, "Add entry");
+  // An EPF month added by hand, saved in paise on the holding.
+  await p.click(`${V} [data-ea="add"]`); await settle();
+  await p.fill("#mvLayer #f_emp", "2,000"); await p.fill("#mvLayer #f_er", "611"); await p.click("#mvLayer #modal #sv"); await p.waitForTimeout(900);
+  ok(await f.evaluate(() => (byId("holdings", "he").epf.manual || []).some((m) => m.emp === 2000 && m.er === 611 && m.k === "cont")), "…a ₹2,000 + ₹611 month is saved");
   ok(await p.$eval(`${V} #epfPdfV`, (e) => e.type === "file" && e.multiple), "Load passbooks has its file picker");
   // The PDF reading is still the planner's: the chosen files reach it (stubbed here; no real passbook in the test).
   await f.evaluate(() => { window.__got = null; window.epfPdfToHolding = (h, files) => { window.__got = [h.id, files.length, files[0].name]; }; });
@@ -96,7 +105,11 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${V} [data-hold="hp"]`); await settle();
   ok(!(await frameShown()) && (await view()) === "ppf" && /PPF balance/i.test(await p.textContent(V)), "PPF opens (drawn by the app)");
   for (const t of ["statement", "projection", "overview"]) { await p.click(`${V} [data-pt2="${t}"]`); await settle(); ok(await pressed(`${V} [data-pt2="${t}"]`), `PPF ${t} tab`); }
-  await formOpens(`${V} [data-pa="add"]`, /PPF/i, "Add entry");
+  await appForm(`${V} [data-pa="add"]`, /PPF/i, "Add entry");
+  await p.click(`${V} [data-pa="add"]`); await settle();
+  await p.fill("#mvLayer #f_amt", "12,000"); await p.click("#mvLayer #modal #sv"); await p.waitForTimeout(900);
+  const dep = await f.evaluate(() => S.data.txns.find((t) => t.instrument === "PPF2" && t.amount === 12000));
+  ok(dep && dep.accountId, "a PPF deposit is saved as an entry from its account (the planner lost the account)");
   await p.click(`${V} .monthbar [data-go="accounts"]`); await settle();
 
   // NPS.
@@ -104,7 +117,10 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${V} [data-hold="hn"]`); await settle();
   ok(!(await frameShown()) && (await view()) === "nps" && /NPS value/i.test(await p.textContent(V)), "NPS opens (drawn by the app)");
   for (const t of ["entries", "projection", "overview"]) { await p.click(`${V} [data-nt="${t}"]`); await settle(); ok(await pressed(`${V} [data-nt="${t}"]`), `NPS ${t} tab`); }
-  await formOpens(`${V} [data-na="units"]`, /statement/i, "Update from statement");
+  await appForm(`${V} [data-na="units"]`, /statement/i, "Update from statement");
+  await p.click(`${V} [data-na="units"]`); await settle();
+  await p.fill("#mvLayer #f_u0", "3600"); await p.click("#mvLayer #modal #sv"); await p.waitForTimeout(900);
+  ok(await f.evaluate(() => byId("holdings", "hn").npsLines[0].units === 3600), "…new units are saved");
   await p.click(`${V} .monthbar [data-go="accounts"]`); await settle();
 
   // Property.

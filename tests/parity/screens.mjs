@@ -520,6 +520,31 @@ const report = await f.evaluate(() => {
       tapSave(`property ${p.name} usual costs`, { "data-pact": "planest" }, st, {}, []);
     }
     for (const o of obligations(21).filter((o) => o.src === "pp").slice(0, 4)) { cmpTap(`Pay by Tuesday property ${o.name}`, { "data-ptpay": o.key }); tapSave(`Pay by Tuesday property ${o.name}`, { "data-ptpay": o.key }, {}, o.tds ? {} : { pacc: b0 }, o.tds ? [] : ["#sv"]); }
+    // EPF, PPF and NPS entries.
+    const setAcc = (acc) => (ops) => { const r = ops.find((o) => o.c === "txns")?.r; if (r) r.accountId = acc; };
+    for (const h of live("holdings").filter((h) => h.type === "EPF" && h.epf)) {
+      const st = { epfId: h.id };
+      cmpTap(`EPF add entry ${h.name}`, { "data-ea": "add" }, st);
+      for (const m of h.epf.manual || []) { cmpTap(`EPF entry ${m.id}`, { "data-epfm": m.id }, st); tapSave(`EPF entry ${m.id} changed`, { "data-epfm": m.id }, st, { emp: "1,900" }); tapSave(`EPF entry ${m.id} removed`, { "data-epfm": m.id }, st, {}, ["#dl"]); }
+      tapSave(`EPF ${h.name} new contribution`, { "data-ea": "add" }, st, { wm: addM(nowM, -1), d: today(), emp: "1,800", er: "550.5", eps: "1250" });
+      tapSave(`EPF ${h.name} new interest`, { "data-ea": "add" }, st, { "click:#ekSeg [data-k=int]": 1, emp: "12,345", er: "3,456" });
+      tapSave(`EPF ${h.name} new withdrawal`, { "data-ea": "add" }, st, { "click:#ekSeg [data-k=wd]": 1, d: today(), emp: "50000", er: "0", note: "Housing" });
+    }
+    for (const h of live("holdings").filter((h) => h.type === "PPF" && h.ppf)) {
+      const st = { ppfId: h.id };
+      cmpTap(`PPF add entry ${h.name}`, { "data-pa": "add" }, st);
+      const ppfAcc = live("txns").filter((t) => t.type === "investment" && (t.instrument || "").trim().toLowerCase() === (h.instrument || "PPF").toLowerCase()).sort((a, b) => b.date.localeCompare(a.date))[0]?.accountId || mainAcc()?.id;
+      for (const m of h.ppf.manual || []) { cmpTap(`PPF entry ${m.id}`, { "data-ppfm": m.id }, st); tapSave(`PPF entry ${m.id} changed`, { "data-ppfm": m.id }, st, { amt: "777" }, undefined, m.k === "dep" ? setAcc(ppfAcc) : undefined); }
+      tapSave(`PPF ${h.name} new deposit`, { "data-pa": "add" }, st, { amt: "12,500", d: today(), acc: b0 }, undefined, setAcc(b0));
+      tapSave(`PPF ${h.name} new interest`, { "data-pa": "add" }, st, { "click:#pkSeg [data-k=int]": 1, amt: "9,876.5" });
+      tapSave(`PPF ${h.name} new withdrawal`, { "data-pa": "add" }, st, { "click:#pkSeg [data-k=wd]": 1, amt: "20000", d: today() });
+    }
+    for (const h of live("holdings").filter((h) => h.type === "NPS" && h.nps)) {
+      const st = { npsId: h.id };
+      cmpTap(`NPS contribution ${h.name}`, { "data-na": "add" }, st); cmpTap(`NPS units ${h.name}`, { "data-na": "units" }, st);
+      tapSave(`NPS ${h.name} new contribution`, { "data-na": "add" }, st, { amt: "5,000", d: today(), acc: b0 }, undefined, setAcc(b0));
+      tapSave(`NPS ${h.name} units from statement`, { "data-na": "units" }, st, { u0: "3500.1234", p0: "46.12", sd: today(), ct: "3,10,000", xr: "11.5" });
+    }
     // The PDF readers, on the same text lines.
     const planLines = ["Some agreement text", "PAYMENT PLAN", "On Booking | 10% | 900000 | 45000", "On Agreement | 10.0% | 900000 | 45000", "On Completion of 6th Floor Slab | 6.0% | 1217655 | 60883", "Advance Maintenance | charges", "| 79,200 | 14256", "Total | 100% | 9000000", "Grand Total | 9500000"];
     const stmtLines = ["ICICI Bank", "Statement for LBBLR00012345678", "Loan Account Details As on 15-Oct-2026", "Debits | 1,23,456.00 | 2,34,567.89 | 12,345.00 | 0.00 | 0.00 | 5,900.00 | 0.00", "10-Sep-2026 | ref | EMI | Due for Sep", "10-Oct-26 | ref | Pre-EMI | Due for Oct", "Current OS", "1,000.00 | 2,000.00 | 3,000.00 | 4,000.00 | 5,000.00 | 6,000.00 | 98,76,543.21 | 8,000.00"];
