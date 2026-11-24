@@ -21,7 +21,8 @@ const bad = (m) => { failed++; console.error(`✗ ${m}`); };
 const check = (cond, m) => (cond ? ok(m) : bad(m));
 
 async function api(url, opts = {}, token = "owner") {
-  const r = await fetch(url, { ...opts, headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(opts.headers ?? {}) } });
+  const auth = token ? { authorization: `Bearer ${token}` } : {};
+  const r = await fetch(url, { ...opts, headers: { "content-type": "application/json", ...auth, ...(opts.headers ?? {}) } });
   const text = await r.text();
   let body; try { body = JSON.parse(text); } catch { body = text; }
   return { status: r.status, body };
@@ -35,7 +36,7 @@ for (const [localId, who] of [[OWNER_UID, "owner"], ["intruder-uid", "intruder"]
   if (r.status !== 200) throw new Error(`couldn't create test user ${who}: ${JSON.stringify(r.body)}`);
 }
 async function idToken(who) {
-  const r = await api(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=test-api-key`, { method: "POST", body: JSON.stringify({ email: `${who}@test.local`, password: "test-password-123", returnSecureToken: true }) }, "none");
+  const r = await api(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=test-api-key`, { method: "POST", body: JSON.stringify({ email: `${who}@test.local`, password: "test-password-123", returnSecureToken: true }) }, null);
   if (!r.body.idToken) throw new Error(`test sign-in failed for ${who}: ${JSON.stringify(r.body).slice(0, 200)}`);
   return r.body.idToken;
 }
