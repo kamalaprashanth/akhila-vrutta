@@ -38,7 +38,7 @@ let sha = process.env.GITHUB_SHA ?? "";
 if (!sha) { try { sha = execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { sha = "local"; } }
 // AV_EMULATORS=1 makes a test build that talks to the local Firebase emulators (never deployed).
 const emulators = process.env.AV_EMULATORS === "1"
-  ? { auth: "http://127.0.0.1:9099", firestoreHost: "127.0.0.1", firestorePort: 8080 } : undefined;
+  ? { auth: "http://127.0.0.1:9099", firestoreHost: "127.0.0.1", firestorePort: 8080, functionsHost: "127.0.0.1", functionsPort: 5001 } : undefined;
 const firebase = emulators
   ? { apiKey: "test-api-key", authDomain: "127.0.0.1", projectId: "demo-akhila-vrutta", appId: "test-app" }
   : parseConfig(process.env.FIREBASE_WEB_CONFIG);

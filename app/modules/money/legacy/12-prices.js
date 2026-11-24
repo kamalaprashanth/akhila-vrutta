@@ -145,8 +145,7 @@ function pxStatusSheet(){
     s.querySelector("#cx").onclick=closeModal;
     const b=s.querySelector("#pxNow");
     b.onclick=async()=>{ if(!pxOn()){ toast("Sign in and sync first."); return; } b.disabled=true; b.textContent="Updating… (up to a few minutes)";
-      try{ const fx=await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
-        const fn=fx.httpsCallable(fx.getFunctions(H.appI, H.cfg.aiRegion||"asia-south1"), "refreshPricesNow", {timeout:560000});
+      try{ const fn=await AVB.callable("refreshPricesNow", 560000);
         await fn({}); P.tables={}; await hPrices(true); closeModal(); pxStatusSheet(); toast("Prices updated"); }
       catch(e){ b.disabled=false; b.textContent=b.dataset.lbl; const m=String(e.message||e.code||"error"); toast(/not-found|internal/i.test(m)?"Couldn't reach the price job. Deploy the functions first (README › Automatic prices).":"Couldn't update: "+m); } };
   });

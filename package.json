@@ -13,7 +13,7 @@
     "test:e2e": "node tests/e2e/smoke.mjs",
     "check": "npm run typecheck && npm run test:unit && npm run build && npm run test:e2e",
     "test:parity": "node tests/parity/parity.mjs",
-    "test:cloud": "AV_EMULATORS=1 node scripts/build.mjs && firebase emulators:exec --only auth,firestore,hosting --project demo-akhila-vrutta \"node tests/cloud/cloud.mjs\"",
+    "test:cloud": "AV_EMULATORS=1 node scripts/build.mjs && firebase emulators:exec --only auth,firestore,hosting,functions --project demo-akhila-vrutta \"node tests/cloud/cloud.mjs\"",
     "test:live": "node tests/live/live.mjs"
   },
   "devDependencies": {

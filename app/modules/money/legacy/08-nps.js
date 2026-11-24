@@ -371,8 +371,7 @@ let aiSample, aiBusy=null;
 const hostedAI = () => { try{ return HOSTED && !!H.cfg.ai; }catch(e){ return false; } };
 async function hostedAsk(turns, {signal}={}){
   if(!H.appI || !H.user) throw {code:"not_signed_in", message:"Sign in first."};
-  const fx=await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
-  const fn=fx.httpsCallable(fx.getFunctions(H.appI, H.cfg.aiRegion||"asia-south1"), "askClaude", {timeout:300000});
+  const fn=await AVB.callable("askClaude", 300000);
   const stop=new Promise((_,rej)=>{ if(signal) signal.addEventListener("abort",()=>rej({code:"cancelled"}),{once:true}); });
   try{ const r=await Promise.race([fn({messages:turns.map(m=>({role:m.role, content:m.content}))}), stop]); return {text:(r.data&&r.data.text)||"", truncated:!!(r.data&&r.data.truncated)}; }
   catch(e){ if(e && e.code==="cancelled") throw e; throw {code:String((e&&e.code)||"error").replace(/^functions\//,""), message:(e&&e.message)||"Couldn't get an answer."}; }

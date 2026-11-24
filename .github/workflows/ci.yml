@@ -38,8 +38,10 @@ jobs:
       - run: npm run test:unit
       - name: Cloud tests on the Firebase emulators
         run: |
+          (cd functions && npm ci --no-audit --no-fund)
+          printf 'ANTHROPIC_API_KEY=test-not-a-key\nALPHAVANTAGE_KEY=test-not-a-key\n' > functions/.secret.local
           AV_EMULATORS=1 node scripts/build.mjs
-          $FT emulators:exec --only auth,firestore,hosting --project demo-akhila-vrutta "node tests/cloud/cloud.mjs"
+          $FT emulators:exec --only auth,firestore,hosting,functions --project demo-akhila-vrutta "node tests/cloud/cloud.mjs"
       - name: Production build
         run: npm run build
         env:
@@ -56,6 +58,26 @@ jobs:
           name: screenshots-check
           path: test-results
           if-no-files-found: ignore
+
+  functions:
+    # Advisor (askClaude) and price updates. Separate from the site release, so a missing key never blocks it.
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Deploy key
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
+        run: |
+          echo "$SA" > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+      - run: cd functions && npm ci --no-audit --no-fund
+      - name: Deploy Cloud Functions
+        run: $FT deploy --only functions --project "$PROJECT" --non-interactive --force
 
   preview:
     needs: check

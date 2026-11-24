@@ -4,3 +4,5 @@ dist/
 *.log
 .firebase/
 test-results/
+functions/node_modules/
+functions/.secret.local

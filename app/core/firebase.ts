@@ -20,7 +20,7 @@ export interface AppConfig {
   /** Commit the build came from, shown in Settings. */
   build: string;
   /** Test builds only: talk to the local Firebase emulators instead of the cloud. */
-  emulators?: { auth: string; firestoreHost: string; firestorePort: number };
+  emulators?: { auth: string; firestoreHost: string; firestorePort: number; functionsHost?: string; functionsPort?: number };
 }
 
 declare global {
@@ -44,6 +44,7 @@ type AuthModule = Record<string, Fn> & { GoogleAuthProvider: new () => { setCust
 export const config = (): AppConfig => window.AV_CONFIG ?? { firebase: null, build: "local" };
 
 export interface Fb {
+  app: unknown;
   auth: unknown;
   authMod: AuthModule;
   db: unknown;
@@ -80,8 +81,27 @@ export function initFirebase(): Promise<Fb | null> {
         res();
       });
     });
-    return { auth, authMod, db, fs };
+    return { app, auth, authMod, db, fs };
   })());
+}
+
+/** Cloud Functions live in Mumbai, next to the database. */
+export const FUNCTIONS_REGION = "asia-south1";
+let fnMod: Promise<Record<string, Fn>> | null = null;
+
+/** A callable Cloud Function, e.g. callable("askClaude", 300000)({ messages }). */
+export async function callable(name: string, timeout = 60000): Promise<(data: unknown) => Promise<{ data: unknown }>> {
+  const fb = await initFirebase();
+  if (!fb) throw new Error("Firebase isn't configured for this build.");
+  fnMod ??= import(/* @vite-ignore */ cdn("functions")) as Promise<Record<string, Fn>>;
+  const fx = await fnMod;
+  const functions = fx.getFunctions!(fb.app, FUNCTIONS_REGION);
+  const emu = config().emulators;
+  if (emu?.functionsHost && !(functions as { _emulated?: boolean })._emulated) {
+    fx.connectFunctionsEmulator!(functions, emu.functionsHost, emu.functionsPort);
+    (functions as { _emulated?: boolean })._emulated = true;
+  }
+  return fx.httpsCallable!(functions, name, { timeout }) as (data: unknown) => Promise<{ data: unknown }>;
 }
 
 /** The signed-in user once Firebase has decided, or null. */

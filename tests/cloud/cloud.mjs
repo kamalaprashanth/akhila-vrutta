@@ -9,6 +9,7 @@ const OWNER_UID = "Qc1qDKgHAJgWaYnppeUni1hPxXr1"; // the allowed account in fire
 const BASE = "http://localhost:5050"; // localhost, not 127.0.0.1: fingerprint (WebAuthn) needs a domain
 const AUTH = "http://127.0.0.1:9099";
 const FS = `http://127.0.0.1:8080/v1/projects/${PROJECT}/databases/(default)/documents`;
+const FN = `http://127.0.0.1:5001/${PROJECT}/asia-south1`;
 const PASS1 = "first test passphrase";
 const PASS2 = "second test passphrase";
 const SHOTS = "test-results/cloud";
@@ -120,6 +121,13 @@ try {
   check(imported?.amount === 1234.56, `an imported transaction is back in rupees (₹${imported?.amount})`);
   await shot(A.page, "money-accounts");
 
+  /* 3b. The planner reaches the Cloud Functions through the main app's sign-in (Advisor, price refresh) */
+  const viaFrame = await f.evaluate(async () => {
+    try { const fn = await AVB.callable("askClaude", 30000); await fn({ messages: [] }); return "no error"; }
+    catch (e) { return String(e && e.code); }
+  });
+  check(viaFrame === "functions/invalid-argument", `Advisor: the planner's call reaches askClaude as the owner (answer: ${viaFrame})`);
+
   /* 4. An edit in the planner is saved: encrypted, in paise, and comes back after a reload */
   await f.evaluate(() => upsert("txns", { id: uid(), type: "expense", amount: 777.77, date: new Date().toISOString().slice(0, 10), accountId: S.data.accounts.find((a) => a.name === "Test Bank").id, note: "cloud test 42", updatedAt: Date.now() }));
   await A.page.waitForTimeout(3000);
@@ -206,6 +214,18 @@ try {
     api(`${FS}/homes/${home}/txns?documentId=plain1`, { method: "POST", body: JSON.stringify({ fields: { amount: { integerValue: "500" } } }) }, owner));
   await denied("records can't go into unknown collections",
     api(`${FS}/homes/${home}/secrets?documentId=x`, { method: "POST", body: JSON.stringify({ fields: { iv: { stringValue: "AAAAAAAAAAAAAAAA" }, ct: { stringValue: "abc" }, by: { stringValue: OWNER_UID } } }) }, owner));
+  await denied("another account can't read prices", api(`${FS}/prices/mf`, {}, intr));
+  await denied("another account can't write a price watch list", api(`${FS}/priceWatch/intruder-uid`, { method: "PATCH", body: JSON.stringify({ fields: { us: { arrayValue: { values: [{ stringValue: "AAPL" }] } } } }) }, intr));
+  const pw = await api(`${FS}/priceWatch/${OWNER_UID}`, { method: "PATCH", body: JSON.stringify({ fields: { us: { arrayValue: { values: [{ stringValue: "AAPL" }] } }, at: { stringValue: "now" } } }) }, owner);
+  check(pw.status === 200, `rules: the owner can save their US ticker list (HTTP ${pw.status})`);
+  const fnAs = async (name, token, data) => {
+    const r = await fetch(`${FN}/${name}`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ data }) });
+    return { status: r.status, body: await r.json().catch(() => ({})) };
+  };
+  const a1 = await fnAs("askClaude", intr, { messages: [{ role: "user", content: "hi" }] });
+  check(a1.status === 403 || a1.body?.error?.status === "PERMISSION_DENIED", `functions: another account can't ask Claude (HTTP ${a1.status} ${a1.body?.error?.status ?? ""})`);
+  const a2 = await fnAs("refreshPricesNow", intr, {});
+  check(a2.status === 403 || a2.body?.error?.status === "PERMISSION_DENIED", `functions: another account can't refresh prices (HTTP ${a2.status} ${a2.body?.error?.status ?? ""})`);
   const ownRead = await api(`${FS}/homes/${home}`, {}, owner);
   check(ownRead.status === 200, `rules: the owner can read their home (HTTP ${ownRead.status})`);
 

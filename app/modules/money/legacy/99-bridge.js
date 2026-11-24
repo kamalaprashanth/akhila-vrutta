@@ -14,8 +14,10 @@ function hSignOut(){ notHere(); }
 function hSnapDaily(){}
 async function hOpenBackup(){ throw new Error("Open encrypted backups from Settings › Import in Akhila Vrutta."); }
 
-(function boot(){
+(async function boot(){
   if(!AVB){ document.body.innerHTML = '<p style="padding:24px">Open this from Akhila Vrutta.</p>'; return; }
+  /* Prices and the Advisor use the main app's signed-in Firebase (same session, nothing stored here). */
+  try { const f = await AVB.firebase(); if(f) Object.assign(H, f, { key: true, cfg: { ai: true, aiRegion: "asia-south1" } }); } catch(e){}
   S.data = merge({}, AVB.load()); S.dirty = false; carryReady = true;
   const h = readHash(); if(VIEWS[h]) S.view = h;
   const draw = render;

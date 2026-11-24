@@ -17,6 +17,21 @@ service cloud.firestore {
         && (!('z' in d) || d.z in [0, 1]);
     }
 
+    // Automatic prices: public price lists written by the daily job (it bypasses these rules); read-only here.
+    match /prices/{src} {
+      allow read: if allowed();
+      match /days/{day} { allow read: if allowed(); }
+    }
+    match /priceNames/{src} { allow read: if allowed(); }
+    match /priceStatus/{doc} { allow read: if allowed(); }
+    // The US tickers to look up (names only, no amounts), so the job stays within Alpha Vantage's daily limit.
+    match /priceWatch/{uid} {
+      allow read: if allowed() && request.auth.uid == uid;
+      allow write: if allowed() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['us', 'at'])
+        && request.resource.data.us is list && request.resource.data.us.size() <= 30;
+    }
+
     // Which home an account belongs to.
     match /users/{uid} {
       allow read: if allowed() && request.auth.uid == uid;

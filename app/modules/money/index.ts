@@ -10,6 +10,7 @@ import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
 import { META, MONEY_COLLECTIONS, stableJSON, type Changes, type Rec, type WriteOp } from "../../core/store.ts";
 import { fromStored, toStored } from "./paise.ts";
+import { callable, initFirebase } from "../../core/firebase.ts";
 
 const ICON = "M3 7h18v12H3zM3 11h18M7 15h3";
 
@@ -98,6 +99,9 @@ declare global {
       save(d: LegacyData): void;
       onView(v: string): void;
       ready(a: FrameApi): void;
+      /** What the planner's price and Advisor code needs from Firebase (signed in, same session). */
+      firebase(): Promise<{ fb: { fs: unknown }; db: unknown; appI: unknown; user: { uid: string } } | null>;
+      callable(name: string, timeout: number): Promise<(data: unknown) => Promise<{ data: unknown }>>;
     };
   }
 }
@@ -122,6 +126,12 @@ function ensureFrame(): HTMLIFrameElement {
       if (location.hash.startsWith("#/money") && location.hash !== want) history.replaceState(null, "", want);
     },
     ready: (a) => { api = a; },
+    firebase: async () => {
+      const f = await initFirebase();
+      const s = ctx.session;
+      return f && s ? { fb: { fs: f.fs }, db: f.db, appI: f.app, user: { uid: s.uid } } : null;
+    },
+    callable,
   };
   ctx.store!.subscribe(onStoreChange);
   // Save straight away when the app is put away.
