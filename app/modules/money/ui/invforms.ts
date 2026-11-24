@@ -2,6 +2,7 @@
  * EPF, PPF and NPS entry forms, as in KP Money Planner: a month's EPF contribution, interest or withdrawal;
  * a PPF deposit, interest or withdrawal; an NPS contribution; NPS units from a statement. Saved in paise.
  */
+import { holdingForm } from "./holdform.ts";
 import { esc } from "../../../core/dom.ts";
 import { addM, ymOf } from "../calc/dates.ts";
 import { num, type MoneyData, type Paise, type Rec } from "../calc/data.ts";
@@ -135,6 +136,14 @@ export function invAct(d: MoneyData, x: DOMStringMap): boolean {
   const S = (E().state() ?? {}) as Record<string, string>;
   if (x.epfm !== undefined || x.ea === "add") { const h = epfHold(d, S) as H | undefined; if (!h) return true; if (x.ea === "add") { epfEntryForm(h); return true; } const m = (h.epf?.manual || []).find((y) => y.id === x.epfm); if (m) epfEntryForm(h, { ...m }); return true; }
   if (x.ppfm !== undefined || x.pa === "add") { const h = ppfHold(d, S) as H | undefined; if (!h) return true; if (x.pa === "add") { ppfEntryForm(h); return true; } const m = (h.ppf?.manual || []).find((y) => y.id === x.ppfm); if (m) ppfEntryForm(h, { ...m }); return true; }
+  if (x.ea === "edit" || x.pa === "edit" || x.na === "edit") { const h = (x.ea ? epfHold(d, S) : x.pa ? ppfHold(d, S) : npsHold(d, S)) as H | undefined; if (h) holdingForm({ ...h } as never); return true; }
+  if (x.hold !== undefined) {
+    const h = d.byId<H & { type?: string; ppf?: unknown; nps?: unknown; epf?: unknown }>("holdings", x.hold), go = (p: string): void => { E().planner("go", p); };
+    if (h && h.type === "PPF" && h.ppf) { S.ppfId = h.id; go("ppf"); return true; }
+    if (h && h.type === "NPS" && h.nps) { S.npsId = h.id; go("nps"); return true; }
+    if (h && h.type === "EPF" && h.epf) { S.epfId = h.id; S.epfTab = S.epfTab || "overview"; go("epf"); return true; }
+    holdingForm(h ? ({ ...h } as never) : {}); return true;
+  }
   if (x.na === "add" || x.na === "units") { const h = npsHold(d, S) as H | undefined; if (!h) return true; if (x.na === "add") npsContribForm(h); else npsUnitsForm(h); return true; }
   return false;
 }

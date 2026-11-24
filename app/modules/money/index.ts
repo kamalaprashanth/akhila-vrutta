@@ -26,6 +26,7 @@ import { npsPage } from "./views/nps.ts";
 import { propPage } from "./views/prop.ts";
 import { mountPages } from "./views/pages.ts";
 import { pxLine, pxRefresh } from "./ui/prices.ts";
+import { maybeNotify } from "./ui/dataio.ts";
 import { autoEntries } from "./ui/auto.ts";
 import { ensureLayer, onSheet, toast as kitToast } from "./ui/kit.ts";
 import { prefGet, prefSet, setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
@@ -316,7 +317,7 @@ function startEnv(): void {
   // Carry-overs, card EMIs due by today and this month's snapshot, made once when Money opens (then after each change).
   { const ops = autoEntries(currentData()); if (ops.length) writeMoney(ops); }
   // Today's official prices onto the linked holdings (at most every 3 hours), as the planner did once unlocked.
-  if (ctx.session) window.setTimeout(() => { void pxRefresh(); }, 1500);
+  if (ctx.session) window.setTimeout(() => { void pxRefresh(); void maybeNotify(); }, 1500);
   onSheet((open) => {
     document.body.classList.toggle("msheet", open || sheetOpen);
   });

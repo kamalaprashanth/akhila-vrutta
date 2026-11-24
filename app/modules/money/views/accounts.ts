@@ -16,6 +16,7 @@ import { reserveState } from "../calc/reserve.ts";
 import { money } from "./txlist.ts";
 import { AX, chartCard, donutChart, fmtMoney, legendHtml, lineChart, barChart, mTick, mTicks, tableHtml, tipRows, topN, VC } from "./charts.ts";
 import { field } from "../ui/kit.ts";
+import { importTradebooks } from "../ui/trades.ts";
 import type { Page } from "./pages.ts";
 import { INV_TYPES } from "../ui/txform.ts";
 
@@ -394,6 +395,6 @@ export const accountsPage: Page = {
   },
   change(t, h, redraw) {
     if (t.id === "f_poExtra" || t.id === "f_poLump") { h.prefSet(t.id === "f_poExtra" ? "poExtra" : "poLump", Math.max(0, parseFloat(t.value.replace(/,/g, "")) || 0)); return redraw(); }
-    if (t.id === "trFile") { h.plannerFiles("importTradebooks", [...(t.files ?? [])]); t.value = ""; }
+    if (t.id === "trFile") { const files = [...(t.files ?? [])]; t.value = ""; void importTradebooks(files); }
   },
 };

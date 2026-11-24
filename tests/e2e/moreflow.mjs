@@ -52,14 +52,35 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
     await p.click("#mvLayer #modal #cx"); await settle();
     ok(!(await appSheet()), "…and closes");
   }
-  for (const [sel, what] of [[`${V} [data-prof="about"]`, "About me"], [`${V} #restore`, "Restore from backup"]]) {
+  // The profile, restore and the downloads: all the app's own now.
+  for (const [sel, what] of [[`${V} [data-prof="about"]`, "About me"], [`${V} [data-prof="ins"]`, "Insurance"], [`${V} #restore`, "Restore from backup"]]) {
     if (!(await p.$(sel))) { ok(false, `${what}: not on the page`); continue; }
     await p.evaluate((s) => { const el = document.querySelector(s); el.closest("details")?.setAttribute("open", ""); el.scrollIntoView(); }, sel);
     await p.click(sel); await settle();
-    ok(await plannerSheet() && await p.$eval("#moneyFrame", (e) => e.classList.contains("over")), `${what} opens its form full screen`);
-    await closeIt();
-    ok(!(await p.$eval("#moneyFrame", (e) => e.classList.contains("over"))) && !(await frameShown()), "…and closes back to Money settings");
+    ok(await appSheet() && !(await frameShown()), `${what} opens the app's form`);
+    await p.click("#mvLayer #modal #cx"); await settle();
+    ok(!(await appSheet()), "…and closes back to Money settings");
   }
+  await p.click(`${V} [data-prof="about"]`); await settle();
+  await p.fill("#mvLayer #f_pr", "57"); await p.click("#mvLayer #addKid"); await settle();
+  await p.fill("#mvLayer #kidRows .fam:last-child input[type=text]", "Test child"); await p.fill("#mvLayer #kidRows .fam:last-child input[type=date]", "2018-06-01");
+  await p.click("#mvLayer #modal #sv"); await settle(); await settle();
+  const pr = await f.evaluate(() => S.data.settings.find((x) => x.id === "profile"));
+  ok(pr && pr.retire === "57" && pr.kids.some((k) => k.name === "Test child" && k.dob === "2018-06-01"), "About me saved: retire at 57, the new child");
+  ok(/retire at 57/.test(await p.innerText(V)), "…and the profile line shows it");
+  for (const [id, re, what] of [["dlJson", /^KP_Money_Planner_data_.*\.json$/, "Download data"], ["xlsx", /^KP Money Planner .*\.xlsx$/, "Download Excel"]]) {
+    const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 8000 }).catch(() => null), p.click(`${V} #${id}`)]);
+    if (!dl) { ok(false, `${what}: no file`); continue; }
+    const buf = await readFile(await dl.path());
+    if (id === "dlJson") { const j = JSON.parse(buf.toString()); ok(re.test(dl.suggestedFilename()) && j.app === "KP Money Planner" && Array.isArray(j.data.txns) && j.data.txns.length > 0, `${what} gives the planner's file (${j.data.txns.length} transactions, in rupees)`);
+      const t0 = j.data.txns.find((t) => t.amount); const st = await f.evaluate((id) => S.data.txns.find((t) => t.id === id)?.amount, t0.id); ok(t0.amount === st, "…amounts in rupees, as the planner keeps them"); }
+    else ok(re.test(dl.suggestedFilename()) && buf[0] === 0x50 && buf[1] === 0x4b && buf.includes(Buffer.from("xl/worksheets/sheet7.xml")), `${what} gives a 7-sheet .xlsx`);
+  }
+  // Restore a backup that renames one account: merged in, shown in the planner's data and here.
+  { const D = await f.evaluate(() => JSON.parse(JSON.stringify(S.data))); const a = D.accounts.find((x) => !x.deleted); a.name = "Restored name"; a.updatedAt = Date.now() + 5000; delete D.categories;   // (with categories, the planner also drops the starter ones)
+    await p.click(`${V} #restore`); await settle();
+    await p.fill("#mvLayer #f_json", JSON.stringify({ app: "KP Money Planner", data: D })); await p.click("#mvLayer #modal #sv"); await settle(); await settle();
+    ok(await f.evaluate((id) => S.data.accounts.find((x) => x.id === id)?.name, a.id) === "Restored name", "Restore merges a newer copy in"); }
   // A category from the list.
   await p.evaluate(() => document.querySelectorAll("#moneyView details.fm").forEach((d) => d.setAttribute("open", "")));
   await p.click(`${V} .row[data-cat]`); await settle();

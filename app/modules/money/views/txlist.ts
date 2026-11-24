@@ -55,7 +55,7 @@ export const dress = (h: string): string => h.replace(/>([^<]+)</g, (_m, txt: st
 const payersAll = (d: MoneyData): Payer[] => d.all<Payer>("payers");
 export const payers = (d: MoneyData): Payer[] => [...d.live<Payer>("payers")].sort((a, b) => (a.own === b.own ? 0 : a.own ? 1 : -1) || String(a.name).localeCompare(String(b.name)));
 const payerOf = (d: MoneyData, t: Tx): Payer | null => t.paidBy ? (payersAll(d).find((p) => p.id === t.paidBy) ?? { id: t.paidBy, name: t.paidBy, own: true }) : null;
-const payerLbl = (d: MoneyData, t: Tx): string => payerOf(d, t)?.name || "";
+export const payerLbl = (d: MoneyData, t: Tx): string => payerOf(d, t)?.name || "";
 const othersPaid = (d: MoneyData, t: Tx): boolean => { const p = payerOf(d, t); return !!p && !p.own; };
 const othersName = (d: MoneyData): string => { const o = payers(d).filter((p) => !p.own); return o.length === 1 ? String(o[0]!.name) : "others"; };
 

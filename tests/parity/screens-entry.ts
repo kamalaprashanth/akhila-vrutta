@@ -24,12 +24,16 @@ import * as planforms from "../../app/modules/money/ui/planforms.ts";
 import * as propforms from "../../app/modules/money/ui/propforms.ts";
 import * as prices from "../../app/modules/money/ui/prices.ts";
 import * as auto from "../../app/modules/money/ui/auto.ts";
+import * as trades from "../../app/modules/money/ui/trades.ts";
+import * as profform from "../../app/modules/money/ui/profform.ts";
+import * as backup from "../../app/modules/money/ui/dataio.ts";
+import * as holdform from "../../app/modules/money/ui/holdform.ts";
 import * as epfpdf from "../../app/modules/money/ui/epfpdf.ts";
 import { toStored } from "../../app/modules/money/paise.ts";
 import { MONEY_COLLECTIONS } from "../../app/core/store.ts";
 
 (window as unknown as { SCREENS: unknown }).SCREENS = {
-  toStored, MoneyData, forms, actions, planforms, propforms, prices, auto, epfpdf, txlist, txform, txsheets, kit, setEnv, accounts, charts, plan, home, insights, advisor, more, card, loan, epf, ppf, nps, prop,
+  toStored, MoneyData, forms, actions, planforms, propforms, prices, auto, epfpdf, trades, holdform, backup, profform, txlist, txform, txsheets, kit, setEnv, accounts, charts, plan, home, insights, advisor, more, card, loan, epf, ppf, nps, prop,
   dataFrom(legacy: Record<string, unknown>, today: string) {
     const cols: Record<string, { id: string }[]> = {};
     for (const c of MONEY_COLLECTIONS) cols[c] = ((legacy[c] as { id: string }[]) ?? []).map((r) => toStored(c, r));

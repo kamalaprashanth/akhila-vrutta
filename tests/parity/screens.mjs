@@ -142,8 +142,9 @@ const report = await f.evaluate(() => {
   const sheetHtml = (sel) => document.querySelector(sel)?.innerHTML ?? "(none)";
   const cmpSheet = (label, openOld, openNew) => {
     n++;
-    openOld(); const a = sheetHtml("#modal"); closeModal();
-    openNew(); const b = sheetHtml("#mvLayer #modal"); N.kit.closeModal();
+    const kid = (h) => h.replace(/data-kidid="([^"]+)"/g, (m, v) => (knownIds.has(v) ? m : 'data-kidid="NEW"'));
+    openOld(); const a = kid(sheetHtml("#modal")); closeModal();
+    openNew(); const b = kid(sheetHtml("#mvLayer #modal")); N.kit.closeModal();
     if (a !== b) {
       let i = 0; while (i < a.length && a[i] === b[i]) i++;
       out.push(`sheet ${label}: differs at ${i}\n    old …${a.slice(Math.max(0, i - 100), i + 120)}\n    new …${b.slice(Math.max(0, i - 100), i + 120)}`);
@@ -358,7 +359,7 @@ const report = await f.evaluate(() => {
   };
   const sortK = (o) => Object.keys(o).sort().reduce((a, k) => ((a[k] = o[k]), a), {});
   // A record saved again unchanged (only its time) isn't a change.
-  const norm = (ops, before, dx) => ops.map(({ c, r }) => { const o = { ...r }; delete o.updatedAt; const was = dx.all(c).find((x) => x.id === o.id); if (was) { const w = { ...was }; delete w.updatedAt; if (JSON.stringify(sortK(w)) === JSON.stringify(sortK(o))) return null; } if (!before.has(c + ":" + o.id)) o.id = "NEW"; return JSON.stringify([c, sortK(o)]).replace(/"(id|mid|loanId|prop|txnId|budgetId|splitOf)":"([^"]+)"/g, (m, k, v) => (knownIds.has(v) ? m : `"${k}":"NEW"`)).replace(/"k":"(c[a-z0-9]{10,})"/g, (m, v) => (knownIds.has(v) ? m : `"k":"NEW"`)); }).filter(Boolean).sort();
+  const norm = (ops, before, dx) => ops.map(({ c, r }) => { const o = { ...r }; delete o.updatedAt; const was = dx.all(c).find((x) => x.id === o.id); if (was) { const w = { ...was }; delete w.updatedAt; if (JSON.stringify(sortK(w)) === JSON.stringify(sortK(o))) return null; } if (!before.has(c + ":" + o.id)) o.id = "NEW"; return JSON.stringify([c, sortK(o)]).replace(/"(id|mid|loanId|prop|txnId|budgetId|splitOf|wifeCat)":"([^"]+)"/g, (m, k, v) => (knownIds.has(v) ? m : `"${k}":"NEW"`)).replace(/"k":"(c[a-z0-9]{10,})"/g, (m, v) => (knownIds.has(v) ? m : `"k":"NEW"`)); }).filter(Boolean).sort();
   // ids already in the data (nested ones too, e.g. a loan's rate changes); any other id was just made
   const knownIds = new Set(JSON.stringify(S.data).match(/"(?:id|mid|k)":"[^"]+"/g)?.map((x) => x.split('":"')[1].slice(0, -1)) ?? []);
   // fix: the planner's known fault for this form, applied to what it saved (or "crash": it couldn't save at all)
@@ -407,7 +408,7 @@ const report = await f.evaluate(() => {
     for (const a of cards) for (const ca of ["pay", "spend", "edit"]) cmpTap(`card ${a.name} ${ca}`, { "data-ca": ca }, { cardId: a.id });
     for (const a of cards.slice(0, 3)) cmpTap(`Plan card bill ${a.name}`, { "data-cpay": a.id });
     for (const a of accs.slice(0, 3)) cmpTap(`account ${a.name}`, { "data-acc": a.id });
-    for (const [id] of [["addAcc"], ["addCat"], ["addPayer"], ["pickMain"], ["addLoan"]]) cmpTap(id, { id });
+    for (const [id] of [["addAcc"], ["addCat"], ["addPayer"], ["pickMain"], ["addLoan"], ["restore"]]) cmpTap(id, { id });
     // Loans: every button and row on each loan's page, as drawn, then saved with typed values.
     const tapSave = (label, attrs, st, vals, steps, fix) => cmpForm(dx, `${tag} ${label}`, () => { Object.assign(S, st); oldTap(attrs); }, () => { Object.assign(S, st); N.actions.appAct(mk(attrs), dx); }, vals, steps, fix);
     const lastPlanAcc = (acc) => (ops) => { const r = ops.find((o) => o.c === "loans")?.r; if (r?.plans?.length) r.plans[r.plans.length - 1].accountId = acc; };
@@ -546,6 +547,83 @@ const report = await f.evaluate(() => {
       cmpTap(`NPS contribution ${h.name}`, { "data-na": "add" }, st); cmpTap(`NPS units ${h.name}`, { "data-na": "units" }, st);
       tapSave(`NPS ${h.name} new contribution`, { "data-na": "add" }, st, { amt: "5,000", d: today(), acc: b0 }, undefined, setAcc(b0));
       tapSave(`NPS ${h.name} units from statement`, { "data-na": "units" }, st, { u0: "3500.1234", p0: "46.12", sd: today(), ct: "3,10,000", xr: "11.5" });
+    }
+    // My profile for the advisor, and the goals made from it.
+    for (const k of ["about", "income", "ins", "prop", "assets", "estate"]) cmpTap(`profile ${k}`, { "data-prof": k });
+    cmpForm(dx, `${tag} profile about`, () => profForm("about"), () => N.profform.profForm("about"), { pdob: "1985-04-12", pr: "58", sn: "Wife", sd: "1988-01-01", "click:#addKid": 1, "#kidRows .fam:last-child input[type=text]": "Son", "#kidRows .fam:last-child input[type=date]": "2016-08-20", "#dpm": true, pd: "parents partly", pj: "Stable", pk: "Medium" });
+    if ((dx.byId("settings", "profile")?.kids || []).length) cmpForm(dx, `${tag} profile about, a child removed`, () => profForm("about"), () => N.profform.profForm("about"), { "click:#kidRows .fam:first-child [data-kidx]": 1 });
+    cmpForm(dx, `${tag} profile income`, () => profForm("income"), () => N.profform.profForm("income"), { ps: "1,85,000", pb: "2 lakh in April", pg: "New" });
+    cmpForm(dx, `${tag} profile income, wife's category`, () => profForm("income"), () => N.profform.profForm("income"), { pw: "__new" });
+    cmpForm(dx, `${tag} profile insurance`, () => profForm("ins"), () => N.profform.profForm("ins"), { it: "20000000", iu: "60", ip: "18000", ih: "1000000", iy: "Family floater", ihp: "25000", io: "", ie: "500000", iq: "No", ia: "", ig: "3000000" });
+    cmpForm(dx, `${tag} profile property use`, () => profForm("prop"), () => N.profform.profForm("prop"), Object.fromEntries(live("props").map((p) => ["pu_" + p.id, "Rented out"])));
+    cmpForm(dx, `${tag} profile assets`, () => profForm("assets"), () => N.profform.profForm("assets"), { as: "20 g gold" });
+    cmpForm(dx, `${tag} profile estate`, () => profForm("estate"), () => N.profform.profForm("estate"), { en: "Some", ew: "No", ex: "to do" });
+    // Investments: the holding form (tap a holding, + Add, Edit on the EPF / PPF / NPS pages).
+    const UNITS = ["Mutual Fund", "Stock", "US Stocks", "Gold"];
+    cmpTap("add investment", { id: "addHold" });
+    for (const h of live("holdings")) {
+      cmpTap(`holding ${h.name}`, { "data-hold": h.id });
+      const sub = (h.type === "PPF" && h.ppf) || (h.type === "NPS" && h.nps) || (h.type === "EPF" && h.epf); if (sub) continue;
+      tapSave(`holding ${h.name} unchanged`, { "data-hold": h.id }, {}, {});
+      tapSave(`holding ${h.name} changed`, { "data-hold": h.id }, {}, UNITS.includes(h.type) ? { price: "123.45", openUnits: "10.5", platform: "Groww" } : { value: "123456.7", platform: "Bank" });
+      tapSave(`holding ${h.name} out of net worth`, { "data-hold": h.id }, {}, { excl: !h.excludeNW });
+    }
+    for (const [a, k, st] of [["data-ea", "EPF", "epfId"], ["data-pa", "PPF", "ppfId"], ["data-na", "NPS", "npsId"]]) for (const h of live("holdings").filter((h) => h.type === k && h[k.toLowerCase()])) {
+      cmpTap(`${k} edit ${h.name}`, { [a]: "edit" }, { [st]: h.id });
+      tapSave(`${k} edit ${h.name} saved`, { [a]: "edit" }, { [st]: h.id }, k === "EPF" ? { epfRate: "8.1", epfAge: "60" } : k === "NPS" ? { "click:#npsSeg [data-k=value]": 1, value: "512345.5", platform: "Protean" } : { platform: "SBI" });
+    }
+    const nh = (label, vals) => tapSave(`new investment ${label}`, { id: "addHold" }, {}, vals);
+    nh("fund", { name: "Test Flexi Cap", openInvested: "10000", openUnits: "100.123", price: "105.5", unitsAsOf: today() });
+    nh("share", { type: "Stock", name: "TESTCO", openInvested: "5000.5", openUnits: "12", price: "450" });
+    nh("US share", { type: "US Stocks", name: "VOO", openInvested: "40000", openUnits: "1.5", price: "512.3", fx: "84.25" });
+    nh("gold", { type: "Gold", name: "", openInvested: "30000", openUnits: "4.2513", price: "7150" });
+    nh("FD", { type: "FD / RD", name: "SBI FD", openInvested: "100000", value: "104500" });
+    nh("plot", { type: "Real estate", name: "Plot", openInvested: "1500000", value: "2500000" });
+    nh("EPF by details", { type: "EPF", name: "", value: "350000", epfEmp: "1800", epfEr: "550", joined: addM(nowM, -30), rateE: "8.25" });
+    nh("PPF by details", { type: "PPF", name: "", value: "250000", opened: "2019-05-10", yearly: "150000", rateP: "7.1" });
+    nh("NPS balance", { type: "NPS", name: "", value: "420000", platform: "Protean" });
+    nh("no name", { type: "Stock", name: "" });
+    // Kite tradebooks: rows read the same way, and the trades shown on a share.
+    { const H = ["Symbol", "ISIN", "Trade Date", "Exchange", "Segment", "Series", "Trade Type", "Auction", "Quantity", "Price", "Trade ID", "Order ID", "Order Execution Time"];
+      const rows = [["Client ID", "AB1234"], [], H, ["INFY", "INE009A01021", "2025-04-03", "NSE", "EQ", "EQ", "buy", "false", 10, 1500.5, "111", "222", "2025-04-03T09:20:00"],
+        ["INFY", "INE009A01021", "2025-06-03", "NSE", "EQ", "EQ", "sell", "false", 4, 1650, "113", "223", "2025-06-03T10:00:00"], ["INFY-BE", "INE009A01021", "2025-08-01", "BSE", "EQ", "BE", "Buy", "false", 3, 1499.95, 115, 225, ""],
+        ["TCS", "INE467B01029", "2025-07-01 00:00:00", "BSE", "EQ", "EQ", "Buy", "false", 2, 3400, "114", "224", ""], ["", "", "", ""], ["BAD", "x", "notdate", "NSE", "", "", "buy", "", 1, 1, "", "", ""], ["ZERO", "y", "2025-01-01", "NSE", "", "", "buy", "", 0, 1, "", "", ""]];
+      n++; const a = kiteTrades(rows), b = N.trades.kiteTrades(rows); if (JSON.stringify(a) !== JSON.stringify(b)) out.push(`Kite tradebook read differently\n    old ${JSON.stringify(a).slice(0, 500)}\n    new ${JSON.stringify(b).slice(0, 500)}`);
+      let bad = 0; try { N.trades.kiteTrades([["x"]]); } catch { bad = 1; } if (!bad) out.push("Kite tradebook: a sheet without the header wasn't refused");
+      const keep = S.data.trades; S.data.trades = [...(keep || []), ...a]; MEMO = new Map(); const dT = N.dataFrom(S.data, today());
+      for (const h of [{ id: "th1", type: "Stock", name: "INFY", platform: "Kite" }, { id: "th2", type: "Stock", name: "Tata Consultancy", px: "stk:INE467B01029" }, { id: "th3", type: "Stock", name: "INFY", platform: "Groww" }, { id: "th4", type: "Mutual Fund", name: "INFY" }, ...live("holdings").filter((h) => ["Stock", "US Stocks", "Gold"].includes(h.type))]) {
+        n++; const x = tradesBlock(h), y = N.trades.tradesBlock(dT, dT.byId("holdings", h.id) || h); if (x !== y) out.push(`trades on ${h.name} (${h.id}) drawn differently\n    old ${x.slice(0, 600)}\n    new ${y.slice(0, 600)}`);
+      }
+      S.data.trades = keep; MEMO = new Map(); }
+    // Goals made once from the profile (nothing seeded yet, and a child added later).
+    for (const [lbl, tweak] of [["first time", (D) => { const a = (D.settings || []).find((x) => x.id === "app"); if (a) { delete a.goalsSeeded; delete a.goalKids; } D.goals = (D.goals || []).filter((g) => !["retire", "loans", "edu"].includes(g.kind)); }],
+      ["a child added", (D) => { let p = (D.settings || []).find((x) => x.id === "profile"); if (!p) { p = { id: "profile" }; (D.settings = D.settings || []).push(p); } p.kids = [...(p.kids || []), { id: "kidT", name: "Tara", dob: "2019-03-03" }]; }]]) {
+      n++; const keep = S.data, D = JSON.parse(JSON.stringify(keep)); tweak(D); S.data = JSON.parse(JSON.stringify(D)); MEMO = new Map();
+      const before = JSON.parse(JSON.stringify(S.data)); ensureSmartGoals();
+      const ids = new Set(); for (const c of Object.keys(before)) if (Array.isArray(before[c])) for (const r of before[c]) ids.add(c + ":" + r.id);
+      const A = []; for (const c of Object.keys(S.data)) if (Array.isArray(S.data[c])) for (const r of S.data[c]) { const b = (before[c] || []).find((x) => x.id === r.id); if (!b || JSON.stringify(b) !== JSON.stringify(r)) A.push({ c, r: N.toStored(c, r) }); }
+      S.data = keep; MEMO = new Map(); const dD = N.dataFrom(D, today());
+      const a = norm(A, ids, dD), b = norm(N.profform.smartGoalWrites(dD), ids, dD); if (JSON.stringify(a) !== JSON.stringify(b)) out.push(`goals from the profile (${lbl}) differ\n    old ${a.join("\n        ").slice(0, 700)}\n    new ${b.join("\n        ").slice(0, 700)}`);
+    }
+    // Backup: the Excel sheets, the data file, restoring (merge and replace) and the calendar file.
+    { const r2 = (v) => (typeof v === "number" ? Math.round(v * 100) / 100 : v), rows = (sh) => JSON.stringify(sh.map((x) => ({ ...x, rows: x.rows.map((r) => r.map(r2)) })));
+      n++; const a = rows(excelSheets()), b = rows(N.backup.excelSheets(dx)); if (a !== b) { const A = JSON.parse(a), B = JSON.parse(b); for (let i = 0; i < A.length; i++) if (JSON.stringify(A[i]) !== JSON.stringify(B[i])) { const k = A[i].rows.findIndex((r, j) => JSON.stringify(r) !== JSON.stringify(B[i].rows[j])); out.push(`Excel sheet ${A[i].name} differs (row ${k + 2})\n    old ${JSON.stringify(A[i].rows[k] ?? A[i].cols).slice(0, 400)}\n    new ${JSON.stringify(B[i].rows[k] ?? B[i].cols).slice(0, 400)}`); } }
+      n++; const sk = (o) => JSON.stringify(Object.keys(o).sort().reduce((x, c) => ((x[c] = Array.isArray(o[c]) ? o[c].map(sortK).sort((p, q) => String(p.id).localeCompare(String(q.id))) : o[c]), x), {}));
+      if (sk(S.data) !== sk(N.backup.plannerData(dx))) out.push("Download data: the file differs from the planner's data");
+      let got = null; const keepSave = window.saveFile; window.saveFile = (name, bytes) => { got = String(bytes); }; icsAll(); window.saveFile = keepSave;
+      n++; const strip = (t) => String(t).replace(/DTSTAMP:[^\r\n]*/g, ""); if (strip(got) !== strip(N.backup.icsText(dx))) out.push(`calendar file differs\n    old ${strip(got).slice(0, 400)}\n    new ${strip(N.backup.icsText(dx)).slice(0, 400)}`);
+      // a backup: some records newer, some older, one new, one missing
+      const B0 = JSON.parse(JSON.stringify(S.data)), T0 = Date.now() + 60000;
+      (B0.txns || []).slice(0, 3).forEach((t, i) => { t.note = "from backup " + i; t.updatedAt = T0; }); (B0.txns || []).slice(3, 5).forEach((t) => { t.note = "older"; t.updatedAt = 1; });
+      (B0.accounts || []).push({ id: "bk1", name: "Backup bank", type: "bank", opening: 1234.5, updatedAt: T0 }); (B0.categories || []).splice(0, 1);
+      for (const repl of [false, true]) for (const wrap of [false, true]) {
+        n++; const j = wrap ? { app: "KP Money Planner", data: B0 } : B0, NOW = Date.now() + 1000;
+        const was = JSON.parse(JSON.stringify(S.data)), oldN = Date.now; Date.now = () => NOW; let after;
+        try { if (repl) after = replaceWith(was, JSON.parse(JSON.stringify(B0))); else { const cur = JSON.parse(JSON.stringify(was)); if ((B0.categories || []).length) for (const c of ["accounts", "categories"]) for (const x of (cur[c] || [])) if (x.seed && !x.deleted) { x.deleted = true; delete x.seed; x.updatedAt = NOW; } after = merge(cur, JSON.parse(JSON.stringify(B0))); } } finally { Date.now = oldN; }
+        const A = []; for (const c of Object.keys(after)) if (Array.isArray(after[c])) for (const r of after[c]) { const p = (was[c] || []).find((x) => x.id === r.id); if (!p || JSON.stringify(sortK(p)) !== JSON.stringify(sortK(r))) A.push(c + " " + JSON.stringify(sortK(N.toStored(c, r)))); }
+        const Bn = N.backup.restoreWrites(dx, JSON.parse(JSON.stringify(j)), repl, NOW).map(({ c, r }) => c + " " + JSON.stringify(sortK(r)));
+        if (JSON.stringify(A.sort()) !== JSON.stringify(Bn.sort())) out.push(`restore (${repl ? "replace" : "merge"}${wrap ? ", downloaded file" : ""}) writes differ: old ${A.length} new ${Bn.length}\n    old ${A.filter((x) => !Bn.includes(x)).slice(0, 3).join("\n        ").slice(0, 900)}\n    new ${Bn.filter((x) => !A.includes(x)).slice(0, 3).join("\n        ").slice(0, 900)}`);
+      }
     }
     // The PDF readers, on the same text lines.
     const planLines = ["Some agreement text", "PAYMENT PLAN", "On Booking | 10% | 900000 | 45000", "On Agreement | 10.0% | 900000 | 45000", "On Completion of 6th Floor Slab | 6.0% | 1217655 | 60883", "Advance Maintenance | charges", "| 79,200 | 14256", "Total | 100% | 9000000", "Grand Total | 9500000"];

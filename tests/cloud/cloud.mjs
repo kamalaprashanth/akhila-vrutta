@@ -160,6 +160,15 @@ try {
   const cardTxt = await A.page.innerText("#moneyView #view");
   check(/of ₹50,000/.test(cardTxt) && /₹499/.test(cardTxt) && await fC2.evaluate(() => S.data.accounts.find((a) => a.id === "cloudcard")?.limit === 50000), "a card's ₹50,000 limit and ₹499 fee come back the same after a reload (stored in paise)");
   f = fC2;   // the page was reloaded: the planner's frame is a new one
+  // An investment added with the app's own form is saved to the cloud in paise and comes back the same after a reload.
+  { await moneyFrame(A.page, "accounts"); await A.page.click('#moneyView #view .accseg [data-acct="invest"]'); await A.page.waitForTimeout(500);
+    await A.page.click("#moneyView #view #addHold"); await A.page.waitForSelector("#mvLayer #modal #f_name");
+    await A.page.fill("#mvLayer #f_name", "Cloud Flexi Cap"); await A.page.fill("#mvLayer #f_openInvested", "25,000.50"); await A.page.fill("#mvLayer #f_openUnits", "250"); await A.page.fill("#mvLayer #f_price", "110");
+    await A.page.click("#mvLayer #modal #sv"); await A.page.waitForTimeout(3000);
+    await A.page.reload(); await unlockWithPass(A.page, PASS1); await A.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
+    f = await moneyFrame(A.page, "accounts");
+    const h = await f.evaluate(() => S.data.holdings.find((x) => x.name === "Cloud Flexi Cap" && !x.deleted));
+    check(h && h.openInvested === 25000.5 && h.openUnits === 250 && h.price === 110, `an investment added with the app's form comes back the same after a reload (₹${h?.openInvested} invested, ${h?.openUnits} units at ₹${h?.price})`); }
 
   progress("functions from the planner");
   /* 3b. The planner reaches the Cloud Functions through the main app's sign-in (Advisor, price refresh) */

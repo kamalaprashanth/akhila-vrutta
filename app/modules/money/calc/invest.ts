@@ -14,7 +14,7 @@ import { invNet } from "./insights.ts";
 
 export const UNIT_TYPES = ["Mutual Fund", "Stock", "US Stocks", "Gold"];
 
-interface NpsLine { k?: string; nm?: string; n?: string; units?: number; price?: number; priceDate?: Day; priceSrc?: string }
+interface NpsLine { k?: string; px?: string; nm?: string; n?: string; units?: number; price?: number; priceDate?: Day; priceSrc?: string }
 interface EpfRow { k: string; wm?: string | null; d?: Day; wage?: Paise; epsw?: Paise; emp: Paise; er: Paise; eps: Paise; from?: string; note?: string; [x: string]: unknown }
 interface EpfYear { ob?: Paise[]; int?: Paise[]; close?: Paise[]; rows: EpfRow[] }
 interface EpfManual { id?: string; k: string; fy?: number; wm?: string; d?: Day; emp?: Paise; er?: Paise; eps?: Paise; epsw?: Paise; note?: string }

@@ -90,7 +90,7 @@ function renewalsSoon(d: MoneyData): string {
 
 /* ---------- what needs you ---------- */
 interface Need { w: number; d?: number; t: string; s: string; a: Paise; act: string }
-function needsYou(d: MoneyData): Need[] {
+export function needsYou(d: MoneyData): Need[] {
   const td = d.today, now = ymOf(td), day = +td.slice(8), out: Need[] = [];
   const cur = forecast(d, 1).months[0]!;
   for (const r of cur.rows as Row[]) {

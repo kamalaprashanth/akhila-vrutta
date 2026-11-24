@@ -3,6 +3,8 @@
  * and repeat payments found in your entries), Cash flow (readiness, the big-bills reserve, the emergency
  * fund, renewals, big months, the forecast), Calendar, and Goals. Built from the stored data (paise).
  */
+import { smartGoalWrites } from "../ui/profform.ts";
+import { E } from "../ui/env.ts";
 import { esc } from "../../../core/dom.ts";
 import { addM, dayDiff, diffM, dLabel, mLabel, MN, mShort, pad, ymOf, type Day, type YM } from "../calc/dates.ts";
 import { num, type Loan, type MoneyData, type Paise, type Rec } from "../calc/data.ts";
@@ -347,7 +349,7 @@ export const planPage: Page = {
   html(d, h) {
     const S = h.state() as unknown as PlanState;
     if (S.planTab === "loans") { S.planTab = "month"; S.accTab = "loans"; queueMicrotask(() => h.go("accounts")); }
-    if ((S.planTab || "month") === "goals" && goalsToSeed(d)) queueMicrotask(() => h.plannerCall("ensureSmartGoals"));
+    if ((S.planTab || "month") === "goals" && goalsToSeed(d)) queueMicrotask(() => { const o = smartGoalWrites(d); if (o.length) E().write(o); });
     return planHtml(d, S, h);
   },
   act(el, h, redraw) {

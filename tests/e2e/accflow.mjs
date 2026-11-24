@@ -142,11 +142,18 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
     ok(await p.$eval("#ctip", (e) => !e.hidden && e.textContent.includes("Net worth")), "the chart shows a tooltip");
   } else ok(true, "(no net worth history in the sample)");
 
-  // Investments: + Add opens the planner's holding form.
+  // Investments: + Add opens the app's holding form; a new fund is saved and listed; tapping it opens it again.
   await p.click(`${V} .accseg [data-acct="invest"]`); await settle();
   await p.click(`${V} #addHold`); await settle();
-  ok(await frameShown() && /investment|holding/i.test(await f.textContent("#modal h3")), "+ Add investment opens the planner's form");
-  await f.evaluate(() => closeModal()); await settle();
+  ok(!(await frameShown()) && /Add investment/.test(await p.textContent("#mvLayer #modal h3")), "+ Add investment opens the app's form");
+  await p.fill("#mvLayer #f_name", "Test Flexi Cap Fund"); await p.fill("#mvLayer #f_openInvested", "25,000"); await p.fill("#mvLayer #f_openUnits", "250"); await p.fill("#mvLayer #f_price", "110");
+  await p.click("#mvLayer #modal #sv"); await settle();
+  ok(/₹27,500 worth now/.test(await p.innerText(V)), "the new investment counts (₹27,500 worth now)");
+  if (await p.$(`${V} [data-hg]`)) { await p.click(`${V} [data-hg]`); await settle(); }
+  ok((await p.innerText(V)).includes("Test Flexi Cap Fund"), "…and is listed under Mutual Fund");
+  const nh = await p.$(`${V} [data-hold]:has-text("Test Flexi Cap Fund")`);
+  if (nh) { await nh.click(); await settle(); ok(/Test Flexi Cap Fund/.test(await p.textContent("#mvLayer #modal h3")) && /value ₹27,500/.test(await p.textContent("#mvLayer #hcalc")), "…opens again with its value (250 × ₹110)"); await p.click("#mvLayer #modal #cx"); await settle(); }
+  else ok(false, "…its row can be tapped");
 
   ok(errors.length === 0, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   await ctx.close();

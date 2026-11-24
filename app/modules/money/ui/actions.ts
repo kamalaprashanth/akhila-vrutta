@@ -2,6 +2,9 @@
  * Taps on the money pages that open one of Akhila Vrutta's own forms (the planner's activate(), moving
  * over form by form). Anything not handled here still goes to the planner.
  */
+import { copyJson, dlJson, exportExcel, icsAll, notifyToggle, restoreSheet } from "./dataio.ts";
+import { profForm } from "./profform.ts";
+import { holdingForm } from "./holdform.ts";
 import type { MoneyData } from "../calc/data.ts";
 import { accForm, catForm, payerForm, pickMainSheet, tagSheet } from "./forms.ts";
 import { txnForm } from "./txform.ts";
@@ -21,6 +24,7 @@ export function appAct(el: HTMLElement, d: MoneyData): boolean {
   if (x.payer !== undefined) { const p = rec("payers", x.payer); if (p) payerForm({ ...p }); return true; }
   if (x.cat !== undefined) { const c = rec("categories", x.cat); catForm(c ? { ...c } : {}); return true; }
   if (x.tagedit !== undefined) { tagSheet(x.tagedit); return true; }
+  if (x.prof !== undefined) { profForm(x.prof); return true; }
   // A card's Pay bill / Add spend / Edit card, and Pay on a card bill in Plan.
   if (x.cpay !== undefined || x.ca !== undefined) {
     const S = E().state() as unknown as { cardId?: string } | null;
@@ -42,6 +46,13 @@ export function appAct(el: HTMLElement, d: MoneyData): boolean {
   if (invAct(d, x)) return true;
   switch (id) {
     case "addLoan": loanForm(); return true;
+    case "addHold": holdingForm(); return true;
+    case "xlsx": exportExcel(); return true;
+    case "dlJson": dlJson(); return true;
+    case "copyJson": copyJson(); return true;
+    case "restore": restoreSheet(); return true;
+    case "icsAll": icsAll(); return true;
+    case "notifOn": void notifyToggle(); return true;
     case "pxStatus": pxStatusSheet(); return true;
     case "addAcc": accForm(); return true;
     case "addCat": catForm(); return true;
