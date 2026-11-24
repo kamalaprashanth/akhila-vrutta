@@ -128,7 +128,7 @@ try {
 
   progress("money frame");
   /* 3. The Money tab: the planner frame loads with its styles (today's bug) and shows the data */
-  const f = await moneyFrame(A.page);
+  let f = await moneyFrame(A.page);
   const styled = await f.evaluate(() => {
     const sheets = [...document.styleSheets].filter((s) => { try { return s.cssRules.length > 50; } catch { return false; } }).length;
     const bodyFont = getComputedStyle(document.body).fontFamily;
@@ -155,6 +155,7 @@ try {
   await fC2.evaluate(() => { S.cardId = "cloudcard"; go("card"); }); await A.page.waitForTimeout(800);
   const cardTxt = await A.page.innerText("#moneyView #view");
   check(/of ₹50,000/.test(cardTxt) && /₹499/.test(cardTxt) && await fC2.evaluate(() => S.data.accounts.find((a) => a.id === "cloudcard")?.limit === 50000), "a card's ₹50,000 limit and ₹499 fee come back the same after a reload (stored in paise)");
+  f = fC2;   // the page was reloaded: the planner's frame is a new one
 
   progress("functions from the planner");
   /* 3b. The planner reaches the Cloud Functions through the main app's sign-in (Advisor, price refresh) */
