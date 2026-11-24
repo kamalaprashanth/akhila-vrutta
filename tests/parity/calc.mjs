@@ -147,6 +147,7 @@ const report = await f.evaluate(() => {
   MEMO = new Map();
   const planReal = comparePlan(d, "yours");
   const fcReal = compareForecast(d, "yours");
+  const propReal = compareProps(d, "yours");
 
   // Made-up plan items: every frequency, month changes and skips, a budget with spends, trading-day shifts,
   // SIPs with and without charges, transfers, a card EMI, family repayment plans (monthly and one-off, one paid).
@@ -216,7 +217,107 @@ const report = await f.evaluate(() => {
   const fcSynth = compareForecast(dP, "made-up");
   S.data = real;
   MEMO = new Map();
-  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth, planReal, planSynth, fcReal, fcSynth };
+  // Made-up properties: items paid by the property's loan, by a hybrid loan's two parts and by another bank loan,
+  // linked transactions (one a refund, one deleted), principal prepaid from another loan, a statement, plan rows
+  // of every kind (you, bank, split, TDS after payment), a reserve account with property-fund transfers.
+  const ymQ = ymOf(T);
+  const Pa = [
+    { id: "rb", name: "Reserve bank", type: "bank", opening: 300000, reserve: true, updatedAt: 1 },
+    { id: "mb", name: "HDFC", type: "bank", opening: 90000, updatedAt: 1 },
+  ];
+  const PL = [
+    { id: "hl", name: "Home loan", lender: "SBI", kind: "emi", principal: 4000000, rate: 8.4, tenure: 240, start: addM(ymQ, -14), day: 5, accountId: "mb", updatedAt: 1 },
+    { id: "hy", name: "Uncle loan", lender: "Uncle", kind: "hybrid", bank: { principal: 600000, rate: 9, tenure: 60, start: addM(ymQ, -10), emi: 12455, day: 7 }, plans: [], updatedAt: 1 },
+    { id: "pl", name: "Personal loan", lender: "HDFC", kind: "emi", principal: 300000, rate: 12.5, tenure: 36, start: addM(ymQ, -8), updatedAt: 1 },
+  ];
+  let n4 = 0; const Z = (x) => ({ id: `z${++n4}`, updatedAt: n4, ...x });
+  const PT = [
+    Z({ id: "pt1", type: "expense", amount: 500000, date: `${addM(ymQ, -13)}-02`, accountId: "mb", funds: [{ loan: "hy", amt: 300000, part: "own" }, { loan: "hy", amt: 150000, part: "bank" }] }),
+    Z({ id: "pt2", type: "income", amount: 2500, date: `${addM(ymQ, -12)}-11`, accountId: "mb" }),
+    Z({ id: "pt3", type: "expense", amount: 80000, date: `${addM(ymQ, -11)}-04`, accountId: "mb", deleted: true }),
+    Z({ id: "pt4", type: "expense", amount: 120000, date: `${addM(ymQ, -6)}-09`, accountId: "mb", fundLoan: "pl", fundAmt: 100000 }),
+    Z({ type: "loan", loanId: "hy", act: "borrow", part: "own", amount: 400000, date: `${addM(ymQ, -13)}-01`, accountId: "mb" }),
+    Z({ type: "loan", loanId: "hy", act: "repay", part: "own", amount: 50000.5, date: `${addM(ymQ, -3)}-01`, accountId: "mb" }),
+    Z({ type: "loan", loanId: "hl", act: "prepay", amount: 200000, date: `${addM(ymQ, -2)}-15`, accountId: "mb" }),
+    // before the bank statement's date: already inside the statement's figures
+    Z({ type: "loan", loanId: "hl", act: "prepay", amount: 111111, date: `${addM(ymQ, -7)}-20`, accountId: "mb" }),
+    Z({ type: "transfer", amount: 50000, date: `${addM(ymQ, -1)}-05`, accountId: "mb", toAccountId: "rb", pot: "prop:p2" }),
+    Z({ type: "transfer", amount: 7000, date: `${ymQ}-02`, accountId: "rb", toAccountId: "mb", pot: "prop:p2" }),
+  ];
+  const PI = [
+    Z({ prop: "p1", cat: "token", amt: 100000, date: `${addM(ymQ, -15)}-20` }),
+    // linked items carry the amount and date from when they were linked, as the planner saves them
+    Z({ prop: "p1", cat: "agree", txnId: "pt1", amt: 500000, date: `${addM(ymQ, -13)}-02` }),
+    Z({ prop: "p1", cat: "stamp", txnId: "pt2", amt: 2500, date: `${addM(ymQ, -12)}-11` }),
+    Z({ prop: "p1", cat: "lawyer", txnId: "pt3", amt: 80000, date: `${addM(ymQ, -11)}-04` }),
+    Z({ prop: "p1", cat: "bank", amt: 3600000, date: `${addM(ymQ, -14)}-01`, loanId: "hl" }),
+    Z({ prop: "p1", cat: "lprepay", txnId: "pt4", amt: 120000, date: `${addM(ymQ, -6)}-09` }),
+    Z({ prop: "p1", cat: "interior", amt: 350000, date: `${addM(ymQ, -4)}-10`, accountId: "mb" }),
+    Z({ prop: "p1", cat: "cash", amt: 75000, date: `${addM(ymQ, -15)}-21` }),
+    Z({ prop: "p1", cat: "pemi", amt: 18000.25, date: `${addM(ymQ, -14)}-28` }),
+    Z({ prop: "p1", cat: "maint", amt: 4500, date: `${addM(ymQ, -1)}-03`, funds: [{ loan: "pl", amt: 9999 }] }),
+    Z({ prop: "p1", cat: "mycat", amt: 1200, date: `${addM(ymQ, -1)}-03` }),
+    // hybrid-loan money with no part given; a cost paid in full from the property's own loan via its funding rows
+    Z({ prop: "p1", cat: "plc", amt: 60000, date: `${addM(ymQ, -9)}-06`, funds: [{ loan: "hy", amt: 60000 }] }),
+    Z({ prop: "p1", cat: "inst", amt: 250000, date: `${addM(ymQ, -7)}-06`, funds: [{ loan: "hl", amt: 250000 }] }),
+    Z({ prop: "p2", cat: "token", amt: 200000, date: `${addM(ymQ, -2)}-01`, loanId: "pl", loanAmt: 50000 }),
+    Z({ prop: "p2", cat: "inst", amt: 900000, date: `${addM(ymQ, 2)}-01` }),
+  ];
+  const PP = [
+    { id: "propcats", rec: "cats", custom: [{ k: "mycat", g: "setup", name: "Curtains" }], hide: ["dg"], names: { token: "Booking amount" }, updatedAt: 1 },
+    { id: "p1", name: "Flat", status: "possession", since: `${addM(ymQ, -14)}-01`, value: 5200000, cur: 6100000, curDate: `${addM(ymQ, -2)}-01`, nw: true, loanId: "hl",
+      stmt: { asOf: `${addM(ymQ, -5)}-30`, through: addM(ymQ, -6), int: 210000.5, pemi: 18000.25, prin: 95000, out: 3700000 }, updatedAt: 1 },
+    { id: "p2", name: "Plot", status: "booked", since: `${addM(ymQ, -2)}-01`, value: 2800000, nw: false, fund: { by: addM(ymQ, 8), ltv: 70, start: 25000 }, updatedAt: 1,
+      plan: [
+        { id: "a", name: "Agreement", amt: 312345, gst: 15617.25, when: `${addM(ymQ, 1)}-10`, who: "you", tds: true, paidOn: `${addM(ymQ, -1)}-12` },
+        { id: "b", name: "Slab 1", amt: 500000, gst: 25000, when: `${addM(ymQ, 3)}-01`, who: "split", youAmt: 125000, bankAmt: 400000 },
+        { id: "c", name: "Slab 2", amt: 500000, gst: 25000, when: addM(ymQ, 5), who: "bank" },
+        { id: "d", name: "Registration", amt: 140000, gst: 0, when: "", who: "you", tds: false },
+        { id: "e", name: "Paid", amt: 10000, gst: 0, when: `${ymQ}-01`, who: "you", done: true },
+        { id: "f", name: "Bank only", amt: 400000, gst: 0, when: `${addM(ymQ, 4)}-15`, who: "bank", tds: true, paidOn: `${ymQ}-02`, tdsDone: true },
+      ] },
+    { id: "p3", name: "Land", status: "registered", since: `${addM(ymQ, 6)}-01`, value: 0, nw: true, updatedAt: 1 },
+  ];
+  S.data = { ...real, accounts: Pa, loans: PL, txns: PT, props: PP, propItems: PI };
+  MEMO = new Map();
+  const propSynth = compareProps(N.dataFrom(S.data, T), "made-up");
+  S.data = real;
+  MEMO = new Map();
+  return { checked, diffs: out, loans: realRes, synth, accReal, accSynth, planReal, planSynth, fcReal, fcSynth, propReal, propSynth };
+
+  function compareProps(d, label) {
+    const NP = N.props, list = propList(), nlist = NP.propList(d);
+    same(list.map((p) => p.id), nlist.map((p) => p.id), `${label}: properties`);
+    same(propCats().map((c) => [c.k, c.g, c.name, c.f, c.hidden]), NP.propCats(d).map((c) => [c.k, c.g, c.name, c.f, c.hidden]), `${label}: property categories`);
+    const nums = (o, n, what, keys) => { for (const k of keys) close(o[k], n[k], `${what}: ${k}`); };
+    for (const p of list) {
+      const np = d.byId("props", p.id), w = `${label} ${p.name}`;
+      const oi = propItems(p), ni = NP.propItems(d, np);
+      same(oi.map((i) => [i.id, i.date, !!i.gone, i.fund ?? "", (i.funds || []).map((f) => [f.loan, f.part])]), ni.map((i) => [i.id, i.date, !!i.gone, i.fund ?? "", (i.funds || []).map((f) => [f.loan, f.part])]), `${w}: items`);
+      oi.forEach((x, i) => { const y = ni[i]; if (!y) return; close(x.amt, y.amt, `${w} item ${x.id}: amount`); close(x.fundAmt ?? 0, y.fundAmt ?? 0, `${w} item ${x.id}: loan-paid`); (x.funds || []).forEach((f, j) => y.funds[j] && close(f.amt, y.funds[j].amt, `${w} item ${x.id}: fund ${j}`)); });
+      const I = propInt(p), J = NP.propInt(d, np);
+      nums(I, J, `${w} interest`, ["stInt", "estInt", "estPrin", "prepay", "toCome", "out"]);
+      same([I.est.map((r) => r.date), I.next && I.next.date], [J.est.map((r) => r.date), J.next && J.next.date], `${w} interest: dates`);
+      const c = propCalc(p), e = NP.propCalc(d, np);
+      nums(c, e, `${w} totals`, ["cost", "interest", "withInt", "sep", "off", "bankPaid", "loanPaid", "lInt", "lPaid", "mine", "price", "own", "prin", "prinFunded", "owed", "owedBank", "owedFam", "paidBank", "paidFam", "toCome", "everything"]);
+      for (const k of new Set([...Object.keys(c.by), ...Object.keys(e.by)])) close(c.by[k] ?? 0, e.by[k] ?? 0, `${w} by category ${k}`);
+      for (const k of new Set([...Object.keys(c.grp), ...Object.keys(e.grp)])) close(c.grp[k] ?? 0, e.grp[k] ?? 0, `${w} by group ${k}`);
+      same(c.loans.map((o) => o.l.id), e.loans.map((o) => o.l.id), `${w}: loans used`);
+      c.loans.forEach((o, i) => { const q = e.loans[i]; if (!q) return; nums(o, q, `${w} loan ${o.l.id}`, ["amt", "prep", "int", "paid", "owed", "come"]);
+        for (const k of ["share", "iShare"]) { checked++; if (Math.abs(o[k] - q[k]) > 1e-9) out.push(`${w} loan ${o.l.id}: ${k} ${o[k]} vs ${q[k]}`); } });
+      same(c.owedBy.map((x) => [x.name, x.bank]), e.owedBy.map((x) => [x.name, x.bank]), `${w}: owed to`);
+      for (let k = -18; k <= 8; k += 2) { const at = `${addM(ymOf(T), k)}-15`; close(propNwAt(p, at), NP.propNwAt(d, np, at), `${w}: net worth value at ${at}`); }
+      close(propNwAt({ ...p, nw: true }), NP.propNwAt(d, { ...np, nw: true }), `${w}: value if counted`);
+      close(propFundNeed(p), NP.propFundNeed(d, np), `${w}: still needed`);
+      close(propFundHeld(p), NP.propFundHeld(d, np), `${w}: fund held`);
+      const pd = propPlanDue(p), nd = NP.propPlanDue(d, np);
+      same(pd.map((x) => [x.key, x.date, x.big, x.acc, !!x.tds]), nd.map((x) => [x.key, x.date, x.big, x.acc, !!x.tds]), `${w}: plan dues`);
+      pd.forEach((x, i) => nd[i] && close(x.amount, nd[i].amount, `${w} ${x.key}: amount`));
+    }
+    const a = propNw(), b = NP.propNw(d); close(a.on, b.on, `${label}: property net worth`); close(a.off, b.off, `${label}: properties left out`);
+    same(reserveAcc()?.id ?? null, NP.reserveAcc(d)?.id ?? null, `${label}: reserve account`);
+    return list.length;
+  }
 
   function compareForecast(d, label) {
     const NF = N.forecast;
@@ -358,6 +459,6 @@ const report = await f.evaluate(() => {
 });
 await browser.close();
 server.close();
-console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up · plan items over 28 months: ${report.planReal} yours + ${report.planSynth} made-up · carry-overs to make: ${report.fcReal} yours, ${report.fcSynth} made-up`);
+console.log(`calc parity on ${EXPORT.includes("sample") ? "the sample" : "the real export"}: ${report.checked} comparisons · loans: ${report.loans} yours + ${report.synth} made-up · accounts: ${report.accReal} yours + ${report.accSynth} made-up · plan items over 28 months: ${report.planReal} yours + ${report.planSynth} made-up · carry-overs to make: ${report.fcReal} yours, ${report.fcSynth} made-up · properties: ${report.propReal} yours + ${report.propSynth} made-up`);
 if (report.diffs.length) { console.error(`✗ ${report.diffs.length} differences:\n  ${report.diffs.slice(0, 30).join("\n  ")}`); process.exit(1); }
-console.log("✓ dates, loans, balances, month totals, card cycles, bills, plan items, carry-overs and the 36-month forecast match the planner exactly");
+console.log("✓ dates, loans, balances, month totals, card cycles, bills, plan items, carry-overs, the 36-month forecast and properties match the planner exactly");

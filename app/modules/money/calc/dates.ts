@@ -45,3 +45,12 @@ export function lastDay(ym: YM): Day {
 
 /** Day `d` of a month, clamped to the month's length (31 → 30 Apr). */
 export const dayIn = (y: number, m: number, d: number): Day => `${y}-${pad(m)}-${pad(Math.min(d, new Date(y, m, 0).getDate()))}`;
+
+/** The day `n` days after `d` (negative goes back). */
+export function addDays(d: Day, n: number): Day {
+  const x = new Date(`${d}T00:00`);
+  x.setDate(x.getDate() + n);
+  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+}
+/** Days from `a` to `b`. */
+export const dayDiff = (a: Day, b: Day): number => Math.round((Date.parse(`${b}T00:00`) - Date.parse(`${a}T00:00`)) / 864e5);

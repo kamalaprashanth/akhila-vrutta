@@ -12,7 +12,7 @@ const EPF_FY = "epf.books.*.fys.*";
 const SYNCS = ["syncs[].bal", "syncs[].was"];
 
 /** Bumped whenever MONEY_FIELDS changes: stored data from an older list must be imported again. */
-export const AMOUNTS_VERSION = "paise-2";
+export const AMOUNTS_VERSION = "paise-3";
 
 export const MONEY_FIELDS: Record<string, string[]> = {
   accounts: ["opening", "minBal"],
@@ -27,7 +27,7 @@ export const MONEY_FIELDS: Record<string, string[]> = {
   ],
   props: ["value", "cur", "plan[].amt", "plan[].gst", "plan[].youAmt", "plan[].bankAmt",
     "stmt.chg", "stmt.int", "stmt.out", "stmt.pemi", "stmt.prin", "fund.start"],
-  propItems: ["amt"],
+  propItems: ["amt", "loanAmt", "funds[].amt"],
   snaps: ["banks", "cards", "inv", "loans", "prop", "total"],
   goals: ["target", "saved"],
 };
