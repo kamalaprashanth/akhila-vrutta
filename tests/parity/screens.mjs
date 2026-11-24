@@ -98,6 +98,10 @@ const report = await f.evaluate(() => {
       // Your own PPF deposit, 50 paise off the statement's: the statement line isn't listed twice.
       X({ type: "investment", amount: 1500.5, instrument: "PPF2", date: `${ym1}-12` }),
     ],
+    // A mutual-fund SIP (stamp duty comes off what's invested) and a monthly one with its own charges.
+    recurring: [...real.recurring,
+      { id: "sipx", type: "investment", name: "Axis SIP", instrument: "Axis fund", invType: "Mutual Fund", amount: 5000, freq: "monthly", start: addM(nowM, -3), day: 28, accountId: acc, updatedAt: 1 },
+      { id: "sipy", type: "investment", name: "Gold SIP", instrument: "Gullak", invType: "Gold", amount: 2000, charges: 30, freq: "monthly", start: addM(nowM, -3), day: 27, accountId: acc, updatedAt: 1 }],
     settings: [...(real.settings || []).filter((x) => x.id !== "profile"), { id: "profile", updatedAt: 1, dob: "1985-05-20", retire: "58", kids: [{ id: "k1", name: "Anu", dob: "2016-08-10" }, { name: "Babu", dob: "2024-01-15" }] }],
     goals: [...(real.goals || []),
       { id: "ge1", kind: "edu", kidId: "k1", kid: 0, name: "Anu's education", pri: 3, school: 180000, ug: 2500000, pg: 3000000, inf: 9, ret: 12, holdings: ["hp"], updatedAt: 1 },
@@ -157,13 +161,16 @@ const report = await f.evaluate(() => {
     n++;
     S.cwFixed = 640; N.charts.setChartWidth(640);
     for (const k in CH) delete CH[k]; chSeq = 0; N.charts.resetCharts(); MEMO = new Map();
-    const a = oldFn(), b = newFn();
+    let a, b;
+    try { a = oldFn(); } catch (e) { a = "old threw: " + e.message; }
+    try { b = newFn(); } catch (e) { b = "new threw: " + e.message; }
     if (a !== b && sameButEstimates(a, b)) { estRounding++; return; }
+    if (a.startsWith("old threw") && !b.includes("threw")) { fixedCrash.push(label); return; }
     if (a !== b) { let i = 0; while (i < a.length && a[i] === b[i]) i++; out.push(`${label}: differs at ${i}\n    old …${a.slice(Math.max(0, i - 100), i + 140)}\n    new …${b.slice(Math.max(0, i - 100), i + 140)}`); }
   };
-  // Estimated past months (worked back from entries) can land on a half rupee; paise round it ₹1 the other way.
-  // Accepted only inside an "(est.)" table row or the chart drawn from the same estimates, and only by ₹1.
-  let estRounding = 0;
+  // Rupee decimals summed in the planner can land just under a half rupee (52,012.4999 for an exact 52,012.50), so
+  // a rounded total can be ₹1 apart. Accepted only in a table row or a chart's coordinates, only by ₹1, and counted.
+  let estRounding = 0; const fixedCrash = [];
   const sameButEstimates = (a, b) => {
     const A = a.split(/(<tr>.*?<\/tr>|<svg.*?<\/svg>)/s), B = b.split(/(<tr>.*?<\/tr>|<svg.*?<\/svg>)/s);
     if (A.length !== B.length) return false;
@@ -171,7 +178,8 @@ const report = await f.evaluate(() => {
       const y = B[i];
       if (x === y) return true;
       if (x.startsWith("<svg")) return x.replace(/-?\d+(\.\d+)?/g, "#") === y.replace(/-?\d+(\.\d+)?/g, "#") && x.match(/-?\d+(\.\d+)?/g).every((v, k) => Math.abs(+v - +y.match(/-?\d+(\.\d+)?/g)[k]) <= 0.15);
-      if (!x.includes("(est.)")) return false;
+      // a table row: totals of many amounts, where rupee decimals could land just under a half rupee
+      if (!x.startsWith("<tr>")) return false;
       const nx = x.match(/[\d,]+/g), ny = y.match(/[\d,]+/g);
       return x.replace(/[\d,]+/g, "#") === y.replace(/[\d,]+/g, "#") && nx.every((v, k) => Math.abs(+v.replace(/,/g, "") - +ny[k].replace(/,/g, "")) <= 1);
     });
@@ -219,12 +227,33 @@ const report = await f.evaluate(() => {
     Object.assign(S, keep);
   };
   homePages(d2, "made-up");
+  const insPages = (dx, tag) => {
+    const K = ["insTab", "homeYr", "hm", "hmTab", "hmOpen", "hmOpen2", "year", "yearTab", "taxFy", "trN", "trP", "trD", "trC"], keep = Object.fromEntries(K.map((k) => [k, S[k]]));
+    const nowM = ymOf(today()), y = +today().slice(0, 4), fy = fyOf(today());
+    const run = (label, st) => page(`${tag} insights ${label}`, () => { for (const k of K) S[k] = undefined; Object.assign(S, st); return vInsights(); }, () => N.insights.insightsHtml(dx, { ...st }));
+    run("default", {});
+    for (const k of [-13, -2, -1, 0, 1, 2]) for (const t of ["expense", "income", "invest"]) run(`month ${addM(nowM, k)} ${t}`, { hm: addM(nowM, k), hmTab: t });
+    const T = N.home.expenseTree(dx, nowM);
+    for (const [gk, g] of T.slice(0, 4)) { run(`month open ${gk}`, { hmOpen: gk }); for (const [ck] of [...g.cats.entries()].slice(0, 3)) run(`month open ${gk} › ${ck}`, { hmOpen: gk, hmOpen2: ck }); }
+    for (const [k] of [...monthFigures(nowM).byInc.entries()].slice(0, 3)) run(`income open ${k}`, { hmTab: "income", hmOpen: k });
+    for (const it of ["Mutual Fund", "PPF", "Unassigned", "NPS"]) run(`invest open ${it}`, { hmTab: "invest", hmOpen: it, hm: addM(nowM, -1) });
+    for (const n of [6, 12, 24]) run(`trends ${n}`, { insTab: "trends", trN: n });
+    for (const [p] of TRP) run(`trends where ${p}`, { insTab: "trends", trP: p });
+    const cats = [...monthFigures(nowM).byCat.keys()];
+    for (const c of cats.slice(0, 4)) { run(`trends drill ${c}`, { insTab: "trends", trD: c, trP: "12m" }); run(`trends category ${c}`, { insTab: "trends", trC: c }); }
+    for (const yy of [y - 2, y - 1, y, y + 1]) for (const t of ["summary", "expense", "income", "reserve"]) run(`year ${yy} ${t}`, { insTab: "year", year: yy, yearTab: t });
+    for (const f of [fy - 2, fy - 1, fy, fy + 1]) run(`tax FY ${f}`, { insTab: "year", yearTab: "tax", taxFy: f });
+    for (const hy of [String(y - 1), String(y)]) run(`home ${hy}`, { insTab: "home", homeYr: hy });
+    Object.assign(S, keep);
+  };
+  insPages(d2, "made-up");
   sheets(d2, "made-up");
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
   accPages(d, "yours");
   planPages(d, "yours");
   homePages(d, "yours");
+  insPages(d, "yours");
   Object.assign(S, save); MEMO = new Map();
   // Also the money formats, on awkward amounts.
   for (const r of [0, 0.004, 0.005, -0.5, 0.5, 1.5, 2.5, -2.5, 999.995, 1234.56, -1234.56, 12345678.9, 1e9]) {
@@ -232,10 +261,11 @@ const report = await f.evaluate(() => {
     if (money(p / 100) !== N.txlist.money(p)) out.push(`money(${r}): old ${money(p / 100)} new ${N.txlist.money(p)}`);
     if (moneyP(p / 100) !== N.txlist.moneyP(p)) out.push(`moneyP(${r}): old ${moneyP(p / 100)} new ${N.txlist.moneyP(p)}`);
   }
-  return { n, txns: live("txns").length, out, estRounding };
+  return { n, txns: live("txns").length, out, estRounding, fixedCrash };
 });
 await browser.close(); server.close();
 const SHOW = +(process.env.SHOW || 6);
-console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with an estimate ₹1 apart (half-rupee rounding)` : ""}`);
+console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with a total ₹1 apart (half-rupee rounding)` : ""}`);
+if (report.fixedCrash.length) console.log(`  (the old planner crashes on ${report.fixedCrash.length} of these — ${[...new Set(report.fixedCrash.map((l) => l.replace(/^(made-up|yours) /, "")))].join(", ")} — the new page shows them)`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
-console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab) and Overview are identical to the planner's");
+console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview and Insights (every tab) are identical to the planner's");

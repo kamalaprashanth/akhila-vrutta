@@ -15,6 +15,7 @@ import { moneyData, txPage, type PlannerState } from "./views/transactions.ts";
 import { accountsPage } from "./views/accounts.ts";
 import { planPage } from "./views/plan.ts";
 import { homePage } from "./views/home.ts";
+import { insightsPage } from "./views/insights.ts";
 import { mountPages } from "./views/pages.ts";
 import { ensureLayer, onSheet, toast as kitToast } from "./ui/kit.ts";
 import { prefGet, prefSet, setEnv, type WriteOp as MoneyWrite } from "./ui/env.ts";
@@ -22,7 +23,7 @@ import { txnForm } from "./ui/txform.ts";
 import { mainAcc } from "./calc/forecast.ts";
 
 /** Planner pages that Akhila Vrutta now draws itself (the planner keeps their state and sheets). */
-const PAGES = { home: homePage, activity: txPage, accounts: accountsPage, plan: planPage };
+const PAGES = { home: homePage, activity: txPage, accounts: accountsPage, plan: planPage, insights: insightsPage };
 const MOVED = new Set(Object.keys(PAGES));
 
 const ICON = "M3 7h18v12H3zM3 11h18M7 15h3";

@@ -25,5 +25,6 @@ Each step ships on its own: branch → CI (cloud tests) → main → release, ch
    AMOUNTS_VERSION is paise-6 (goal school/ug/pg/spend are money): the owner re-imports once, at the end.
 6. Overview (views/home.ts) — done. Pay/Move/Set aside/Invest buttons, Change account and the Advisor still
    open in the planner.
-7. Insights. 8. Advisor. 9. Money settings (more).
+7. Insights (views/insights.ts) — done. Fixed: the Year › Reserve tab crashed for a year with no months yet.
+   Year in review, month-item sheet, category limits form still open in the planner. 8. Advisor. 9. Money settings (more).
 10. Remove the frame; switch-over (import button goes, old app read-only for a month).
