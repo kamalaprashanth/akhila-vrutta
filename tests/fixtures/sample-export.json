@@ -1,0 +1,339 @@
+{
+ "app": "KP Money Planner",
+ "exported": "2026-01-01T00:00:00.000Z",
+ "data": {
+  "schema": 1,
+  "accounts": [
+   {
+    "id": "mwu80jwhhyloaj",
+    "name": "Cash",
+    "type": "cash",
+    "opening": 0,
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80kkkq1xr0c",
+    "name": "Test Bank",
+    "type": "bank",
+    "opening": 150000.5,
+    "updatedAt": 1795496093732
+   },
+   {
+    "id": "mwu80kknpw1fff",
+    "name": "Test Card",
+    "type": "card",
+    "opening": 0,
+    "updatedAt": 1795496093735
+   }
+  ],
+  "categories": [
+   {
+    "id": "mwu80jwiiw5gkp",
+    "name": "Rent & maintenance",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwi8kcce0",
+    "name": "Utilities (power, gas, water)",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwiq7gt15",
+    "name": "Broadband & mobile",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwi1aqvni",
+    "name": "Subscriptions",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwijg88mb",
+    "name": "Insurance",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwivjwwvg",
+    "name": "Groceries",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwippbo9c",
+    "name": "Food & eating out",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwigjdmyr",
+    "name": "Travel & trips",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwi6fu78l",
+    "name": "Transport & fuel",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwi718g90",
+    "name": "Health",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwiqzhtpo",
+    "name": "Pooja & donation",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwilklfgm",
+    "name": "Gifts",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwi3ypmni",
+    "name": "Family support",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwi0yuc44",
+    "name": "Shopping",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwineg06l",
+    "name": "Personal care",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwijkms0m",
+    "name": "Home & furniture",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwi6i0dya",
+    "name": "Property",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwitdwm6a",
+    "name": "Fees, legal & tax",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwitdbcbx",
+    "name": "Cash withdrawal",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwizfnezs",
+    "name": "Loan EMI",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwi1p7wq9",
+    "name": "Other",
+    "kind": "expense",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwi9mbj2w",
+    "name": "Salary",
+    "kind": "income",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwihxi3zo",
+    "name": "Reimbursement",
+    "kind": "income",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwiygi3y9",
+    "name": "Interest & dividend",
+    "kind": "income",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwiab87nu",
+    "name": "Gift received",
+    "kind": "income",
+    "updatedAt": 1795496092865,
+    "seed": true
+   },
+   {
+    "id": "mwu80jwiwg0vnv",
+    "name": "Other income",
+    "kind": "income",
+    "updatedAt": 1795496092865,
+    "seed": true
+   }
+  ],
+  "txns": [
+   {
+    "id": "mwu80kkozvbc3n",
+    "type": "income",
+    "amount": 85000,
+    "date": "2026-11-01",
+    "accountId": "mwu80kkkq1xr0c",
+    "note": "sample income 85000",
+    "updatedAt": 1795496093736,
+    "categoryId": "mwu80jwi9mbj2w"
+   },
+   {
+    "id": "mwu80kkqz5h58o",
+    "type": "expense",
+    "amount": 1234.56,
+    "date": "2026-11-02",
+    "accountId": "mwu80kkkq1xr0c",
+    "note": "sample expense 1234.56",
+    "updatedAt": 1795496093738,
+    "categoryId": "mwu80jwivjwwvg"
+   },
+   {
+    "id": "mwu80kkt8bhy9d",
+    "type": "expense",
+    "amount": 499,
+    "date": "2026-11-03",
+    "accountId": "mwu80kknpw1fff",
+    "note": "sample expense 499",
+    "updatedAt": 1795496093741,
+    "categoryId": "mwu80jwi1aqvni"
+   },
+   {
+    "id": "mwu80kkvhtfpu7",
+    "type": "expense",
+    "amount": 18000,
+    "date": "2026-11-05",
+    "accountId": "mwu80kkkq1xr0c",
+    "note": "sample expense 18000",
+    "updatedAt": 1795496093743,
+    "categoryId": "mwu80jwiiw5gkp"
+   },
+   {
+    "id": "mwu80kkwvw448c",
+    "type": "transfer",
+    "amount": 5000,
+    "date": "2026-11-06",
+    "accountId": "mwu80kkkq1xr0c",
+    "note": "sample transfer 5000",
+    "updatedAt": 1795496093744,
+    "toAccountId": "mwu80kknpw1fff"
+   }
+  ],
+  "recurring": [
+   {
+    "id": "mwu80kkxonecea",
+    "type": "expense",
+    "name": "Sample rent",
+    "amount": 18000,
+    "day": 5,
+    "freq": "monthly",
+    "start": "2026-11",
+    "end": null,
+    "accountId": "mwu80kkkq1xr0c",
+    "categoryId": "mwu80jwiiw5gkp",
+    "updatedAt": 1795496093745
+   }
+  ],
+  "loans": [
+   {
+    "id": "mwu80kl1wu4oiw",
+    "kind": "emi",
+    "name": "Sample loan",
+    "lender": "Sample lender",
+    "principal": 500000,
+    "emi": 10500.75,
+    "rate": 9.5,
+    "tenure": 60,
+    "day": 10,
+    "start": "2026-11",
+    "accountId": "mwu80kkkq1xr0c",
+    "plans": [],
+    "updatedAt": 1795496093749
+   }
+  ],
+  "holdings": [],
+  "payers": [
+   {
+    "id": "spouse",
+    "name": "Spouse",
+    "own": false,
+    "tag": "Home",
+    "updatedAt": 1
+   },
+   {
+    "id": "cash",
+    "name": "Cash",
+    "own": true,
+    "tag": "",
+    "updatedAt": 1
+   },
+   {
+    "id": "pluxee",
+    "name": "Pluxee",
+    "own": true,
+    "tag": "",
+    "updatedAt": 1
+   }
+  ],
+  "snaps": [
+   {
+    "id": "nw-2026-11",
+    "ym": "2026-11",
+    "day": "2026-11-24",
+    "total": 0,
+    "banks": 0,
+    "inv": 0,
+    "prop": 0,
+    "cards": 0,
+    "loans": 0,
+    "updatedAt": 1795496092886
+   }
+  ],
+  "goals": [],
+  "views": []
+ }
+}

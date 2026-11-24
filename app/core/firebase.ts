@@ -19,11 +19,15 @@ export interface AppConfig {
   firebase: FirebaseWebConfig | null;
   /** Commit the build came from, shown in Settings. */
   build: string;
+  /** Test builds only: talk to the local Firebase emulators instead of the cloud. */
+  emulators?: { auth: string; firestoreHost: string; firestorePort: number };
 }
 
 declare global {
   interface Window {
     AV_CONFIG?: AppConfig;
+    /** Test builds only: which test account signs in ("owner" by default). */
+    AV_TEST_USER?: string;
   }
 }
 
@@ -62,10 +66,13 @@ export function initFirebase(): Promise<Fb | null> {
     ]);
     const app = appMod.initializeApp!(cfg);
     const auth = authMod.getAuth!(app);
+    const emu = config().emulators;
+    if (emu) authMod.connectAuthEmulator!(auth, emu.auth, { disableWarnings: true });
     // The cache on this device holds only ciphertext, the same as the cloud.
     const db = fs.initializeFirestore!(app, {
       localCache: fs.persistentLocalCache!({ tabManager: fs.persistentMultipleTabManager!() }),
     });
+    if (emu) fs.connectFirestoreEmulator!(db, emu.firestoreHost, emu.firestorePort);
     try { await authMod.getRedirectResult!(auth); } catch { /* no redirect pending */ }
     known = new Promise((res) => {
       authMod.onAuthStateChanged!(auth, (u: { uid: string } | null) => {
@@ -93,6 +100,13 @@ export async function onUser(cb: (u: SignedInUser | null) => void): Promise<void
 export async function signIn(): Promise<SignedInUser | null> {
   const fb = await initFirebase();
   if (!fb) throw new Error("Firebase isn't configured for this build.");
+  if (config().emulators) {
+    // Test builds sign in a prepared test account; Google's popup can't run in automated tests.
+    const who = window.AV_TEST_USER ?? "owner";
+    const r = (await fb.authMod.signInWithEmailAndPassword!(fb.auth, `${who}@test.local`, "test-password-123")) as { user: { uid: string } };
+    current = { uid: r.user.uid };
+    return current;
+  }
   const p = new fb.authMod.GoogleAuthProvider();
   p.setCustomParameters({ prompt: "select_account" });
   try {

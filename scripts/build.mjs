@@ -36,6 +36,12 @@ function parseConfig(text) {
 
 let sha = process.env.GITHUB_SHA ?? "";
 if (!sha) { try { sha = execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { sha = "local"; } }
-const firebase = parseConfig(process.env.FIREBASE_WEB_CONFIG);
-writeFileSync(`${out}/config.js`, `window.AV_CONFIG=${JSON.stringify({ firebase, build: sha.slice(0, 7) || "local" })};\n`);
+// AV_EMULATORS=1 makes a test build that talks to the local Firebase emulators (never deployed).
+const emulators = process.env.AV_EMULATORS === "1"
+  ? { auth: "http://127.0.0.1:9099", firestoreHost: "127.0.0.1", firestorePort: 8080 } : undefined;
+const firebase = emulators
+  ? { apiKey: "test-api-key", authDomain: "127.0.0.1", projectId: "demo-akhila-vrutta", appId: "test-app" }
+  : parseConfig(process.env.FIREBASE_WEB_CONFIG);
+const cfg = { firebase, build: sha.slice(0, 7) || "local", ...(emulators ? { emulators } : {}) };
+writeFileSync(`${out}/config.js`, `window.AV_CONFIG=${JSON.stringify(cfg)};\n`);
 console.log(firebase ? `config: project ${firebase.projectId}` : "config: no Firebase (local build)");
