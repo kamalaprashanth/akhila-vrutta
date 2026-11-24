@@ -264,6 +264,27 @@ const report = await f.evaluate(() => {
   advPages(d2, "made-up");
   const morePages = (dx, tag) => { for (const nOn of [false, true]) { prefSet("notify", nOn); page(`${tag} money settings (notify ${nOn})`, () => vMore(), () => N.more.moreHtml(dx, nOn)); } localStorage.removeItem("kpmp.ui.notify"); };
   morePages(d2, "made-up");
+  // Every credit card: billed (this and five earlier statements) and unbilled.
+  const cardPages = (dx, tag) => {
+    const keep = { cardId: S.cardId, cyc: S.cyc, cardTab: S.cardTab, view: S.view };
+    for (const a of live("accounts").filter((a) => a.type === "card")) for (const [tab, cyc] of [["unbilled", 0], ...[0, 1, 2, 3, 4, 5].map((k) => ["billed", k])]) {
+      const st = { cardId: a.id, cyc, cardTab: tab };
+      page(`${tag} card ${a.name} ${tab} ${cyc}`, () => { Object.assign(S, st, { view: "card" }); return vCard(); }, () => N.card.cardHtml(dx, st) ?? "(no card)");
+    }
+    Object.assign(S, keep);
+  };
+  cardPages(d2, "made-up");
+  // Every loan, each tab, with and without the part-payment calculator.
+  const loanPages = (dx, tag) => {
+    const keep = { loanId: S.loanId, loanTab: S.loanTab, lsim: S.lsim, view: S.view };
+    for (const l of live("loans")) for (const tab of ["overview", "schedule", "history"]) for (const sim of [null, { amt: 200000, ym: addM(ymOf(today()), 2), extra: "", mode: "tenure" }, { amt: "", ym: addM(ymOf(today()), 1), extra: 5000, mode: "emi" }, { amt: 150000, ym: "2020-01", extra: 2500, mode: "tenure" }]) {
+      if (sim && tab !== "overview") continue;
+      const st = { loanId: l.id, loanTab: tab, lsim: sim && { ...sim, id: l.id } };
+      page(`${tag} loan ${l.name} ${tab} ${JSON.stringify(sim)}`, () => { Object.assign(S, st, { view: "loan" }); return vLoan(); }, () => N.loan.loanHtml(dx, st) ?? "(no loan)");
+    }
+    Object.assign(S, keep);
+  };
+  loanPages(d2, "made-up");
   sheets(d2, "made-up");
   S.data = real; MEMO = new Map();
   sheets(d, "yours");
@@ -273,6 +294,8 @@ const report = await f.evaluate(() => {
   insPages(d, "yours");
   advPages(d, "yours");
   morePages(d, "yours");
+  cardPages(d, "yours");
+  loanPages(d, "yours");
   Object.assign(S, save); MEMO = new Map();
   // Also the money formats, on awkward amounts.
   for (const r of [0, 0.004, 0.005, -0.5, 0.5, 1.5, 2.5, -2.5, 999.995, 1234.56, -1234.56, 12345678.9, 1e9]) {
@@ -287,4 +310,4 @@ const SHOW = +(process.env.SHOW || 6);
 console.log(`screen parity on ${EXPORT.includes("sample") ? "the made-up sample" : "the real export"}: ${report.n} pages and sheets (${report.txns} transactions)${report.estRounding ? ` · ${report.estRounding} with a total ₹1 apart (half-rupee rounding)` : ""}`);
 if (report.fixedCrash.length) console.log(`  (the old planner crashes on ${report.fixedCrash.length} of these — ${[...new Set(report.fixedCrash.map((l) => l.replace(/^(made-up|yours) /, "")))].join(", ")} — the new page shows them)`);
 if (report.out.length) { console.log(`✗ ${report.out.length} differences:`); for (const x of report.out.slice(0, SHOW)) console.log("  " + x); process.exit(1); }
-console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview, Insights (every tab) the Advisor (page and what Claude is sent) and Money settings are identical to the planner's");
+console.log("✓ Transactions (page, form, split, carry-over, filters, clean-up, bulk) Accounts (every section), Plan (every tab), Overview, Insights (every tab) the Advisor (page and what Claude is sent), Money settings, credit cards and loans are identical to the planner's");

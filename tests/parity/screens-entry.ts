@@ -11,12 +11,14 @@ import * as home from "../../app/modules/money/views/home.ts";
 import * as insights from "../../app/modules/money/views/insights.ts";
 import * as advisor from "../../app/modules/money/views/advisor.ts";
 import * as more from "../../app/modules/money/views/more.ts";
+import * as card from "../../app/modules/money/views/card.ts";
+import * as loan from "../../app/modules/money/views/loan.ts";
 import { setEnv } from "../../app/modules/money/ui/env.ts";
 import { toStored } from "../../app/modules/money/paise.ts";
 import { MONEY_COLLECTIONS } from "../../app/core/store.ts";
 
 (window as unknown as { SCREENS: unknown }).SCREENS = {
-  txlist, txform, txsheets, kit, setEnv, accounts, charts, plan, home, insights, advisor, more,
+  txlist, txform, txsheets, kit, setEnv, accounts, charts, plan, home, insights, advisor, more, card, loan,
   dataFrom(legacy: Record<string, unknown>, today: string) {
     const cols: Record<string, { id: string }[]> = {};
     for (const c of MONEY_COLLECTIONS) cols[c] = ((legacy[c] as { id: string }[]) ?? []).map((r) => toStored(c, r));

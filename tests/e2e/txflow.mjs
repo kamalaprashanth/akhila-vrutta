@@ -163,15 +163,15 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${L} #cx`); await settle();
   ok(!(await sheetUp()), "…and closes");
 
-  // Another tab and back.
-  await f.evaluate(() => { S.cardId = S.data.accounts.find((a) => a.type === "card" && !a.deleted).id; go("card"); }); await p.waitForTimeout(700);
-  ok(await frameShown() && await p.$eval("#moneyView", (e) => e.hidden), "a credit card's page is the planner's");
-  // A sheet on a planner page: full screen, then back to its normal place.
+  // Another tab and back (every money page is drawn by the app now).
+  await p.evaluate(() => { location.hash = "#/money/more"; }); await p.waitForTimeout(700);
+  ok(!(await frameShown()) && /Setup checklist/i.test(await p.textContent("#moneyView #view")), "Money settings is the app's page too");
+  // A planner sheet on an app page: full screen, then the frame hides again.
   await f.evaluate(() => txFilterSheet()); await settle();
-  ok(await p.$eval("#moneyFrame", (e) => e.classList.contains("over") && e.getBoundingClientRect().top === 0), "a planner page's sheet also fills the screen");
+  ok(await p.$eval("#moneyFrame", (e) => e.classList.contains("over") && e.getBoundingClientRect().top === 0), "a planner sheet fills the screen");
   await f.evaluate(() => closeModal()); await settle();
-  ok(await p.$eval("#moneyFrame", (e) => !e.classList.contains("over") && e.getBoundingClientRect().top > 0), "…and the frame goes back under the tabs");
-  ok(await f.evaluate(() => !document.documentElement.classList.contains("avfull")), "…with the planner's page back in place");
+  ok(!(await frameShown()) && await p.$eval("#moneyFrame", (e) => !e.classList.contains("over")), "…and the frame hides again");
+  ok(await f.evaluate(() => !document.documentElement.classList.contains("avfull") && !document.documentElement.classList.contains("avonly")), "…with the planner's page back in place");
 
   // A link from another planner page into Transactions, with its filter.
   await f.evaluate(() => { S.f = { type: "expense", cat: "", acc: "", tag: "", period: "custom", from: "2026-11-02", to: "2026-11-03", q: "" }; go("activity"); }); await p.waitForTimeout(700);

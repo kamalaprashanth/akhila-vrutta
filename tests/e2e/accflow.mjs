@@ -50,10 +50,22 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok((await pressed()) === "banks", "a tile opens its section");
   ok(await p.$eval(V, (e) => e.textContent.includes("Test Bank") && e.textContent.includes("Credit cards")), "banks and cards listed");
 
-  // A card opens the planner's card page; back to Accounts draws it here again.
+  // A card opens its page (drawn here): tabs, earlier statements, Pay bill (the planner's form), back.
   await p.click(`${V} [data-card]`); await p.waitForTimeout(700);
-  ok(await frameShown() && await f.evaluate(() => S.view === "card"), "a card opens its page (still the planner's)");
-  await p.evaluate(() => { location.hash = "#/money/accounts"; }); await p.waitForTimeout(700);
+  ok(!(await frameShown()) && await f.evaluate(() => S.view === "card") && /Credit card/.test(await p.textContent(`${V} .monthbar`)), "a card opens its page (drawn by the app)");
+  if (await p.$(`${V} [data-ct="unbilled"]`)) {
+    await p.click(`${V} [data-ct="unbilled"]`); await settle();
+    ok(await p.$eval(`${V} [data-ct="unbilled"]`, (e) => e.getAttribute("aria-pressed") === "true") && /unbilled since/.test(await p.textContent(V)), "Unbilled tab");
+    await p.click(`${V} [data-ct="billed"]`); await settle();
+    const span = await p.textContent(`${V} .monthbar .m`);
+    await p.click(`${V} [data-cyc="1"]`); await settle();
+    ok((await p.textContent(`${V} .monthbar .m`)) !== span && await p.$eval(`${V} [data-cyc="-1"]`, (e) => !e.disabled), "‹ shows the earlier statement");
+  }
+  await p.click(`${V} [data-ca="pay"]`); await settle();
+  ok(await frameShown() && await p.$eval("#moneyFrame", (e) => e.classList.contains("over")) && /transfer|pay/i.test(await f.textContent("#modal")), "Pay bill opens the planner's form over the page");
+  await f.evaluate(() => closeModal()); await settle();
+  ok(!(await frameShown()) && await f.evaluate(() => S.view === "card"), "…and closes back to the card");
+  await p.click(`${V} .monthbar [data-go="accounts"]`); await p.waitForTimeout(700);
   ok(!(await frameShown()) && (await pressed()) === "banks", "back on Accounts, same section");
 
   // + Add account: the planner's form, over the whole screen.
@@ -72,8 +84,24 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
     await p.click(`${V} [data-po="snow"]`); await settle();
     ok(await p.$eval(`${V} [data-po="snow"]`, (e) => e.getAttribute("aria-pressed") === "true"), "smallest-first order");
   } else ok(false, "the payoff plan shows");
+  // A loan opens its page (drawn here): the part-payment calculator, tabs, a form.
   await p.click(`${V} [data-loan]`); await p.waitForTimeout(700);
-  ok(await frameShown() && await f.evaluate(() => S.view === "loan"), "a loan opens its page (still the planner's)");
+  ok(!(await frameShown()) && await f.evaluate(() => S.view === "loan") && !!(await p.$(`${V} .tiles`)), "a loan opens its page (drawn by the app)");
+  if (await p.$(`${V} #spGo`)) {
+    await p.click(`${V} #spGo`); await settle();
+    ok(!(await p.$(`${V} .simout`)), "Work it out with nothing typed: nothing worked out");
+    await p.fill(`${V} #f_spAmt`, "1,00,000"); await p.click(`${V} #spGo`); await settle();
+    ok(!!(await p.$(`${V} .simout`)) && /Interest saved/.test(await p.textContent(`${V} .simout`)), "a part payment of ₹1,00,000 shows the interest saved");
+    await p.click(`${V} [data-spm="emi"]`); await settle();
+    ok(/New EMI/.test(await p.textContent(`${V} .simout`)) && /^1,?00,?000$/.test(await p.inputValue(`${V} #f_spAmt`)), "keep end date: a new EMI, the amount kept");
+    await p.click(`${V} #spClr`); await settle();
+    ok(!(await p.$(`${V} .simout`)), "Clear");
+  } else ok(false, "the calculator shows");
+  await p.click(`${V} [data-lt="history"]`); await settle();
+  ok(await p.$eval(`${V} [data-lt="history"]`, (e) => e.getAttribute("aria-pressed") === "true") && /History/i.test(await p.textContent(V)), "History tab");
+  await p.click(`${V} [data-la="edit"]`); await settle();
+  ok(await frameShown() && /loan/i.test(await f.textContent("#modal h3")), "Edit opens the planner's loan form");
+  await f.evaluate(() => closeModal()); await settle();
   await p.evaluate(() => { location.hash = "#/money/accounts"; }); await p.waitForTimeout(700);
 
   // Net worth range and the chart's tooltip.
