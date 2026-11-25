@@ -1,0 +1,71 @@
+name: Android setup (one-off)
+# Pushed to the android-setup branch only. Makes the app's signing key inside GitHub (kept in Google Secret
+# Manager, never in the repository), registers the Android app and its key fingerprint with Firebase for
+# Google sign-in, and makes the Capacitor Android project, which is committed afterwards.
+on:
+  push:
+    branches: [android-setup]
+permissions:
+  contents: read
+env:
+  PROJECT: akhila-vrutta
+  FT: npx --yes firebase-tools@14
+  PKG: in.kp.akhilavrutta
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Signing key (made once, kept in Secret Manager)
+        run: |
+          set -e
+          gcloud services enable secretmanager.googleapis.com --project "$PROJECT" || true
+          if gcloud secrets versions access latest --secret android-keystore --project "$PROJECT" > ks.json 2>/dev/null; then
+            echo "::notice::Signing key already in Secret Manager"
+          else
+            P=$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 28)
+            keytool -genkeypair -keystore ks.jks -alias akhila -keyalg RSA -keysize 4096 -validity 36500 \
+              -storepass "$P" -keypass "$P" -dname "CN=Akhila Vrutta, O=KP, L=Bangalore, C=IN" > /dev/null
+            node -e 'const fs=require("fs"); fs.writeFileSync("ks.json", JSON.stringify({ pass: process.argv[1], alias: "akhila", jks: fs.readFileSync("ks.jks").toString("base64") }))' "$P"
+            gcloud secrets create android-keystore --replication-policy=automatic --data-file=ks.json --project "$PROJECT"
+            echo "::notice::Signing key made and stored in Secret Manager (android-keystore)"
+          fi
+          node -e 'const fs=require("fs"), j=JSON.parse(fs.readFileSync("ks.json")); fs.writeFileSync("ks.jks", Buffer.from(j.jks,"base64")); fs.writeFileSync("ks.pass", j.pass)'
+          keytool -list -v -keystore ks.jks -storepass "$(cat ks.pass)" | grep -E "SHA1:|SHA256:" | sed 's/^ *//' | tee sha.txt
+      - name: Android app in Firebase, with the key's fingerprints
+        run: |
+          set -e
+          $FT apps:list ANDROID --project "$PROJECT" --json > apps.json
+          ID=$(node -e 'const j=require("./apps.json"); const a=(j.result||[]).find(x=>x.packageName===process.env.PKG); console.log(a?a.appId:"")')
+          if [ -z "$ID" ]; then
+            $FT apps:create ANDROID "Akhila Vrutta" --package-name "$PKG" --project "$PROJECT" --json > made.json
+            ID=$(node -e 'const j=require("./made.json"); console.log(j.result.appId)')
+          fi
+          echo "Android app: $ID"
+          for H in $(sed -E 's/^SHA(1|256): //' sha.txt | tr -d ':'); do $FT apps:android:sha:create "$ID" "$H" --project "$PROJECT" || true; done
+          $FT apps:android:sha:list "$ID" --project "$PROJECT" || true
+          $FT apps:sdkconfig ANDROID "$ID" --project "$PROJECT" -o gs.json
+          node -e 'const j=require("./gs.json"); const c=j.client[0]; console.log("OAuth clients:", JSON.stringify((c.oauth_client||[]).map(o=>({type:o.client_type,id:o.client_id})))); for (const s of c.services?.appinvite_service?.other_platform_oauth_client||[]) console.log("other:", s.client_type, s.client_id)'
+      - name: Capacitor Android project
+        run: |
+          set -e
+          cd mobile
+          npm init -y > /dev/null
+          npm install --save-dev --no-audit --no-fund @capacitor/cli@latest @capacitor/core@latest @capacitor/android@latest @capacitor/app@latest @capacitor/local-notifications@latest
+          mkdir -p www && echo '<!doctype html><title>Akhila Vrutta</title>' > www/index.html
+          npx cap add android
+          npx cap sync android
+          rm -rf www node_modules android/app/build android/.gradle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile
+          path: mobile
+          include-hidden-files: true
