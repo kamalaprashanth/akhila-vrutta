@@ -3,6 +3,7 @@
 // Run through:  npm run test:cloud   (starts the emulators, needs Java and a build with AV_EMULATORS=1)
 import { chromium } from "playwright";
 import { mkdirSync, readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 
 const PROJECT = "demo-akhila-vrutta";
 const OWNER_UID = "Qc1qDKgHAJgWaYnppeUni1hPxXr1"; // the allowed account in firestore.rules
@@ -232,6 +233,17 @@ try {
   const hbDocs = [...((await api(`${FS}/homes/${home}/habits?pageSize=50`)).body.documents ?? []), ...((await api(`${FS}/homes/${home}/habitLog?pageSize=50`)).body.documents ?? [])];
   const hbPlain = hbDocs.filter((d) => ["Walk 30 min", "habitLog"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
   check(hbDocs.length >= 2 && hbPlain === 0 && hbDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a habit and its tick are in the cloud as ciphertext only (${hbDocs.length} records)`);
+  /* Backup: a full backup downloads (made from the key the cloud keeps), and the weekly switch is saved encrypted */
+  await A.page.goto(`${BASE}/#/settings`);
+  await A.page.waitForSelector("#bkCard #bkDown", { timeout: 20000 });
+  const [bk] = await Promise.all([A.page.waitForEvent("download", { timeout: 30000 }), A.page.click("#bkCard #bkDown")]);
+  const bkText = (await readFile(await bk.path())).toString("utf8");
+  check(JSON.parse(bkText).kind === "akhila-vrutta-backup" && !/Cloud to-do|Walk 30 min/.test(bkText), `a full backup downloads, nothing readable in it (${bk.suggestedFilename()})`);
+  await A.page.click("#bkCard #bkWeekly");
+  await A.page.waitForTimeout(3000);
+  const bkDocs = (await api(`${FS}/homes/${home}/backupLog?pageSize=50`)).body.documents ?? [];
+  check(bkDocs.length >= 2 && bkDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `the backup log and the weekly switch are in the cloud as ciphertext (${bkDocs.length} records)`);
+  await A.page.click("#bkCard #bkWeekly");
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.setInputFiles("#impFile", SAMPLE);
   await A.page.click("#impGo");

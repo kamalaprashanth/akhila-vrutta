@@ -10,6 +10,7 @@ import { fromB64, open, seal, toB64 } from "./crypto.ts";
 import { googleAccess } from "./firebase.ts";
 import { isNative, nativeCall } from "./native.ts";
 import { FILES, type Rec } from "./store.ts";
+import type { BackupDrive } from "./backup.ts";
 
 export interface FileRec extends Rec { drive: string; name: string; mime: string; size: number; iv: string; z?: 0 | 1; owner: { c: string; id: string }; added: number; deleted?: boolean }
 
@@ -57,18 +58,41 @@ const folderId = (): Promise<string> => (folder ??= (async () => {
   return made.id;
 })().catch((e) => { folder = null; throw e; }));
 
+async function uploadTo(parent: string, name: string, bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  const meta = JSON.stringify({ name, parents: [parent], mimeType: "application/octet-stream" });
+  const b = "av" + Math.random().toString(36).slice(2);
+  const body = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${b}\r\nContent-Type: application/octet-stream\r\n\r\n`, bytes, `\r\n--${b}--`]);
+  const r = (await (await call(`${UP}?uploadType=multipart&fields=id`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${b}` }, body })).json()) as { id: string };
+  return r.id;
+}
 const drive: Backend = {
-  async upload(name, bytes) {
-    const meta = JSON.stringify({ name, parents: [await folderId()], mimeType: "application/octet-stream" });
-    const b = "av" + Math.random().toString(36).slice(2);
-    const body = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${b}\r\nContent-Type: application/octet-stream\r\n\r\n`, bytes, `\r\n--${b}--`]);
-    const r = (await (await call(`${UP}?uploadType=multipart&fields=id`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${b}` }, body })).json()) as { id: string };
-    return r.id;
-  },
+  async upload(name, bytes) { return uploadTo(await folderId(), name, bytes); },
   async download(id) { return new Uint8Array(await (await call(`${API}/${encodeURIComponent(id)}?alt=media`)).arrayBuffer()); },
   async remove(id) { await call(`${API}/${encodeURIComponent(id)}`, { method: "DELETE" }).catch((e) => { if (!/404/.test(String(e))) throw e; }); },
 };
 let backend: Backend = drive;
+
+/* ---------- weekly backups: "Akhila Vrutta/Backups" ---------- */
+let bfolder: Promise<string> | null = null;
+const backupsFolder = (): Promise<string> => (bfolder ??= (async () => {
+  const parent = await folderId();
+  const q = encodeURIComponent(`name='Backups' and '${parent}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const found = (await (await call(`${API}?q=${q}&fields=files(id)&spaces=drive`)).json()) as { files: { id: string }[] };
+  if (found.files[0]) return found.files[0].id;
+  return ((await (await call(`${API}?fields=id`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Backups", parents: [parent], mimeType: "application/vnd.google-apps.folder" }) })).json()) as { id: string }).id;
+})().catch((e) => { bfolder = null; throw e; }));
+/** Google Drive for backups. Without a tap, the website can use Drive only if it was allowed this session. */
+export const driveBackups: BackupDrive = {
+  available: () => isNative() || !!(token && Date.now() < token.until),
+  upload: async (name, bytes) => uploadTo(await backupsFolder(), name, bytes),
+  async list() {
+    const q = encodeURIComponent(`'${await backupsFolder()}' in parents and trashed=false`);
+    const j = (await (await call(`${API}?q=${q}&fields=files(id,name,size,createdTime)&orderBy=createdTime desc&pageSize=50&spaces=drive`)).json()) as { files: { id: string; name: string; size?: string; createdTime: string }[] };
+    return j.files.map((f) => ({ id: f.id, name: f.name, size: Number(f.size ?? 0), made: Date.parse(f.createdTime) }));
+  },
+  download: (id) => drive.download(id),
+  remove: (id) => drive.remove(id),
+};
 /** Tests only: keep the ciphertext somewhere else. */
 export const setFileBackend = (b: Backend): void => { backend = b; };
 
@@ -130,7 +154,10 @@ export const canShareFile = (r: FileRec): boolean => {
   try { return !!navigator.canShare?.({ files: [new File([], r.name, { type: r.mime })] }); } catch { return false; }
 };
 /** Saves a decrypted copy: Downloads/Akhila Vrutta on the phone, the browser's downloads elsewhere. Says where. */
-export async function saveCopy(r: FileRec, b: Blob): Promise<string> {
+export const saveCopy = (r: FileRec, b: Blob): Promise<string> => saveBlob(r.name, r.mime, b);
+/** Saves bytes as a file: Downloads/Akhila Vrutta on the phone, the browser's downloads elsewhere. Says where. */
+export async function saveBlob(name: string, mime: string, b: Blob): Promise<string> {
+  const r = { name, mime };
   if (isNative()) {
     const o = await nativeCall<{ folder?: string }>("AkhilaNative", "saveFile", { name: r.name, mime: r.mime, data: await asB64(b) });
     return `Saved to ${(o?.folder ?? "Download/Akhila Vrutta").replace(/^Download\b/, "Downloads")}`;

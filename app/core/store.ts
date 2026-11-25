@@ -18,9 +18,11 @@ export const HOUSEHOLD_COLLECTIONS = ["hhHomes", "hhJobs", "hhDone", "hhApplianc
 /** Files kept encrypted in Google Drive: what they are and where (the vault). */
 export const HABIT_COLLECTIONS = ["habits", "habitLog", "habitPrefs"] as const;
 export const FILES = "files";
+/** When backups were made, and the weekly setting (not itself backed up). */
+export const BACKUP_LOG = "backupLog";
 /** Housekeeping: schema versions and where the data came from. */
 export const META = "meta";
-export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, ...HABIT_COLLECTIONS, FILES, META];
+export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, ...HABIT_COLLECTIONS, FILES, BACKUP_LOG, META];
 /** What a KP Money Planner import replaces (never Household or files). */
 export const IMPORT_SCOPE: readonly string[] = [...MONEY_COLLECTIONS, META];
 

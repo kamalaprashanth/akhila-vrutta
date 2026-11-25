@@ -9,6 +9,7 @@ import { Store } from "./core/store.ts";
 import { hideMoney, startMoney } from "./modules/money/index.ts";
 import { startHousehold } from "./modules/household/index.ts";
 import { startHabits } from "./modules/habits/index.ts";
+import { startBackups } from "./core/backup-auto.ts";
 
 const AUTO_LOCK_MS = 2 * 60 * 1000;
 
@@ -58,7 +59,8 @@ async function boot(): Promise<void> {
     requestAnimationFrame(() => {
       queued = false;
       // Don't redraw under someone typing in a form.
-      if (!document.activeElement?.closest("form, #impArea")) render();
+      // …nor under a backup or restore in progress in Settings.
+      if (!document.activeElement?.closest("form, #impArea, #bkArea") && !document.querySelector("#bkArea > *")) render();
     });
   });
   render();
@@ -67,6 +69,7 @@ async function boot(): Promise<void> {
   startMoney();
   startHousehold();
   startHabits();
+  startBackups();
 
   // The Android app: Back, and locking after a minute away (choosing a file also leaves the app for a moment).
   installNative({ home: "#/home", hint: (t) => toast(t), lockAfterMs: 60 * 1000, lock: () => location.reload(), locks: () => session.mode !== "remember" });

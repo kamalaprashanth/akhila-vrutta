@@ -6,6 +6,7 @@ import { bioCapable, changePassphrase, forgetDevice, MODE_LABEL, setMode, type U
 import { confirmPassphrase } from "../core/lock.ts";
 import { META } from "../core/store.ts";
 import { attachMeter, strength } from "../core/strength.ts";
+import { backupCard, wireBackup } from "./backupcard.ts";
 import { isEncryptedBackup, openOldBackup, parseOldExport, type Parsed } from "./money/import.ts";
 
 const ICON = "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .3-1.5-1.5L17 5l-3-1-1 2h-2l-1-2-3 1 .5 1.8L6 8.3 4 8l-1 3 2 1v0l-2 1 1 3 2-.3 1.5 1.5L7 19l3 1 1-2h2l1 2 3-1-.5-1.8 1.5-1.5 2 .3 1-3z";
@@ -166,7 +167,7 @@ export const settings: Module = {
   icon: ICON,
   render(root) {
     const cfg = config();
-    root.innerHTML = html`${raw(dataCard())}${raw(securityCard())}
+    root.innerHTML = html`${raw(backupCard())}${raw(dataCard())}${raw(securityCard())}
       <section class="card">
         <h2>About this build</h2>
         <dl class="kv">
@@ -176,6 +177,7 @@ export const settings: Module = {
         </dl>
       </section>`;
     void wireImport(root);
+    wireBackup(root);
     void wireSecurity(root);
   },
 };
