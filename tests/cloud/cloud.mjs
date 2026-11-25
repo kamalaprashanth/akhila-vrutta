@@ -244,6 +244,7 @@ try {
   const bkDocs = (await api(`${FS}/homes/${home}/backupLog?pageSize=50`)).body.documents ?? [];
   check(bkDocs.length >= 2 && bkDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `the backup log and the weekly switch are in the cloud as ciphertext (${bkDocs.length} records)`);
   await A.page.click("#bkCard #bkWeekly");
+  await A.page.waitForTimeout(2000);   // its save redraws Settings
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.setInputFiles("#impFile", SAMPLE);
   await A.page.click("#impGo");

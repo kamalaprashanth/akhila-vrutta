@@ -60,7 +60,7 @@ async function boot(): Promise<void> {
       queued = false;
       // Don't redraw under someone typing in a form.
       // …nor under a backup or restore in progress in Settings.
-      if (!document.activeElement?.closest("form, #impArea, #bkArea") && !document.querySelector("#bkArea > *")) render();
+      if (!document.activeElement?.closest("form, #impArea, #bkArea") && !document.querySelector("#bkArea > *, #impArea > *")) render();
     });
   });
   render();
