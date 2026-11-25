@@ -102,6 +102,20 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok(drive.length === 2 && drive.every((b) => b.join() !== png.join() && b.slice(0, 4).join() !== pdf.join()), "Drive holds only ciphertext (no PNG or PDF header)");
   const files = await recs("files");
   ok(files.length === 2 && files.every((f) => f.drive && f.iv && /hh-(photo|invoice)/.test(f.name) && f.owner.c === "hhAppliances"), "each file's name and type are in the encrypted record, not in Drive");
+  // Google's permission window blocked by the browser: the file waits, and "Allow Drive" saves it
+  await p.evaluate(() => { window.BLOCK_ONCE = true; });
+  await p.setInputFiles(`${L} #hhPick`, ["test-results/hh-photo.png"]);
+  await p.waitForSelector(`${L} #hhAllow`, { timeout: 10000 });
+  ok((await p.$$(`${L} [data-file]`)).length === 2, "a blocked permission window leaves the file waiting, with an Allow Drive button");
+  await p.click(`${L} #hhAllow`);
+  await p.waitForFunction(() => document.querySelectorAll("#mvLayer [data-file]").length === 3 && !document.querySelector("#mvLayer #hhAllow"), null, { timeout: 10000 });
+  ok(true, "…tapping it saves the waiting file");
+  const third = (await recs("files")).find((f) => !files.some((g) => g.id === f.id));
+  await p.click(`${L} [data-file="${third.id}"]`); await settle();
+  await p.click(`${L} #dl`); await settle();
+  await p.click(`${L} .sheet .btn.danger, ${L} .sheet .btn.pri`); await settle();
+  await p.waitForFunction(() => document.querySelectorAll("#mvLayer [data-file]").length === 2, null, { timeout: 10000 });
+  ok((await recs("files")).length === 2, "…and a file can be deleted again");
   await p.click(`${L} #sv`); await settle();
   const appl = (await recs("hhAppliances"))[0];
   ok(appl?.name === "Washing machine" && appl.price === 3899000 && appl.warrantyTo === addDays(40) && files.every((f) => f.owner.id === appl.id), "the appliance is saved (₹38,990 as paise), its files with it");

@@ -37,7 +37,9 @@ W.AV_TEST_DEK = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }
 const drive = new Map<string, Uint8Array>();
 W.DRIVE = drive;
 setFileBackend({
-  async upload(_n, b) { const id = "d" + drive.size; drive.set(id, b.slice()); return id; },
+  async upload(_n, b) {
+    if (W.BLOCK_ONCE) { W.BLOCK_ONCE = false; throw Object.assign(new Error("Firebase: Error (auth/popup-blocked)."), { code: "auth/popup-blocked" }); }
+    const id = "d" + drive.size; drive.set(id, b.slice()); return id; },
   async download(id) { const b = drive.get(id); if (!b) throw new Error("404"); return b.slice(); },
   async remove(id) { drive.delete(id); },
 });

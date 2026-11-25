@@ -1,7 +1,7 @@
 /** Household's forms and sheets (Money's sheet kit, so they look and work the same). */
 import { html, raw } from "../../core/dom.ts";
 import type { Rec } from "../../core/store.ts";
-import { addFile, fileSize, filesOf, readFile, removeFile, type FileRec } from "../../core/files.ts";
+import { addFile, connectDrive, fileSize, filesOf, isPopupBlocked, needsDriveTap, readFile, removeFile, type FileRec } from "../../core/files.ts";
 import { accOpts, askConfirm, catOpts, closeModal, field, openSheet, toast, val } from "../money/ui/kit.ts";
 import { pdfCanvases } from "../money/ui/pdf.ts";
 import { moneyNow, moneyWrite } from "../money/index.ts";
@@ -120,9 +120,10 @@ export function doneForm(jobId: string): void {
 }
 
 /* ---------- appliances ---------- */
-export function applianceForm(id?: string, home0?: string): void {
-  if (!id && needHome()) return;
-  const r = reader(), a0 = id ? r.get<Appliance>("hhAppliances", id) : undefined, isNew = !a0, t = today();
+/** `again`: coming back from a file, with what was typed so far (the appliance may not be saved yet). */
+export function applianceForm(id?: string, home0?: string, again?: { draft: Appliance; isNew: boolean; added: FileRec[] }): void {
+  if (!id && !again && needHome()) return;
+  const r = reader(), a0 = again?.draft ?? (id ? r.get<Appliance>("hhAppliances", id) : undefined), isNew = again ? again.isNew : !a0, t = today();
   const a: Appliance = a0 ?? ({ id: uid(), home: home0 || homes(r)[0]!.id, name: "" } as Appliance);
   const owner = { c: "hhAppliances", id: a.id }, hist = live<Done>(r, "hhDone").filter((x) => x.applianceId === a.id).sort((p, q) => q.date.localeCompare(p.date));
   openSheet(isNew ? "Add appliance" : a.name, html`<div class="grid2">${raw(field(["aname", "What", "text", { value: a.name, ph: "e.g. Washing machine" }]))}${raw(field(["ahome", "Home", "select", { value: a.home, options: homeOpts() }]))}</div>
@@ -134,20 +135,43 @@ export function applianceForm(id?: string, home0?: string): void {
       <input type="file" id="hhPick" accept="image/*,application/pdf" multiple hidden><input type="file" id="hhCam" accept="image/*" capture="environment" hidden></div>
     ${raw(btns(isNew))}
     ${raw(isNew ? "" : html`<div class="btns" style="margin-top:4px"><button class="btn sm" type="button" id="svcLog">Log a service</button></div>`)}${raw(historyList(hist))}`, (s) => {
-    const added: FileRec[] = [];
+    const added: FileRec[] = again?.added ?? [];
+    /** What the form says now, for coming back to it after looking at a file. */
+    const draft = (): Appliance => {
+      const o: Appliance = { ...a, name: val("aname"), home: val("ahome") || a.home };
+      for (const [k, f] of [["model", "amodel"], ["bought", "abought"], ["warrantyTo", "awarr"], ["amcTo", "aamc"], ["service", "asvc"], ["note", "anote"]] as const) { if (val(f)) o[k] = val(f); else delete o[k]; }
+      const p = paise(val("aprice")); if (p) o.price = p; else delete o.price;
+      return o;
+    };
+    let waiting: File[] = [];   // files read but not saved: Google's permission popup was blocked
     const tiles = (): void => {
       const fs = filesOf(owner), busy = s.querySelector<HTMLElement>("#hhFiles")?.dataset.busy;
       $(s, "hhFiles").innerHTML = html`${fs.map((f) => raw(html`<button type="button" class="hhfile" data-file="${f.id}"><span class="ic">${f.mime.startsWith("image/") ? "🖼" : "📄"}</span><span class="nm">${f.name}</span><span class="sz">${fileSize(f.size)}</span></button>`))}
-        ${raw(busy ? html`<span class="hhfile busy"><span class="nm">${busy}</span></span>` : "")}<button type="button" class="hhfile add" id="hhAddF"><span class="ic">＋</span><span class="nm">Add file</span></button><button type="button" class="hhfile add" id="hhAddC"><span class="ic">📷</span><span class="nm">Camera</span></button>`;
-      $(s, "hhAddF").onclick = () => $(s, "hhPick").click();
-      $(s, "hhAddC").onclick = () => $(s, "hhCam").click();
-      s.querySelectorAll<HTMLElement>("[data-file]").forEach((b) => { b.onclick = () => { const f = filesOf(owner).find((x) => x.id === b.dataset.file); if (f) viewFile(f, () => applianceForm(a.id)); }; });
+        ${raw(busy ? html`<span class="hhfile busy"><span class="nm">${busy}</span></span>` : "")}${raw(waiting.length ? html`<button type="button" class="hhfile add hhallow" id="hhAllow"><span class="ic">🔑</span><span class="nm">Allow Drive</span><span class="sz">then ${waiting.length} file${waiting.length === 1 ? "" : "s"} save</span></button>` : "")}<button type="button" class="hhfile add" id="hhAddF"><span class="ic">＋</span><span class="nm">Add file</span></button><button type="button" class="hhfile add" id="hhAddC"><span class="ic">📷</span><span class="nm">Camera</span></button>`;
+      // the first file of a visit asks Google for Drive access straight from the tap, then opens the picker
+      const pick = (id: string) => async (): Promise<void> => {
+        if (needsDriveTap()) {
+          try { await connectDrive(); } catch (e) { toast(isPopupBlocked(e) ? "Your browser blocked Google's window. Allow pop-ups for this site, then tap again." : `Google Drive access wasn't given (${e instanceof Error ? e.message : "error"}).`); return; }
+          toast("Google Drive is connected. If the file chooser didn't open, tap again.");
+        }
+        $(s, id).click();
+      };
+      $(s, "hhAddF").onclick = () => void pick("hhPick")();
+      $(s, "hhAddC").onclick = () => void pick("hhCam")();
+      s.querySelector<HTMLElement>("#hhAllow")?.addEventListener("click", () => void (async () => {
+        try { await connectDrive(); } catch (e) { toast(isPopupBlocked(e) ? "Your browser blocked Google's window. Allow pop-ups for this site, then tap again." : `Google Drive access wasn't given (${e instanceof Error ? e.message : "error"}).`); return; }
+        const again = waiting; waiting = []; await upload(again);
+      })());
+      s.querySelectorAll<HTMLElement>("[data-file]").forEach((b) => { b.onclick = () => { const f = filesOf(owner).find((x) => x.id === b.dataset.file); if (f) { const st = { draft: draft(), isNew, added }; viewFile(f, () => applianceForm(a.id, undefined, st)); } }; });
     };
-    const upload = async (list: FileList | null): Promise<void> => {
+    const upload = async (list: FileList | File[] | null): Promise<void> => {
       const fl = [...(list ?? [])]; if (!fl.length) return;
       for (const [i, f] of fl.entries()) {
         $(s, "hhFiles").dataset.busy = `Encrypting and saving ${fl.length > 1 ? `${i + 1} of ${fl.length}` : f.name}…`; tiles();
-        try { added.push(await addFile(owner, f)); } catch (e) { toast(`Couldn't save ${f.name}: ${e instanceof Error ? e.message : "error"}`); }
+        try { added.push(await addFile(owner, f)); } catch (e) {
+          if (isPopupBlocked(e)) { waiting.push(...fl.slice(i)); toast("Google needs your OK to use Drive: tap Allow Drive."); break; }
+          toast(`Couldn't save ${f.name}: ${e instanceof Error ? e.message : "error"}`);
+        }
       }
       delete $(s, "hhFiles").dataset.busy; tiles();
     };
@@ -156,9 +180,7 @@ export function applianceForm(id?: string, home0?: string): void {
     $(s, "cx").onclick = () => { closeModal(); if (isNew) for (const f of added) void removeFile(f); };
     $(s, "sv").onclick = () => {
       const name = val("aname"); if (!name) return toast("Say what it is, e.g. Washing machine.");
-      const o: Rec = { ...a, name, home: val("ahome") };
-      for (const [k, f] of [["model", "amodel"], ["bought", "abought"], ["warrantyTo", "awarr"], ["amcTo", "aamc"], ["service", "asvc"], ["note", "anote"]] as const) { if (val(f)) o[k] = val(f); else delete o[k]; }
-      const p = paise(val("aprice")); if (p) o.price = p; else delete o.price;
+      const o = draft() as Rec;
       closeModal(); hhWrite([{ c: "hhAppliances", r: o }]); toast(isNew ? "Appliance added" : "Saved");
     };
     s.querySelector<HTMLElement>("#dl")?.addEventListener("click", () => askConfirm(`Remove "${a.name}" and its ${filesOf(owner).length} file(s) from Google Drive?`, "Remove", () => { for (const f of filesOf(owner)) void removeFile(f); hhWrite([{ c: "hhAppliances", id: a.id, r: null }]); }));

@@ -8,6 +8,7 @@
 import { ctx } from "./app.ts";
 import { fromB64, open, seal, toB64 } from "./crypto.ts";
 import { googleAccess } from "./firebase.ts";
+import { isNative } from "./native.ts";
 import { FILES, type Rec } from "./store.ts";
 
 export interface FileRec extends Rec { drive: string; name: string; mime: string; size: number; iv: string; z?: 0 | 1; owner: { c: string; id: string }; added: number; deleted?: boolean }
@@ -70,6 +71,15 @@ const drive: Backend = {
 let backend: Backend = drive;
 /** Tests only: keep the ciphertext somewhere else. */
 export const setFileBackend = (b: Backend): void => { backend = b; };
+
+/**
+ * On the web, Google's permission popup may only open straight from a tap; after a file has been read and
+ * encrypted it is too late and the browser blocks it. So the form asks for access from the tap itself
+ * when it isn't there yet (needsDriveTap), and offers a button if it was blocked anyway.
+ */
+export const needsDriveTap = (): boolean => backend === drive && !isNative() && !(token && Date.now() < token.until);
+export const connectDrive = async (): Promise<void> => { if (backend === drive) await auth(); };
+export const isPopupBlocked = (e: unknown): boolean => /popup-blocked|popup_blocked/i.test(String((e as { code?: string })?.code ?? "") + String((e as Error)?.message ?? ""));
 
 const dek = (): CryptoKey => {
   const k = (ctx.session as { dek?: CryptoKey } | null)?.dek ?? (window as unknown as { AV_TEST_DEK?: CryptoKey }).AV_TEST_DEK;
