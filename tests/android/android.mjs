@@ -1,9 +1,9 @@
-// The Android app on an emulator (CI). Drives its WebView over Chrome DevTools (debug builds only).
+// The Android app on an emulator (CI). Drives its WebView through Playwright's Android support (debug builds only).
 //   node tests/android/android.mjs test <test.apk>   Money test page: native plugins, pages, reminders, Back, auto-lock
 //   node tests/android/android.mjs app  <app.apk>    the real app: opens to the sign-in screen with its own Firebase SDK
 import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
-import { chromium } from "playwright";
+import { _android } from "playwright";
 
 const [mode, apk] = process.argv.slice(2);
 const PKG = "in.kp.akhilavrutta";
@@ -17,26 +17,15 @@ async function launch() {
   adb("shell", "am", "start", "-W", "-n", `${PKG}/.MainActivity`);
   return connect();
 }
+// Playwright's Android support finds the app's WebView through adb and gives a page for it.
+let device = null;
 async function connect() {
-  let sock = "";
-  for (let i = 0; i < 60 && !sock; i++) {
-    const pid = (() => { try { return adb("shell", "pidof", PKG); } catch { return ""; } })();
-    if (pid) sock = (adb("shell", "cat", "/proc/net/unix").match(new RegExp(`@(webview_devtools_remote_${pid.split(" ")[0]})`)) ?? [])[1] ?? "";
-    if (!sock) await sleep(1000);
-  }
-  if (!sock) throw new Error("the app's WebView didn't open for debugging");
-  try { adb("forward", "--remove", "tcp:9222"); } catch { /* none */ }
-  adb("forward", "tcp:9222", `localabstract:${sock}`);
-  for (let i = 0; i < 30; i++) {
-    try {
-      const b = await chromium.connectOverCDP("http://127.0.0.1:9222");
-      const p = b.contexts()[0]?.pages().find((x) => x.url().startsWith("https://localhost"));
-      if (p) { await p.waitForLoadState(); return { b, p }; }
-      await b.close();
-    } catch { /* not ready */ }
-    await sleep(1000);
-  }
-  throw new Error("couldn't reach the app's page");
+  device ??= (await _android.devices())[0];
+  if (!device) throw new Error("no emulator found");
+  const wv = await device.webView({ pkg: PKG }, { timeout: 60000 });
+  const p = await wv.page();
+  await p.waitForLoadState();
+  return { b: { close: async () => {} }, p };
 }
 const running = () => { try { return !!adb("shell", "pidof", PKG); } catch { return false; } };
 const back = () => adb("shell", "input", "keyevent", "4");
