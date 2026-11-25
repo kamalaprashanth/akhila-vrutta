@@ -1,6 +1,7 @@
 /** The shell: unlock, then header, tab bar and routing between modules. */
 import { MODULES } from "./modules/pages.ts";
-import { html, raw, $ } from "./core/dom.ts";
+import { html, raw, $, toast } from "./core/dom.ts";
+import { installNative, isNative } from "./core/native.ts";
 import { config } from "./core/firebase.ts";
 import { ctx } from "./core/app.ts";
 import { closeLock, lockProgress, unlock } from "./core/lock.ts";
@@ -61,6 +62,9 @@ async function boot(): Promise<void> {
   render();
   closeLock();
 
+  // The Android app: Back, and locking after a minute away (choosing a file also leaves the app for a moment).
+  installNative({ home: "#/home", hint: (t) => toast(t), lockAfterMs: 60 * 1000, lock: () => location.reload(), locks: () => session.mode !== "remember" });
+  if (isNative()) return;
   let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }

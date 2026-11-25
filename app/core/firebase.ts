@@ -4,8 +4,12 @@
  * from the FIREBASE_WEB_CONFIG repository variable.
  */
 
+import { isNative, nativeCall } from "./native.ts";
+
 const SDK = "10.14.1";
-const cdn = (m: string) => `https://www.gstatic.com/firebasejs/${SDK}/firebase-${m}.js`;
+/** The Android app carries the same SDK files inside it (config.sdkBase), so it opens offline. */
+const cdn = (m: string) => `${config().sdkBase ?? `https://www.gstatic.com/firebasejs/${SDK}`}/firebase-${m}.js`;
+export const FIREBASE_SDK = SDK;
 
 export interface FirebaseWebConfig {
   apiKey: string;
@@ -19,6 +23,9 @@ export interface AppConfig {
   firebase: FirebaseWebConfig | null;
   /** Commit the build came from, shown in Settings. */
   build: string;
+  /** The Android app: where its own copy of the Firebase SDK is, and the web OAuth client for Google sign-in. */
+  sdkBase?: string;
+  googleClientId?: string;
   /** Test builds only: talk to the local Firebase emulators instead of the cloud. */
   emulators?: { auth: string; firestoreHost: string; firestorePort: number; functionsHost?: string; functionsPort?: number };
 }
@@ -124,6 +131,16 @@ export async function signIn(): Promise<SignedInUser | null> {
     // Test builds sign in a prepared test account; Google's popup can't run in automated tests.
     const who = window.AV_TEST_USER ?? "owner";
     const r = (await fb.authMod.signInWithEmailAndPassword!(fb.auth, `${who}@test.local`, "test-password-123")) as { user: { uid: string } };
+    current = { uid: r.user.uid };
+    return current;
+  }
+  if (isNative()) {
+    // Google blocks its sign-in page inside apps: Android's own account picker gives an ID token instead.
+    const cid = config().googleClientId;
+    if (!cid) throw new Error("This app build has no Google sign-in client.");
+    const { idToken } = await nativeCall<{ idToken: string }>("AkhilaNative", "googleSignIn", { serverClientId: cid });
+    const cred = (fb.authMod.GoogleAuthProvider as unknown as { credential(id: string): unknown }).credential(idToken);
+    const r = (await fb.authMod.signInWithCredential!(fb.auth, cred)) as { user: { uid: string } };
     current = { uid: r.user.uid };
     return current;
   }

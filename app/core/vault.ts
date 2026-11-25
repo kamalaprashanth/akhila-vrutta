@@ -11,6 +11,7 @@
  *   bioDek   the data key wrapped by the fingerprint secret   (mode "bio")
  *   dek      the data key as a non-extractable CryptoKey     (mode "remember")
  */
+import { isNative, nativeCall } from "./native.ts";
 import { aesKey, fromB64, open, rnd, seal, toB64, unwrapWithPass, wrapWithPass, type PassWrap, type Sealed } from "./crypto.ts";
 import { IDB } from "./idb.ts";
 import { currentUser, initFirebase, signIn, type Fb } from "./firebase.ts";
@@ -106,6 +107,7 @@ export async function changePassphrase(s: Session, oldPass: string, newPass: str
 /* ---------- fingerprint (WebAuthn PRF) ---------- */
 
 export const bioCapable = async (): Promise<boolean> => {
+  if (isNative()) return nativeCall<{ available: boolean }>("AkhilaNative", "bioAvailable").then((r) => r.available, () => false);
   try {
     return !!window.PublicKeyCredential && (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
   } catch {
@@ -130,7 +132,29 @@ async function prfSecret(credId: string, prfSalt: string): Promise<Uint8Array<Ar
   return new Uint8Array(r.results.first);
 }
 
+/* The Android app: a 32-byte secret kept under a key in the phone's secure hardware that only a strong
+   fingerprint opens, and that Android deletes when a new fingerprint is added. It wraps the data key the
+   same way the WebAuthn secret does on the web. */
+const ANDROID = "android-keystore";
+async function nativeSecret(method: "bioEnroll" | "bioSecret"): Promise<Uint8Array<ArrayBuffer>> {
+  try {
+    const { secret } = await nativeCall<{ secret: string }>("AkhilaNative", method);
+    return fromB64(secret);
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "cancelled") throw Object.assign(new Error("cancelled"), { name: "NotAllowedError" });
+    if (code === "changed") throw Object.assign(new Error("A fingerprint was added to this phone, so fingerprint unlock was switched off. Enter your passphrase, then turn it on again in Settings."), { name: "BioChanged" });
+    throw e;
+  }
+}
+
 async function bioEnroll(dekRaw: Uint8Array<ArrayBuffer>): Promise<{ credId: string; prfSalt: string }> {
+  if (isNative()) {
+    const secret = await nativeSecret("bioEnroll");
+    await IDB.set("bioDek", await seal(await aesKey(secret), dekRaw, "dek"));
+    secret.fill(0);
+    return { credId: ANDROID, prfSalt: ANDROID };
+  }
   const salt = rnd(32);
   const c = (await navigator.credentials.create({
     publicKey: {
@@ -167,6 +191,7 @@ export async function setMode(dev: Omit<Device, "mode">, mode: UnlockMode, dekRa
     await IDB.del("dek");
     await IDB.del("bioDek");
   }
+  if (mode !== "bio" && isNative()) await nativeCall("AkhilaNative", "bioForget").catch(() => {});
   await IDB.set("device", next);
   return next;
 }
@@ -179,7 +204,7 @@ export async function unlockBio(dev: Device): Promise<CryptoKey> {
   if (!dev.credId || !dev.prfSalt) throw new Error("Fingerprint isn't set up on this device.");
   const wrapped = await IDB.get<Sealed>("bioDek");
   if (!wrapped) throw new Error("Fingerprint isn't set up on this device.");
-  const secret = await prfSecret(dev.credId, dev.prfSalt);
+  const secret = dev.credId === ANDROID ? await nativeSecret("bioSecret") : await prfSecret(dev.credId, dev.prfSalt);
   const raw = await open(await aesKey(secret), wrapped, "dek");
   secret.fill(0);
   const key = await aesKey(raw);

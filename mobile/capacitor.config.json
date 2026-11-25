@@ -2,6 +2,7 @@
   "appId": "in.kp.akhilavrutta",
   "appName": "Akhila Vrutta",
   "webDir": "www",
-  "android": { "allowMixedContent": false, "captureInput": true, "webContentsDebuggingEnabled": false },
-  "server": { "androidScheme": "https" }
+  "android": { "allowMixedContent": false },
+  "server": { "androidScheme": "https" },
+  "plugins": { "LocalNotifications": { "iconColor": "#0e5e4c" } }
 }

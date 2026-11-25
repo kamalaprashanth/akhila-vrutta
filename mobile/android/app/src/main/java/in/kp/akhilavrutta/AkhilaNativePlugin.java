@@ -1,0 +1,183 @@
+package in.kp.akhilavrutta;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.Build;
+import android.os.CancellationSignal;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyPermanentlyInvalidatedException;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
+
+import androidx.annotation.NonNull;
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.core.content.ContextCompat;
+import androidx.credentials.Credential;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.GetCredentialCancellationException;
+import androidx.credentials.exceptions.GetCredentialException;
+import androidx.fragment.app.FragmentActivity;
+
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
+
+import java.security.KeyStore;
+import java.security.SecureRandom;
+import java.util.concurrent.Executor;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+
+/**
+ * Akhila Vrutta's own native side.
+ *  googleSignIn  Android's Google account picker (Credential Manager) gives a Google ID token, which the web
+ *                code turns into a Firebase sign-in. Google doesn't allow its sign-in page inside an app.
+ *  bio*          a 32-byte secret kept encrypted under an Android Keystore key that only a strong fingerprint
+ *                opens (never the phone's PIN), and that Android deletes when a fingerprint is added. The web
+ *                code wraps the data key with this secret; the secret itself never leaves memory unencrypted.
+ */
+@CapacitorPlugin(name = "AkhilaNative")
+public class AkhilaNativePlugin extends Plugin {
+    private static final String KEY = "akhila_bio_v1";
+    private static final String PREFS = "akhila_bio";
+    private static final int STRONG = BiometricManager.Authenticators.BIOMETRIC_STRONG;
+
+    /* ---------- Google sign-in ---------- */
+
+    @PluginMethod
+    public void googleSignIn(PluginCall call) {
+        String clientId = call.getString("serverClientId");
+        if (clientId == null || clientId.isEmpty()) { call.reject("No Google client id", "config"); return; }
+        GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder(clientId).build();
+        GetCredentialRequest request = new GetCredentialRequest.Builder().addCredentialOption(option).build();
+        CredentialManager cm = CredentialManager.create(getContext());
+        cm.getCredentialAsync(getActivity(), request, new CancellationSignal(), ContextCompat.getMainExecutor(getContext()),
+            new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                @Override public void onResult(GetCredentialResponse r) {
+                    Credential c = r.getCredential();
+                    if (c instanceof CustomCredential && GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(c.getType())) {
+                        try {
+                            GoogleIdTokenCredential g = GoogleIdTokenCredential.createFrom(c.getData());
+                            JSObject o = new JSObject();
+                            o.put("idToken", g.getIdToken());
+                            call.resolve(o);
+                        } catch (Exception e) { call.reject("Couldn't read the Google sign-in", "error", e); }
+                    } else call.reject("Unexpected sign-in type", "error");
+                }
+                @Override public void onError(@NonNull GetCredentialException e) {
+                    call.reject(e.getMessage() == null ? "Sign-in didn't finish" : e.getMessage(), e instanceof GetCredentialCancellationException ? "cancelled" : "error");
+                }
+            });
+    }
+
+    /* ---------- fingerprint key ---------- */
+
+    @PluginMethod
+    public void bioAvailable(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("available", BiometricManager.from(getContext()).canAuthenticate(STRONG) == BiometricManager.BIOMETRIC_SUCCESS);
+        call.resolve(o);
+    }
+
+    private SharedPreferences prefs() { return getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
+
+    private static KeyStore keystore() throws Exception { KeyStore ks = KeyStore.getInstance("AndroidKeyStore"); ks.load(null); return ks; }
+
+    private static SecretKey newKey() throws Exception {
+        KeyStore ks = keystore();
+        if (ks.containsAlias(KEY)) ks.deleteEntry(KEY);
+        KeyGenParameterSpec.Builder b = new KeyGenParameterSpec.Builder(KEY, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .setUserAuthenticationRequired(true)
+            .setInvalidatedByBiometricEnrollment(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) b.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG);
+        KeyGenerator kg = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        kg.init(b.build());
+        return kg.generateKey();
+    }
+
+    private void forget() {
+        try { keystore().deleteEntry(KEY); } catch (Exception ignored) { }
+        prefs().edit().clear().apply();
+    }
+
+    private interface OnCipher { void run(Cipher c) throws Exception; }
+
+    private void prompt(PluginCall call, Cipher cipher, String subtitle, OnCipher done) {
+        getActivity().runOnUiThread(() -> {
+            Executor ex = ContextCompat.getMainExecutor(getContext());
+            BiometricPrompt bp = new BiometricPrompt((FragmentActivity) getActivity(), ex, new BiometricPrompt.AuthenticationCallback() {
+                @Override public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult r) {
+                    try { done.run(r.getCryptoObject().getCipher()); } catch (Exception e) { call.reject("Fingerprint unlock failed", "error", e); }
+                }
+                @Override public void onAuthenticationError(int code, @NonNull CharSequence msg) {
+                    boolean cancel = code == BiometricPrompt.ERROR_NEGATIVE_BUTTON || code == BiometricPrompt.ERROR_USER_CANCELED || code == BiometricPrompt.ERROR_CANCELED;
+                    call.reject(msg.toString(), cancel ? "cancelled" : "error");
+                }
+            });
+            BiometricPrompt.PromptInfo info = new BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Unlock Akhila Vrutta").setSubtitle(subtitle)
+                .setNegativeButtonText("Use passphrase").setAllowedAuthenticators(STRONG).build();
+            bp.authenticate(info, new BiometricPrompt.CryptoObject(cipher));
+        });
+    }
+
+    /** Makes the key and the secret (after a fingerprint) and returns the secret. */
+    @PluginMethod
+    public void bioEnroll(PluginCall call) {
+        try {
+            Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+            c.init(Cipher.ENCRYPT_MODE, newKey());
+            prompt(call, c, "Touch the sensor to turn on fingerprint unlock", (ci) -> {
+                byte[] secret = new byte[32];
+                new SecureRandom().nextBytes(secret);
+                byte[] ct = ci.doFinal(secret);
+                prefs().edit().putString("iv", b64(ci.getIV())).putString("ct", b64(ct)).apply();
+                JSObject o = new JSObject();
+                o.put("secret", b64(secret));
+                java.util.Arrays.fill(secret, (byte) 0);
+                call.resolve(o);
+            });
+        } catch (Exception e) { call.reject("Fingerprint unlock can't be set up on this phone", "error", e); }
+    }
+
+    /** Asks for a fingerprint and returns the secret. "changed": a fingerprint was added, the key is gone. */
+    @PluginMethod
+    public void bioSecret(PluginCall call) {
+        String iv = prefs().getString("iv", null), ct = prefs().getString("ct", null);
+        try {
+            SecretKey k = (SecretKey) keystore().getKey(KEY, null);
+            if (k == null || iv == null || ct == null) { forget(); call.reject("Fingerprint isn't set up on this phone", "missing"); return; }
+            Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+            c.init(Cipher.DECRYPT_MODE, k, new GCMParameterSpec(128, unb64(iv)));
+            prompt(call, c, "Touch the sensor", (ci) -> {
+                JSObject o = new JSObject();
+                o.put("secret", b64(ci.doFinal(unb64(ct))));
+                call.resolve(o);
+            });
+        } catch (KeyPermanentlyInvalidatedException e) {
+            forget();
+            call.reject("A fingerprint was added to this phone", "changed");
+        } catch (Exception e) { call.reject("Fingerprint unlock failed", "error", e); }
+    }
+
+    @PluginMethod
+    public void bioForget(PluginCall call) { forget(); call.resolve(); }
+
+    private static String b64(byte[] b) { return Base64.encodeToString(b, Base64.NO_WRAP); }
+    private static byte[] unb64(String s) { return Base64.decode(s, Base64.NO_WRAP); }
+}

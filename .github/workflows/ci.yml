@@ -62,6 +62,94 @@ jobs:
           path: test-results
           if-no-files-found: ignore
 
+  android:
+    # The Android app: built from this commit's site, tested on an emulator; on main, signed and attached
+    # to a GitHub release for installing on the phone.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: The site, as the app carries it
+        run: AV_MOBILE=1 GOOGLE_WEB_CLIENT_ID="$(node -p 'require("./mobile/google-client.json").webClientId')" node scripts/build.mjs
+        env:
+          FIREBASE_WEB_CONFIG: ${{ vars.FIREBASE_WEB_CONFIG }}
+          AUTH_DOMAIN: kp-akhila-vrutta.web.app
+      - name: Capacitor and the app icon
+        run: |
+          node tests/android/testpage.mjs build-android-test
+          (cd mobile && npm ci --no-audit --no-fund)
+          node mobile/prepare.mjs build-android-test --icons
+          (cd mobile && npx --yes @capacitor/assets@3 generate --android --iconBackgroundColor '#f7f2e8' --splashBackgroundColor '#f7f2e8' --splashBackgroundColorDark '#10201b')
+      - name: Test app (Money test page with made-up data)
+        run: |
+          node mobile/prepare.mjs build-android-test
+          (cd mobile && npx cap sync android && cd android && ./gradlew --no-daemon -q assembleDebug)
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk test.apk
+      - name: The app (debug, for the emulator)
+        run: |
+          node mobile/prepare.mjs dist
+          (cd mobile && npx cap sync android && cd android && ./gradlew --no-daemon -q assembleDebug)
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk app-debug.apk
+      - name: Emulator access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: On an Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: node tests/android/android.mjs test test.apk && node tests/android/android.mjs app app-debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-android
+          path: test-results
+          if-no-files-found: ignore
+      - name: Signing key
+        id: key
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
+        run: |
+          echo "$SA" > "$RUNNER_TEMP/sa.json"
+          gcloud auth activate-service-account --key-file "$RUNNER_TEMP/sa.json" -q
+          if ! gcloud secrets versions access latest --secret android-keystore --project "$PROJECT" > "$RUNNER_TEMP/ks.json"; then
+            echo "::warning title=Android::No signing key in Secret Manager yet, so no APK release"; echo "ok=0" >> "$GITHUB_OUTPUT"; exit 0; fi
+          node -e 'const fs=require("fs"), j=JSON.parse(fs.readFileSync(process.argv[1])); fs.writeFileSync(process.argv[2], Buffer.from(j.jks,"base64")); console.log("::add-mask::"+j.pass); fs.appendFileSync(process.env.GITHUB_ENV, "AV_KEYSTORE_PASS="+j.pass+"\n")' "$RUNNER_TEMP/ks.json" "$RUNNER_TEMP/ks.jks"
+          rm "$RUNNER_TEMP/ks.json" "$RUNNER_TEMP/sa.json"
+          echo "AV_KEYSTORE=$RUNNER_TEMP/ks.jks" >> "$GITHUB_ENV"
+          echo "ok=1" >> "$GITHUB_OUTPUT"
+      - name: Signed APK, attached to a GitHub release
+        if: steps.key.outputs.ok == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AV_VERSION_CODE: ${{ github.run_number }}
+          AV_VERSION_NAME: 1.${{ github.run_number }} (${{ github.sha }})
+        run: |
+          (cd mobile/android && ./gradlew --no-daemon -q assembleRelease)
+          APK=mobile/android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --print-certs "$APK" | grep -i "SHA-256 digest" | head -1
+          cp "$APK" "akhila-vrutta-1.${{ github.run_number }}.apk"
+          gh release create "android-1.${{ github.run_number }}" "akhila-vrutta-1.${{ github.run_number }}.apk" \
+            --title "Akhila Vrutta for Android 1.${{ github.run_number }}" --target "${{ github.sha }}" \
+            --notes "Open this page on the phone and tap the .apk to install (it updates the installed app). Built from ${{ github.sha }}."
+          rm -f "$AV_KEYSTORE"
+
   functions:
     # Advisor (askClaude) and price updates. Separate from the site release, so a missing key never blocks it.
     needs: check

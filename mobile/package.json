@@ -1,0 +1,12 @@
+{
+  "name": "akhila-vrutta-android",
+  "private": true,
+  "description": "The Android app (Capacitor). Build-time only: the app itself ships no npm package.",
+  "devDependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/local-notifications": "^8.3.1"
+  }
+}

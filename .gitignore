@@ -7,3 +7,5 @@ dist-planner/
 test-results/
 functions/node_modules/
 functions/.secret.local
+build-android-test/
+*.apk

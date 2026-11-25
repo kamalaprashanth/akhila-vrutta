@@ -16,7 +16,7 @@ import { planPage } from "./views/plan.ts";
 import { homePage } from "./views/home.ts";
 import { insightsPage } from "./views/insights.ts";
 import { advisorPage, setAsk } from "./views/advisor.ts";
-import { morePage } from "./views/more.ts";
+import { morePage, reminderItems } from "./views/more.ts";
 import { cardPage } from "./views/card.ts";
 import { loanPage } from "./views/loan.ts";
 import { epfPage } from "./views/epf.ts";
@@ -30,7 +30,9 @@ import { txFilterSheet } from "./ui/txsheets.ts";
 import { pxLine, pxRefresh } from "./ui/prices.ts";
 import { maybeNotify, plannerData } from "./ui/dataio.ts";
 import { autoEntries } from "./ui/auto.ts";
-import { closeModal, ensureLayer, onSheet, toast as kitToast } from "./ui/kit.ts";
+import { closeModal, ensureLayer, onSheet, sheetOpen, toast as kitToast } from "./ui/kit.ts";
+import { schedulePhone } from "./ui/phone.ts";
+import { notePage, onBackClose } from "../../core/native.ts";
 import { prefGet, prefSet, setEnv, uid, type WriteOp as MoneyWrite } from "./ui/env.ts";
 import { txnForm } from "./ui/txform.ts";
 import { mainAcc } from "./calc/forecast.ts";
@@ -76,6 +78,7 @@ function go(v0: string): void {
   });
   const want = `#/money/${v}`;
   if (location.hash.startsWith("#/money") && location.hash !== want) history.replaceState(null, "", want);
+  notePage(want);
   show();
 }
 function show(): void {
@@ -105,6 +108,7 @@ function ensureBox(): HTMLElement {
   return box;
 }
 
+const dueItems = () => reminderItems(currentData());
 const currentData = () => moneyData((c) => ctx.store!.all(c), MONEY_COLLECTIONS);
 
 /** Saves records (in paise), makes the automatic entries that follow, and draws the page again. */
@@ -115,6 +119,7 @@ function writeMoney(ops0: MoneyWrite[]): void {
   const a = autoEntries(currentData());
   if (a.length) ctx.store.writeMany(a.map(({ c, r }) => ({ c, id: r.id, r })));
   refresh();
+  schedulePhone(dueItems);
 }
 /** Another device changed something: make what follows from it and draw the page again. */
 function onStoreChange(ch: Changes): void {
@@ -123,6 +128,7 @@ function onStoreChange(ch: Changes): void {
   const a = autoEntries(currentData());
   if (a.length) ctx.store.writeMany(a.map(({ c, r }) => ({ c, id: r.id, r })));
   refresh();
+  schedulePhone(dueItems);
 }
 
 /** The Advisor asks Claude through Akhila Vrutta's askClaude function (signed in, same session). */
@@ -181,6 +187,9 @@ function start(): void {
   // Today's official prices onto the linked holdings (at most every 3 hours), and today's due reminders on this device.
   if (ctx.session) window.setTimeout(() => { void pxRefresh(); void maybeNotify(); }, 1500);
   onSheet((open) => { document.body.classList.toggle("msheet", open); });
+  // The Android app: Back closes an open sheet first; bills, EMIs and card dues as phone notifications.
+  onBackClose(() => { if (!sheetOpen()) return false; closeModal(); return true; });
+  schedulePhone(dueItems, 1000);
 }
 
 export const money: Module = {

@@ -3,6 +3,8 @@ import { ctx } from "../../app/core/app.ts";
 import { money } from "../../app/modules/money/index.ts";
 import { parseOldExport } from "../../app/modules/money/import.ts";
 import type { Changes, Rec, WriteOp } from "../../app/core/store.ts";
+import { installNative } from "../../app/core/native.ts";
+import { toast } from "../../app/core/dom.ts";
 
 class FakeStore {
   data = new Map<string, Map<string, Rec>>();
@@ -33,3 +35,5 @@ document.body.dataset.mod = "money";
 const render = () => money.render(document.getElementById("main")!);
 window.addEventListener("hashchange", render);
 render();
+// in the Android test app: Back, and "locking" (a reload) after a minute away, as the real app does
+installNative({ home: "#/money/home", hint: (t) => toast(t), lockAfterMs: 60 * 1000, lock: () => location.reload(), locks: () => true });

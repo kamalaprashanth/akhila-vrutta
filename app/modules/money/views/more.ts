@@ -2,6 +2,7 @@
  * Money settings, as in KP Money Planner (inside Akhila Vrutta): the setup checklist, the profile for the
  * advisor, people who pay without a balance, reminders, tags, categories, security and backups.
  */
+import { isNative } from "../../../core/native.ts";
 import { esc } from "../../../core/dom.ts";
 import { addM, dayIn, dLabel, lastDay, mShort, ymOf, type Day } from "../calc/dates.ts";
 import { num, type Loan, type MoneyData, type Paise, type Rec } from "../calc/data.ts";
@@ -72,7 +73,7 @@ function remindersCard(d: MoneyData, nOn: boolean): string {
   <div class="card"><p style="margin:0 0 8px">For reminders on your phone, add your bills to Google Calendar once; each one repeats on its due day.</p>
   ${R.length ? `<details class="fm" style="box-shadow:none;background:var(--sunk)"><summary><span class="mn">${R.length} bills, EMIs and SIPs with a due day</span><span class="sub" style="text-align:right">tap to show</span></summary><div class="list" style="box-shadow:none;border-radius:0">${R.map((x) => `<div class="row"><div class="main"><div class="t">${esc(x.t)}</div><div class="s">${esc(x.s)} · next ${fmtD(d, x.d)}</div></div>${gcalLink(x.t, x.d, `${x.s}. From KP Money Planner.`, x.rr, "Add")}</div>`).join("")}</div></details>` : '<p class="note">Add a due day to your regular items, cards and loans to set reminders.</p>'}
   <div class="btns" style="margin-top:12px">${R.length ? '<button class="btn" type="button" id="icsAll">Download all as a calendar file</button>' : ""}<button class="btn" type="button" id="notifOn">${nOn ? "Turn off notifications" : "Notify me on this device"}</button></div>
-  <p class="note">Notifications show when you open the app and something is overdue or due within 3 days. Reminders while the app is closed need Google Calendar (or a paid Firebase plan).</p></div>`;
+  <p class="note">Notifications show when you open the app and something is overdue or due within 3 days. Reminders while the app is closed need Google Calendar (or a paid Firebase plan).</p>${isNative() ? '<p class="note">On this phone, bills, EMIs and card dues also come as notifications at 9 AM the day before and on the due day, even when the app is closed.</p>' : ""}</div>`;
 }
 const hostedCard = (): string => `<h2>Security &amp; saving</h2><div class="card"><p style="margin:0">Your money data is encrypted and saved by Akhila Vrutta. Unlocking, your passphrase and importing are in the app's main <b>Settings</b> tab.</p></div>`;
 

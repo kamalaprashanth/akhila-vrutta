@@ -6,6 +6,7 @@ import {
   unlockBio, unlockPass, unlockRemembered, type Device, type Session, type UnlockMode,
 } from "./vault.ts";
 import { signOutNow, type SignedInUser } from "./firebase.ts";
+import { isNative } from "./native.ts";
 
 let el: HTMLElement | null = null;
 
@@ -80,7 +81,7 @@ function askPassphrase<T>(title: string, note: string, o: AskOpts<T>): Promise<T
 export function chooseMode(canBio: boolean): Promise<UnlockMode> {
   return new Promise((resolve) => {
     const e = show(html`${raw(msg("How should this device unlock from now on? You can change this later in Settings."))}
-      <div class="lockopts">${raw(canBio ? html`<button class="lockopt" type="button" data-m="bio"><b>Fingerprint or screen lock</b><span>Recommended for your phone. The app asks for your fingerprint each time it opens.</span></button>` : "")}
+      <div class="lockopts">${raw(canBio ? html`<button class="lockopt" type="button" data-m="bio"><b>${isNative() ? "Fingerprint" : "Fingerprint or screen lock"}</b><span>${isNative() ? "The app asks for your fingerprint each time it opens. The phone's PIN doesn't open it; your passphrase always does." : "Recommended for your phone. The app asks for your fingerprint each time it opens."}</span></button>` : "")}
       <button class="lockopt" type="button" data-m="remember"><b>Stay unlocked on this device</b><span>Opens straight away. Anyone who can unlock this device can open the app.</span></button>
       <button class="lockopt" type="button" data-m="pass"><b>Passphrase every time</b><span>Most private. Type the passphrase whenever the app opens.</span></button></div>`);
     e.querySelectorAll<HTMLElement>("[data-m]").forEach((b) => b.addEventListener("click", () => resolve(b.dataset.m as UnlockMode)));
@@ -116,19 +117,23 @@ export async function unlock(): Promise<Session> {
   return setup();
 }
 
-async function unlockDevice(dev: Device): Promise<Session> {
+async function unlockDevice(dev0: Device): Promise<Session> {
+  let dev = dev0;
   const done = (dek: CryptoKey): Session => ({ uid: dev.uid, home: dev.home, dek, mode: dev.mode });
   if (dev.mode === "remember") {
     const k = await unlockRemembered();
     if (k) return done(k);
   }
+  let redo = false;
   if (dev.mode === "bio") {
     const r = await new Promise<CryptoKey | "pass">((resolve) => {
-      const e = show(html`${raw(msg("Unlock with your fingerprint or screen lock."))}
+      const e = show(html`${raw(msg(isNative() ? "Unlock with your fingerprint." : "Unlock with your fingerprint or screen lock."))}
         <div class="lockopts"><button class="btn pri" type="button" id="lk_b">Unlock</button>
         <button class="btn lockalt" type="button" id="lk_pp">Use passphrase instead</button></div><p class="lockm err" id="lk_e" hidden></p>`);
       const go = async () => {
         try { resolve(await unlockBio(dev)); } catch (x) {
+          // the phone's fingerprint key is gone (a fingerprint was added): passphrase, then choose again
+          if (x instanceof Error && (x.name === "BioChanged" || (x as { code?: string }).code === "missing")) { redo = true; toast(x.name === "BioChanged" ? x.message : "Fingerprint unlock needs setting up again. Enter your passphrase."); resolve("pass"); return; }
           const t = e.querySelector<HTMLElement>("#lk_e")!;
           t.hidden = false;
           t.textContent = x instanceof Error && x.name === "NotAllowedError" ? "Cancelled. Tap Unlock to try again." : `Couldn't unlock: ${x instanceof Error ? x.message : "error"}`;
@@ -143,6 +148,7 @@ async function unlockDevice(dev: Device): Promise<Session> {
   const keyRaw = await askPassphrase("Passphrase", "Enter your passphrase to open your data.", { check: (p) => unlockPass(dev, p) });
   const key = await aesKey(keyRaw);
   if (dev.mode === "remember") await setMode(dev, "remember", keyRaw);
+  if (redo) { const m = await chooseMode(await bioCapable()); dev = await applyMode(dev, m, keyRaw); }
   keyRaw.fill(0);
   return done(key);
 }
