@@ -101,8 +101,10 @@ jobs:
           node mobile/prepare.mjs dist
           (cd mobile && npx cap sync android && cd android && ./gradlew --no-daemon -q assembleDebug)
           cp mobile/android/app/build/outputs/apk/debug/app-debug.apk app-debug.apk
-      - name: Emulator access
+      - name: Emulator access (and room for it)
         run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          df -h / | tail -1
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
       - name: On an Android emulator
@@ -112,6 +114,7 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
+          disk-size: 4G
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: node tests/android/android.mjs test test.apk && node tests/android/android.mjs app app-debug.apk
       - uses: actions/upload-artifact@v4
