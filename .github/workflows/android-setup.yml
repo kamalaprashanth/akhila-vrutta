@@ -6,7 +6,7 @@ on:
   push:
     branches: [android-setup]
 permissions:
-  contents: read
+  contents: write
 env:
   PROJECT: akhila-vrutta
   FT: npx --yes firebase-tools@14
@@ -67,8 +67,8 @@ jobs:
           npx cap add android
           npx cap sync android
           rm -rf www node_modules android/app/build android/.gradle
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mobile
-          path: mobile
-          include-hidden-files: true
+      - name: Hand the project back (pushed to the android-scaffold branch, to be committed on android)
+        run: |
+          git config user.name "Claude" && git config user.email "noreply@anthropic.com"
+          git checkout -b android-scaffold
+          git add -f mobile && git commit -qm "Capacitor Android project, as made by cap add android" && git push -f origin android-scaffold
