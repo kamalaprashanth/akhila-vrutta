@@ -234,6 +234,7 @@ try {
   await A.page.waitForTimeout(500);
   const hhText = await A.page.innerText("#hhView");
   check(/Cloud home/.test(hhText) && /Cloud to-do 9/.test(hhText), "after a Money re-import and a reload, the home and the to-do are still there");
+  await moneyFrame(A.page, "activity");   // back to Transactions for the next steps
 
   progress("second device");
   /* 5. Second device: "welcome back", same data, and changes flow between devices */
