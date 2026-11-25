@@ -34,12 +34,14 @@ adb("install", "-r", "-g", apk);
 adb("shell", "am", "force-stop", PKG);
 
 if (mode === "test") {
-  // the first start after installing can replace its page once while it opens: try again then
-  let b, p;
-  for (let i = 0; ; i++) {
-    try { ({ b, p } = await launch()); await p.waitForSelector("#moneyView #view > *", { timeout: 30000 }); break; }
-    catch (e) { if (i === 2) throw e; console.log("  (the app's page went away while opening; again)"); await sleep(3000); }
-  }
+  // a start can replace its page once while it opens (a WebView left from before): try again then
+  const opened = async (how) => {
+    for (let i = 0; ; i++) {
+      try { const r = await how(); await r.p.waitForSelector("#moneyView #view > *", { timeout: 30000 }); return r; }
+      catch (e) { if (i === 2) throw e; console.log("  (the app's page went away while opening; again)"); await sleep(3000); }
+    }
+  };
+  let { b, p } = await opened(launch);
   const logs = []; p.on("console", (m) => logs.push(`${m.type()}: ${m.text()}`)); p.on("pageerror", (e) => logs.push(`error: ${e.message}`));
   process.on("exit", () => { if (fails) console.log("  page log:\n   " + logs.filter((l) => !/getPending|console\.groupEnd/.test(l)).slice(-40).join("\n   ")); });
   await p.waitForSelector("#moneyView #view > *", { timeout: 30000 });
@@ -89,8 +91,7 @@ if (mode === "test") {
   await b.close().catch(() => {});
 
   // auto-lock: a few seconds away keeps the page; more than a minute away locks (reloads) it
-  ({ b, p } = await launch());
-  await p.waitForSelector("#moneyView #view > *", { timeout: 30000 });
+  ({ b, p } = await opened(launch));
   await p.evaluate(() => { window.__still = 1; });
   adb("shell", "input", "keyevent", "3"); await sleep(5000);
   adb("shell", "am", "start", "-n", `${PKG}/.MainActivity`); await sleep(2000);
@@ -98,8 +99,7 @@ if (mode === "test") {
   adb("shell", "input", "keyevent", "3"); await sleep(65000);
   adb("shell", "am", "start", "-n", `${PKG}/.MainActivity`); await sleep(3000);
   await b.close().catch(() => {});
-  ({ b, p } = await connect());
-  await p.waitForSelector("#moneyView #view > *", { timeout: 30000 });
+  ({ b, p } = await opened(connect));
   ok(await p.evaluate(() => window.__still === undefined), "over a minute away: locked (opened afresh)");
   await b.close().catch(() => {});
 }
