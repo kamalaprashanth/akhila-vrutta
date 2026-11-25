@@ -80,10 +80,12 @@ if (mode === "test") {
   ok(await until(async () => /activity/.test(await hash())), `Back goes to the page before (${await hash()})`);
   back();
   ok(await until(async () => /home/.test(await hash())), `…and again, to Overview (${await hash()})`);
-  back(); await sleep(2500);
-  ok(running(), "at Overview, one Back doesn't close the app");
+  // (closing finishes the app's screen; Android may keep the process around, so look at what's on screen)
+  const onScreen = () => adb("shell", "dumpsys", "window").split("\n").some((l) => /mCurrentFocus|mFocusedApp/.test(l) && l.includes(PKG));
+  back(); await sleep(1000);
+  ok(onScreen(), "at Overview, one Back doesn't close the app");
   back();
-  ok(await until(async () => !running(), 8000), "…a second Back does");
+  ok(await until(async () => !onScreen(), 8000), "…a second Back straight after does");
   await b.close().catch(() => {});
 
   // auto-lock: a few seconds away keeps the page; more than a minute away locks (reloads) it
