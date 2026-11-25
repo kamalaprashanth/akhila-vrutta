@@ -64,7 +64,7 @@ if (mode === "test") {
   // Back: closes a sheet, then goes back a page, then at Overview twice closes the app.
   // (The emulator delivers Back a moment later, so each step waits for its result.)
   const until = async (fn, ms = 10000) => { for (let t = 0; t < ms; t += 250) { if (await fn().catch(() => false)) return true; await sleep(250); } return false; };
-  const hash = () => p.evaluate(() => location.hash);
+  const hash = () => p.evaluate(() => `${location.hash} (Backs seen ${window.__backs ?? "?"})`).catch(() => "the app's page closed");
   await p.click("#moneyAdd");
   ok(await until(() => p.evaluate(() => !!document.querySelector("#mvLayer #modal .sheet"))), "+ opens the add form");
   // the form puts the cursor in a field, and Android's first Back only hides the keyboard
