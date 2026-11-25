@@ -63,9 +63,12 @@ if (mode === "test") {
   await p.click("#moneyAdd");
   ok(await until(() => p.evaluate(() => !!document.querySelector("#mvLayer #modal .sheet"))), "+ opens the add form");
   // the form puts the cursor in a field, and Android's first Back only hides the keyboard
-  await p.evaluate(() => document.activeElement?.blur()); await sleep(1500);
+  const ime = () => /mInputShown=true|isInputViewShown=true/.test(adb("shell", "dumpsys", "input_method"));
+  await sleep(1500);
+  if (ime()) { back(); await until(async () => !ime(), 5000); await sleep(500); }
+  await p.evaluate(() => { window.__backs = 0; window.Capacitor.Plugins.App.addListener("backButton", () => { window.__backs++; }); });
   back();
-  ok(await until(() => p.evaluate(() => !document.querySelector("#mvLayer #modal .sheet"))), "Back closes the form");
+  ok(await until(() => p.evaluate(() => !document.querySelector("#mvLayer #modal .sheet"))), `Back closes the form (Back seen by the page: ${await p.evaluate(() => window.__backs)}, keyboard shown: ${ime()})`);
   await p.evaluate(() => { location.hash = "#/money/activity"; }); await sleep(800);
   await p.evaluate(() => { location.hash = "#/money/plan"; }); await sleep(800);
   back();
