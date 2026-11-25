@@ -1,0 +1,37 @@
+name: App Check setup (one-off)
+# Pushed to the appcheck-setup branch only. Registers the App Check providers: reCAPTCHA Enterprise for the
+# website (the owner made the key in Cloud Shell) and Play Integrity for the Android app. Enforcement is
+# separate, after a few days of watching.
+on:
+  push:
+    branches: [appcheck-setup]
+env:
+  PROJECT: akhila-vrutta
+  SITE_KEY: 6Lch6zEuAAAAALR8YHNMm7kpKExb7c2uR-iWEDpt
+  ANDROID_APP: "1:85806021255:android:ee14fc59d12561e064d622"
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Register the providers
+        env:
+          FIREBASE_WEB_CONFIG: ${{ vars.FIREBASE_WEB_CONFIG }}
+        run: |
+          WEB_APP=$(node -e 'const s=process.env.FIREBASE_WEB_CONFIG; const m=s.match(/appId["\x27]?\s*:\s*["\x27]([^"\x27]+)/); console.log(m?m[1]:"")')
+          echo "web app: $WEB_APP"
+          T=$(gcloud auth print-access-token)
+          API=https://firebaseappcheck.googleapis.com/v1/projects/$PROJECT/apps
+          echo "--- website: reCAPTCHA Enterprise"
+          curl -sS -X PATCH -H "Authorization: Bearer $T" -H "Content-Type: application/json" -H "X-Goog-User-Project: $PROJECT" \
+            "$API/$WEB_APP/recaptchaEnterpriseConfig?updateMask=siteKey" -d "{\"siteKey\":\"$SITE_KEY\"}"
+          echo; echo "--- Android: Play Integrity"
+          curl -sS -X PATCH -H "Authorization: Bearer $T" -H "Content-Type: application/json" -H "X-Goog-User-Project: $PROJECT" \
+            "$API/$ANDROID_APP/playIntegrityConfig?updateMask=tokenTtl" -d '{"tokenTtl":"3600s"}'
+          echo; echo "--- enforcement now (expected: unenforced)"
+          for S in firestore.googleapis.com; do curl -sS -H "Authorization: Bearer $T" -H "X-Goog-User-Project: $PROJECT" "https://firebaseappcheck.googleapis.com/v1/projects/$PROJECT/services/$S"; echo; done
+          echo "--- the Android app's API key (for the native App Check exchange)"
+          curl -sS -H "Authorization: Bearer $T" "https://firebase.googleapis.com/v1beta1/projects/$PROJECT/androidApps/$ANDROID_APP/config" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const c=JSON.parse(Buffer.from(j.configFileContents,"base64"));console.log("android api key present:",!!c.client[0].api_key[0].current_key)})'
