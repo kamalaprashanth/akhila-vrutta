@@ -48,15 +48,17 @@ for (const [label, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { 
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   page.on("requestfailed", (r) => { if (!/fonts\.g/.test(r.url())) errors.push(`failed: ${r.url()} ${r.failure()?.errorText}`); });
+  const sdk = [];
+  page.on("request", (r) => { if (/firebase-(app|auth|firestore)\.js/.test(r.url())) sdk.push(r.url()); });
   await page.goto(BASE);
   try {
     await page.waitForSelector("#lock #lk_g", { timeout: 20000 });
     await page.waitForFunction(() => performance.getEntriesByType("resource").some((e) => /firebase-firestore\.js/.test(e.name)), null, { timeout: 20000 });
     await page.waitForTimeout(1500);
     check(true, `${label}: lock screen shows and Firebase loads`);
-    const sdk = await page.evaluate(() => performance.getEntriesByType("resource").map((e) => e.name).filter((n) => /firebase-(app|auth|firestore)\.js/.test(n)));
-    check(sdk.length >= 3 && sdk.every((u) => u.startsWith(location.origin + "/firebase/")), `${label}: the Firebase SDK comes from the site itself, not Google's CDN`);
   } catch { check(false, `${label}: lock screen or Firebase didn't load`); }
+  const origin = new URL(BASE).origin;
+  check(sdk.length >= 3 && sdk.every((u) => u.startsWith(origin + "/firebase/")), `${label}: the Firebase SDK comes from the site itself, not Google's CDN (${sdk.map((u) => u.replace(origin, "")).join(", ") || "none seen"})`);
   await page.screenshot({ path: `${SHOTS}/${label}-lock.png` });
 
   check(errors.length === 0, `${label}: no errors in the browser${errors.length ? ":\n    " + errors.join("\n    ") : ""}`);
