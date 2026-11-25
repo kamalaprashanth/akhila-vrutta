@@ -1,0 +1,33 @@
+name: Play signing key to Firebase (one-off)
+# Pushed to the play-signing branch only. Google Play re-signs the app with its own key, so Google sign-in in
+# the Play version needs that key's fingerprints in Firebase too. Reads them from the app Play generates.
+on:
+  push:
+    branches: [play-signing]
+env:
+  PROJECT: akhila-vrutta
+  FT: npx --yes firebase-tools@14
+  APP: "1:85806021255:android:ee14fc59d12561e064d622"
+jobs:
+  sha:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
+      - name: App as Play signs it
+        run: node scripts/play-signing.mjs
+      - name: Its fingerprints
+        run: |
+          AS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/apksigner
+          $AS verify --print-certs play.apk | tee certs.txt
+          grep -E "SHA-1 digest|SHA-256 digest" certs.txt | head -2 | sed -E 's/.*digest: //' > sha.txt
+          cat sha.txt
+      - name: Add them to Firebase
+        run: |
+          for H in $(cat sha.txt); do $FT apps:android:sha:create "$APP" "$H" --project "$PROJECT" || true; done
+          $FT apps:android:sha:list "$APP" --project "$PROJECT"
