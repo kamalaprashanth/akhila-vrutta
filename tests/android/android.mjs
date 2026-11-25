@@ -94,8 +94,9 @@ if (mode === "test") {
   ok(await until(async () => /home/.test(await hash())), `…and again, to Overview (${await hash()})`);
   // (closing finishes the app's screen; Android may keep the process around, so look at what's on screen)
   const onScreen = () => adb("shell", "dumpsys", "window").split("\n").some((l) => /mCurrentFocus|mFocusedApp/.test(l) && l.includes(PKG));
-  back(); await sleep(1000);
-  ok(onScreen(), "at Overview, one Back doesn't close the app");
+  back();
+  const hinted = await until(() => ev(() => /Press back again/.test(document.querySelector("#toast")?.textContent ?? "")), 8000);
+  ok(hinted && onScreen(), "at Overview, one Back doesn't close the app (it says to press again)");
   back();
   ok(await until(async () => !onScreen(), 8000), "…a second Back straight after does");
   await b.close().catch(() => {});
