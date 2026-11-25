@@ -34,7 +34,9 @@ export function scheduleReminders(wait = 3000): void {
       const pend = await nativeCall<{ notifications: { id: number }[] }>("LocalNotifications", "getPending");
       if (pend.notifications.length) await nativeCall("LocalNotifications", "cancel", { notifications: pend.notifications.map((n) => ({ id: n.id })) });
       const list = allNotes();
-      if (list.length) await nativeCall("LocalNotifications", "schedule", { notifications: list.map((r) => ({ id: r.id, title: r.title, body: r.body ?? "Open Akhila Vrutta to see it.", schedule: { at: r.at.toISOString(), allowWhileIdle: true } })) });
+      // inexact (Android times it, around 9 AM): Play allows exact alarms only for alarm and calendar apps,
+      // and asking for them sends you to the "Alarms & reminders" settings screen
+      if (list.length) await nativeCall("LocalNotifications", "schedule", { notifications: list.map((r) => ({ id: r.id, title: r.title, body: r.body ?? "Open Akhila Vrutta to see it.", schedule: { at: r.at.toISOString(), allowWhileIdle: true }, isExactNotification: false })) });
     } catch (e) { console.warn("reminders", e); }
   })(), wait);
 }
