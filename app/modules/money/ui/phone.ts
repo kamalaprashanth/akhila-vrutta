@@ -1,10 +1,8 @@
 /**
  * Bill reminders on the Android phone: real notifications at 9 AM the day before and on the due day, for
  * bills, card dues, EMIs and SIPs (the same list as the calendar file), even when the app is closed. They
- * name the bill only: no amounts, as they can show on the lock screen. Rescheduled whenever the app opens
- * or something changes.
+ * name the bill only: no amounts, as they can show on the lock screen. Scheduled by core/reminders.ts.
  */
-import { isNative, nativeCall } from "../../../core/native.ts";
 
 type Day = string;
 export interface Reminder { id: number; title: string; body: string; at: Date }
@@ -48,27 +46,4 @@ export function phoneReminders(items: DueItem[], now = new Date(), days = 45): R
     }
   }
   return out.sort((a, b) => +a.at - +b.at).slice(0, 120).map((x, i) => ({ ...x, id: 1000 + i }));
-}
-
-let timer = 0;
-let asked = false;
-/** Replaces the phone's scheduled reminders with the current list (debounced: called after every change). */
-export function schedulePhone(items: () => DueItem[], wait = 3000): void {
-  if (!isNative()) return;
-  clearTimeout(timer);
-  timer = window.setTimeout(() => void (async () => {
-    try {
-      // Android 13+ asks once whether the app may show notifications
-      const perm = await nativeCall<{ display: string }>("LocalNotifications", "checkPermissions");
-      if (perm.display !== "granted") {
-        if (asked) return;
-        asked = true;
-        if ((await nativeCall<{ display: string }>("LocalNotifications", "requestPermissions")).display !== "granted") return;
-      }
-      const pend = await nativeCall<{ notifications: { id: number }[] }>("LocalNotifications", "getPending");
-      if (pend.notifications.length) await nativeCall("LocalNotifications", "cancel", { notifications: pend.notifications.map((n) => ({ id: n.id })) });
-      const list = phoneReminders(items());
-      if (list.length) await nativeCall("LocalNotifications", "schedule", { notifications: list.map((r) => ({ id: r.id, title: r.title, body: r.body, schedule: { at: r.at.toISOString(), allowWhileIdle: true } })) });
-    } catch (e) { console.warn("reminders", e); }
-  })(), wait);
 }

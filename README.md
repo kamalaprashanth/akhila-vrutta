@@ -12,6 +12,7 @@ Live at **https://kp-akhila-vrutta.web.app** (Firebase project `akhila-vrutta`).
 | `app/modules/` | One folder per area; each exports a `Module` |
 | `static/` | `index.html`, manifest, icons; copied as-is |
 | `mobile/` | The Android app (Capacitor): see `docs/android.md` |
+| `app/modules/household/` | Household: jobs, appliances, lists; files in the encrypted vault (`docs/household.md`) |
 | `scripts/build.mjs` | esbuild bundle into `dist/`, writes `dist/config.js` |
 | `tests/unit/` | `node:test` tests, run with native TypeScript |
 | `tests/e2e/` | Playwright smoke test over `dist/` |

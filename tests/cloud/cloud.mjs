@@ -207,6 +207,34 @@ try {
   const back = (await plannerTxns(fA)).find((t) => t.note === "cloud test 42");
   check(back?.amount === 777.77, `after reload the edit is back as ₹777.77 (got ${back?.amount})`);
 
+  progress("household");
+  /* 4b. Household: a home and a to-do are saved encrypted, survive a Money re-import, and come back after a reload */
+  await A.page.goto(`${BASE}/#/household`);
+  await A.page.waitForSelector("#hhView #addHome", { timeout: 20000 });
+  await A.page.click("#hhView #addHome");
+  await A.page.fill("#mvLayer #f_hname", "Cloud home");
+  await A.page.click("#mvLayer #sv");
+  await A.page.click('#hhView [data-tab="lists"]');
+  await A.page.fill("#hhView #hhNew", "Cloud to-do 9");
+  await A.page.press("#hhView #hhNew", "Enter");
+  await A.page.waitForTimeout(3000);
+  const hhDocs = [...((await api(`${FS}/homes/${home}/hhItems?pageSize=50`)).body.documents ?? []), ...((await api(`${FS}/homes/${home}/hhHomes?pageSize=50`)).body.documents ?? [])];
+  const hhPlain = hhDocs.filter((d) => ["Cloud to-do", "Cloud home"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  check(hhDocs.length >= 2 && hhPlain === 0 && hhDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `household records are in the cloud as ciphertext only (${hhDocs.length} records)`);
+  await A.page.goto(`${BASE}/#/settings`);
+  await A.page.setInputFiles("#impFile", SAMPLE);
+  await A.page.click("#impGo");
+  await A.page.waitForFunction(() => /Imported|up to date/.test(document.querySelector("#toast")?.textContent ?? ""), null, { timeout: 30000 });
+  await A.page.reload();
+  await unlockWithPass(A.page, PASS1);
+  await A.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
+  await A.page.goto(`${BASE}/#/household`);
+  await A.page.waitForSelector("#hhView .hchip", { timeout: 20000 });
+  await A.page.click('#hhView [data-tab="lists"]').catch(() => {});
+  await A.page.waitForTimeout(500);
+  const hhText = await A.page.innerText("#hhView");
+  check(/Cloud home/.test(hhText) && /Cloud to-do 9/.test(hhText), "after a Money re-import and a reload, the home and the to-do are still there");
+
   progress("second device");
   /* 5. Second device: "welcome back", same data, and changes flow between devices */
   const B = await device("device 2");

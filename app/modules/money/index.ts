@@ -31,7 +31,8 @@ import { pxLine, pxRefresh } from "./ui/prices.ts";
 import { maybeNotify, plannerData } from "./ui/dataio.ts";
 import { autoEntries } from "./ui/auto.ts";
 import { closeModal, ensureLayer, onSheet, sheetOpen, toast as kitToast } from "./ui/kit.ts";
-import { phoneReminders, schedulePhone } from "./ui/phone.ts";
+import { phoneReminders } from "./ui/phone.ts";
+import { scheduleReminders, setReminderSource } from "../../core/reminders.ts";
 import { notePage, onBackClose } from "../../core/native.ts";
 import { prefGet, prefSet, setEnv, uid, type WriteOp as MoneyWrite } from "./ui/env.ts";
 import { txnForm } from "./ui/txform.ts";
@@ -119,7 +120,7 @@ function writeMoney(ops0: MoneyWrite[]): void {
   const a = autoEntries(currentData());
   if (a.length) ctx.store.writeMany(a.map(({ c, r }) => ({ c, id: r.id, r })));
   refresh();
-  schedulePhone(dueItems);
+  scheduleReminders();
 }
 /** Another device changed something: make what follows from it and draw the page again. */
 function onStoreChange(ch: Changes): void {
@@ -128,7 +129,7 @@ function onStoreChange(ch: Changes): void {
   const a = autoEntries(currentData());
   if (a.length) ctx.store.writeMany(a.map(({ c, r }) => ({ c, id: r.id, r })));
   refresh();
-  schedulePhone(dueItems);
+  scheduleReminders();
 }
 
 /** The Advisor asks Claude through Akhila Vrutta's askClaude function (signed in, same session). */
@@ -191,8 +192,14 @@ function start(): void {
   onSheet((open) => { document.body.classList.toggle("msheet", open); });
   // The Android app: Back closes an open sheet first; bills, EMIs and card dues as phone notifications.
   onBackClose(() => { if (!sheetOpen()) return false; closeModal(); return true; });
-  schedulePhone(dueItems, 1000);
+  setReminderSource("money", () => phoneReminders(dueItems()));
+  scheduleReminders(1000);
 }
+
+/** For other areas (Household): Money's data and writer, ready without opening the Money tab. */
+export function startMoney(): void { if (ctx.store) start(); }
+export const moneyWrite = (ops: MoneyWrite[]): void => writeMoney(ops);
+export const moneyNow = () => currentData();
 
 export const money: Module = {
   id: "money",

@@ -3,6 +3,7 @@ import { html, raw } from "../core/dom.ts";
 import { ctx } from "../core/app.ts";
 import { settings } from "./settings.ts";
 import { money } from "./money/index.ts";
+import { household } from "./household/index.ts";
 
 const ICONS = {
   home: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
@@ -16,9 +17,9 @@ const ICONS = {
 /** Milestones as planned; `done` flips as each one ships. */
 const MILESTONES: { n: number; name: string; done: boolean }[] = [
   { n: 1, name: "Foundation: repository, build, checks, deploys", done: true },
-  { n: 2, name: "Money planner moved over", done: false },
-  { n: 3, name: "Shared core, your data moved, switch-over", done: false },
-  { n: 4, name: "Android app", done: false },
+  { n: 2, name: "Money planner moved over", done: true },
+  { n: 3, name: "Shared core and your data moved", done: true },
+  { n: 4, name: "Android app", done: true },
   { n: 5, name: "Household", done: false },
   { n: 6, name: "Health", done: false },
   { n: 7, name: "Document vault", done: false },
@@ -51,19 +52,10 @@ export const home: Module = {
         )}</ol>
       </section>
       <section class="card">
-        <h2>Your money planner</h2>
-        <p>Until the switch-over in Milestone 3, keep using the current app.</p>
+        <h2>KP Money Planner</h2>
+        <p>Everything it does is in Money here. The old app stays as it is.</p>
         <a class="btn" href="https://kp-money-planner.web.app" rel="noopener">Open KP Money Planner</a>
       </section>`;
-  },
-};
-
-export const household: Module = {
-  id: "household",
-  label: "Household",
-  icon: ICONS.household,
-  render(root) {
-    root.innerHTML = soon("Household", 5, "Appliances, vehicles and property with their invoices, warranties and service schedules.");
   },
 };
 

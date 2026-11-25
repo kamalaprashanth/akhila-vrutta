@@ -13,9 +13,15 @@ export const MONEY_COLLECTIONS = [
   "accounts", "categories", "txns", "recurring", "loans", "holdings", "payers",
   "snaps", "goals", "views", "trades", "props", "propItems", "settings",
 ] as const;
+/** Household: homes not in Money, maintenance jobs, what was done, appliances, to-do and grocery lists. */
+export const HOUSEHOLD_COLLECTIONS = ["hhHomes", "hhJobs", "hhDone", "hhAppliances", "hhItems"] as const;
+/** Files kept encrypted in Google Drive: what they are and where (the vault). */
+export const FILES = "files";
 /** Housekeeping: schema versions and where the data came from. */
 export const META = "meta";
-export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, META];
+export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, FILES, META];
+/** What a KP Money Planner import replaces (never Household or files). */
+export const IMPORT_SCOPE: readonly string[] = [...MONEY_COLLECTIONS, META];
 
 export interface Rec {
   id: string;
@@ -208,13 +214,14 @@ export class Store {
   }
 
   /**
-   * Makes the cloud match `incoming` exactly: writes new and changed records, trashes the rest.
+   * Makes the cloud match `incoming` exactly in `scope` (the money collections and meta): writes new and
+   * changed records, trashes the rest. Household records and files are never touched by an import.
    * Unchanged records cost nothing, so re-importing is cheap.
    */
-  async replaceAll(incoming: Record<string, Rec[]>, onProgress?: (done: number, total: number) => void): Promise<{ written: number; removed: number }> {
+  async replaceAll(incoming: Record<string, Rec[]>, onProgress?: (done: number, total: number) => void, scope: readonly string[] = IMPORT_SCOPE): Promise<{ written: number; removed: number }> {
     const { fs, db } = this.fb;
     const ops: { c: string; id: string; r: Rec | null }[] = [];
-    for (const c of COLLECTIONS) {
+    for (const c of scope) {
       const next = new Map((incoming[c] ?? []).map((r) => [r.id, r]));
       const cur = this.data.get(c)!;
       for (const [id, r] of next) {

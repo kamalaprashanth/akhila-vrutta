@@ -1,6 +1,10 @@
 package in.kp.akhilavrutta;
 
+import android.accounts.Account;
+import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentSender;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.CancellationSignal;
@@ -28,10 +32,15 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.android.gms.auth.api.identity.AuthorizationRequest;
+import com.google.android.gms.auth.api.identity.AuthorizationResult;
+import com.google.android.gms.auth.api.identity.Identity;
+import com.google.android.gms.common.api.Scope;
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import java.security.KeyStore;
+import java.util.Collections;
 import java.security.SecureRandom;
 import java.util.concurrent.Executor;
 
@@ -44,11 +53,12 @@ import javax.crypto.spec.GCMParameterSpec;
  * Akhila Vrutta's own native side.
  *  googleSignIn  Android's Google account picker (Credential Manager) gives a Google ID token, which the web
  *                code turns into a Firebase sign-in. Google doesn't allow its sign-in page inside an app.
+ *  googleAccess  a Google access token for one more permission (Drive's "files this app made").
  *  bio*          a 32-byte secret kept encrypted under an Android Keystore key that only a strong fingerprint
  *                opens (never the phone's PIN), and that Android deletes when a fingerprint is added. The web
  *                code wraps the data key with this secret; the secret itself never leaves memory unencrypted.
  */
-@CapacitorPlugin(name = "AkhilaNative")
+@CapacitorPlugin(name = "AkhilaNative", requestCodes = { AkhilaNativePlugin.AUTH_REQ })
 public class AkhilaNativePlugin extends Plugin {
     private static final String KEY = "akhila_bio_v1";
     private static final String PREFS = "akhila_bio";
@@ -80,6 +90,48 @@ public class AkhilaNativePlugin extends Plugin {
                     call.reject(e.getMessage() == null ? "Sign-in didn't finish" : e.getMessage(), e instanceof GetCredentialCancellationException ? "cancelled" : "error");
                 }
             });
+    }
+
+    /* ---------- access to one more Google permission (Drive) ---------- */
+
+    static final int AUTH_REQ = 4711;
+    private PluginCall authCall;
+
+    /** A Google access token for `scope` on `account` (asks the first time, on Android's own screen). */
+    @PluginMethod
+    public void googleAccess(PluginCall call) {
+        String scope = call.getString("scope"), account = call.getString("account");
+        if (scope == null) { call.reject("No scope", "config"); return; }
+        AuthorizationRequest.Builder b = AuthorizationRequest.builder().setRequestedScopes(Collections.singletonList(new Scope(scope)));
+        if (account != null && !account.isEmpty()) b.setAccount(new Account(account, "com.google"));
+        Identity.getAuthorizationClient(getActivity()).authorize(b.build())
+            .addOnSuccessListener((AuthorizationResult r) -> {
+                if (r.hasResolution() && r.getPendingIntent() != null) {
+                    authCall = call;
+                    try {
+                        getActivity().startIntentSenderForResult(r.getPendingIntent().getIntentSender(), AUTH_REQ, null, 0, 0, 0);
+                    } catch (IntentSender.SendIntentException e) { authCall = null; call.reject("Couldn't ask for access", "error", e); }
+                } else token(call, r);
+            })
+            .addOnFailureListener((e) -> call.reject(e.getMessage() == null ? "Google didn't give access" : e.getMessage(), "error", e));
+    }
+
+    @Override
+    protected void handleOnActivityResult(int requestCode, int resultCode, Intent data) {
+        super.handleOnActivityResult(requestCode, resultCode, data);
+        if (requestCode != AUTH_REQ || authCall == null) return;
+        PluginCall call = authCall;
+        authCall = null;
+        if (resultCode != Activity.RESULT_OK) { call.reject("Cancelled", "cancelled"); return; }
+        try { token(call, Identity.getAuthorizationClient(getActivity()).getAuthorizationResultFromIntent(data)); }
+        catch (Exception e) { call.reject("Google didn't give access", "error", e); }
+    }
+
+    private static void token(PluginCall call, AuthorizationResult r) {
+        if (r.getAccessToken() == null) { call.reject("Google didn't give access", "error"); return; }
+        JSObject o = new JSObject();
+        o.put("accessToken", r.getAccessToken());
+        call.resolve(o);
     }
 
     /* ---------- fingerprint key ---------- */

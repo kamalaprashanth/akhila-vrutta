@@ -6,7 +6,8 @@ import { config } from "./core/firebase.ts";
 import { ctx } from "./core/app.ts";
 import { closeLock, lockProgress, unlock } from "./core/lock.ts";
 import { Store } from "./core/store.ts";
-import { hideMoney } from "./modules/money/index.ts";
+import { hideMoney, startMoney } from "./modules/money/index.ts";
+import { startHousehold } from "./modules/household/index.ts";
 
 const AUTO_LOCK_MS = 2 * 60 * 1000;
 
@@ -61,6 +62,9 @@ async function boot(): Promise<void> {
   });
   render();
   closeLock();
+  // Phone reminders from Money and Household, whichever tab is open
+  startMoney();
+  startHousehold();
 
   // The Android app: Back, and locking after a minute away (choosing a file also leaves the app for a moment).
   installNative({ home: "#/home", hint: (t) => toast(t), lockAfterMs: 60 * 1000, lock: () => location.reload(), locks: () => session.mode !== "remember" });

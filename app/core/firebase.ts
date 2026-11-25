@@ -164,3 +164,25 @@ export async function signOutNow(): Promise<void> {
   const fb = await initFirebase();
   if (fb) await fb.authMod.signOut!(fb.auth);
 }
+
+/**
+ * A short-lived Google access token for one more permission (Google Drive's "files this app made"), for the
+ * signed-in account. Web: Google's consent popup through Firebase. Android: Android's own consent screen.
+ */
+export async function googleAccess(scope: string): Promise<string> {
+  const fb = await initFirebase();
+  if (!fb) throw new Error("Firebase isn't configured for this build.");
+  const user = (fb.auth as { currentUser: { email?: string } | null }).currentUser;
+  if (!user) throw new Error("Not signed in.");
+  if (isNative()) {
+    const r = await nativeCall<{ accessToken: string }>("AkhilaNative", "googleAccess", { scope, account: user.email ?? "" });
+    return r.accessToken;
+  }
+  const p = new fb.authMod.GoogleAuthProvider() as { setCustomParameters(o: object): void; addScope(s: string): void };
+  p.addScope(scope);
+  p.setCustomParameters({ login_hint: user.email ?? "" });
+  const res = await fb.authMod.reauthenticateWithPopup!(user, p);
+  const cred = (fb.authMod.GoogleAuthProvider as unknown as { credentialFromResult(r: unknown): { accessToken?: string } | null }).credentialFromResult(res);
+  if (!cred?.accessToken) throw new Error("Google didn't give access to Drive.");
+  return cred.accessToken;
+}
