@@ -26,6 +26,9 @@ export interface AppConfig {
   /** The Android app: where its own copy of the Firebase SDK is, and the web OAuth client for Google sign-in. */
   sdkBase?: string;
   googleClientId?: string;
+  /** Firebase App Check: the website proves itself with reCAPTCHA Enterprise; the Android app with Play
+   *  Integrity, through our own plugin (with the Android app's id and key). */
+  appCheck?: { siteKey?: string; android?: { appId: string; apiKey: string } };
   /** Test builds only: talk to the local Firebase emulators instead of the cloud. */
   emulators?: { auth: string; firestoreHost: string; firestorePort: number; functionsHost?: string; functionsPort?: number };
 }
@@ -73,8 +76,9 @@ export function initFirebase(): Promise<Fb | null> {
       import(/* @vite-ignore */ cdn("firestore")) as Promise<FsModule>,
     ]);
     const app = appMod.initializeApp!(cfg);
-    const auth = authMod.getAuth!(app);
     const emu = config().emulators;
+    if (!emu) await startAppCheck(app, cfg);
+    const auth = authMod.getAuth!(app);
     if (emu) authMod.connectAuthEmulator!(auth, emu.auth, { disableWarnings: true });
     // The cache on this device holds only ciphertext, the same as the cloud.
     const db = fs.initializeFirestore!(app, {
@@ -90,6 +94,28 @@ export function initFirebase(): Promise<Fb | null> {
     });
     return { app, auth, authMod, db, fs };
   })());
+}
+
+/**
+ * App Check: every request to the database and the Claude function carries a token showing it comes from
+ * this site or this app. Until enforcement is switched on, a missing token is only counted, so a failure here
+ * never stops the app; it's logged.
+ */
+async function startAppCheck(app: unknown, cfg: FirebaseWebConfig): Promise<void> {
+  const ac = config().appCheck;
+  if (!ac || (isNative() ? !ac.android : !ac.siteKey)) return;
+  try {
+    const m = (await import(/* @vite-ignore */ cdn("app-check"))) as Record<string, Fn> & { ReCaptchaEnterpriseProvider: new (k: string) => unknown; CustomProvider: new (o: object) => unknown };
+    const provider = isNative()
+      ? new m.CustomProvider({
+        getToken: async () => {
+          const r = await nativeCall<{ token: string; expires: number }>("AkhilaNative", "appCheckToken", { appId: ac.android!.appId, apiKey: ac.android!.apiKey, projectId: cfg.projectId });
+          return { token: r.token, expireTimeMillis: r.expires };
+        },
+      })
+      : new m.ReCaptchaEnterpriseProvider(ac.siteKey!);
+    m.initializeAppCheck!(app, { provider, isTokenAutoRefreshEnabled: true });
+  } catch (e) { console.warn("App Check", e); }
 }
 
 /** Cloud Functions live in Mumbai, next to the database. */

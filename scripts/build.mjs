@@ -51,9 +51,13 @@ const firebase = emulators
   : parseConfig(process.env.FIREBASE_WEB_CONFIG);
 // AV_MOBILE=1: the Android app's copy. It carries the Firebase SDK itself (mobile/sdk.mjs puts it in
 // /firebase) and signs in with Google through Android, using the project's web OAuth client.
-const mobile = process.env.AV_MOBILE === "1" ? { sdkBase: "/firebase", googleClientId: process.env.GOOGLE_WEB_CLIENT_ID || "" }
+// App Check: APP_CHECK_SITE_KEY (reCAPTCHA Enterprise, the website); ANDROID_APP_ID and ANDROID_API_KEY (the
+// Android app, Play Integrity; the key is read from Firebase in CI, never committed).
+const androidCheck = process.env.ANDROID_APP_ID && process.env.ANDROID_API_KEY ? { appCheck: { android: { appId: process.env.ANDROID_APP_ID, apiKey: process.env.ANDROID_API_KEY } } } : {};
+const webCheck = process.env.APP_CHECK_SITE_KEY ? { appCheck: { siteKey: process.env.APP_CHECK_SITE_KEY } } : {};
+const mobile = process.env.AV_MOBILE === "1" ? { sdkBase: "/firebase", googleClientId: process.env.GOOGLE_WEB_CLIENT_ID || "", ...androidCheck }
   // AV_SELF_SDK=1: the site carries the SDK too (scripts/firebase-sdk.mjs copies it in), so no outside scripts load
-  : process.env.AV_SELF_SDK === "1" ? { sdkBase: "/firebase" } : {};
+  : process.env.AV_SELF_SDK === "1" ? { sdkBase: "/firebase", ...webCheck } : { ...webCheck };
 const cfg = { firebase, build: sha.slice(0, 7) || "local", ...mobile, ...(emulators ? { emulators } : {}) };
 writeFileSync(`${out}/config.js`, `window.AV_CONFIG=${JSON.stringify(cfg)};\n`);
 console.log(firebase ? `config: project ${firebase.projectId}` : "config: no Firebase (local build)");

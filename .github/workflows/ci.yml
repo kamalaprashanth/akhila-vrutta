@@ -46,6 +46,7 @@ jobs:
       - name: Production build (carrying its own Firebase SDK)
         run: AV_SELF_SDK=1 npm run build && node scripts/firebase-sdk.mjs dist
         env:
+          APP_CHECK_SITE_KEY: 6Lch6zEuAAAAALR8YHNMm7kpKExb7c2uR-iWEDpt
           FIREBASE_WEB_CONFIG: ${{ vars.FIREBASE_WEB_CONFIG }}
           AUTH_DOMAIN: kp-akhila-vrutta.web.app
       - run: npm run test:e2e
@@ -80,9 +81,17 @@ jobs:
           java-version: 21
       - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
-      - name: The site, as the app carries it
-        run: AV_MOBILE=1 GOOGLE_WEB_CLIENT_ID="$(node -p 'require("./mobile/google-client.json").webClientId')" node scripts/build.mjs
+      - name: The site, as the app carries it (with the Android app's App Check id and key, read from Firebase)
+        run: |
+          if [ -n "$SA" ]; then
+            echo "$SA" > "$RUNNER_TEMP/sa0.json"; gcloud auth activate-service-account --key-file "$RUNNER_TEMP/sa0.json" -q; rm "$RUNNER_TEMP/sa0.json"
+            K=$(curl -sS -H "Authorization: Bearer $(gcloud auth print-access-token)" "https://firebase.googleapis.com/v1beta1/projects/$PROJECT/androidApps/$ANDROID_APP_ID/config" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const c=JSON.parse(Buffer.from(JSON.parse(s).configFileContents,"base64"));process.stdout.write(c.client[0].api_key[0].current_key)}catch{}})')
+            [ -n "$K" ] && echo "::add-mask::$K" && export ANDROID_API_KEY="$K" || echo "::warning title=App Check::Couldn't read the Android app's key; the app runs without App Check"
+          fi
+          AV_MOBILE=1 GOOGLE_WEB_CLIENT_ID="$(node -p 'require("./mobile/google-client.json").webClientId')" node scripts/build.mjs
         env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
+          ANDROID_APP_ID: "1:85806021255:android:ee14fc59d12561e064d622"
           FIREBASE_WEB_CONFIG: ${{ vars.FIREBASE_WEB_CONFIG }}
           AUTH_DOMAIN: kp-akhila-vrutta.web.app
       - name: Capacitor and the app icon

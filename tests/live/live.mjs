@@ -48,8 +48,9 @@ for (const [label, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { 
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   page.on("requestfailed", (r) => { if (!/fonts\.g/.test(r.url())) errors.push(`failed: ${r.url()} ${r.failure()?.errorText}`); });
-  const sdk = [];
+  const sdk = [], appCheck = [];
   page.on("request", (r) => { if (/firebase-(app|auth|firestore)\.js/.test(r.url())) sdk.push(r.url()); });
+  page.on("response", (r) => { if (/exchangeRecaptchaEnterpriseToken/.test(r.url())) appCheck.push(r.status()); });
   await page.goto(BASE);
   try {
     await page.waitForSelector("#lock #lk_g", { timeout: 20000 });
@@ -59,6 +60,10 @@ for (const [label, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { 
   } catch { check(false, `${label}: lock screen or Firebase didn't load`); }
   const origin = new URL(BASE).origin;
   check(sdk.length >= 3 && sdk.every((u) => u.startsWith(origin + "/firebase/")), `${label}: the Firebase SDK comes from the site itself, not Google's CDN (${sdk.map((u) => u.replace(origin, "")).join(", ") || "none seen"})`);
+  // App Check (watch-only for now): reported, not required. A preview address isn't on the reCAPTCHA key's list,
+  // and a headless browser may score too low, so its own messages don't count as errors here.
+  console.log(`  ${label}: App Check exchange ${appCheck.length ? appCheck.join(", ") : "not seen"}`);
+  for (let i = errors.length - 1; i >= 0; i--) if (/recaptcha|app-?check|AppCheck/i.test(errors[i])) { console.log(`  (App Check, not counted) ${errors[i].slice(0, 200)}`); errors.splice(i, 1); }
   await page.screenshot({ path: `${SHOTS}/${label}-lock.png` });
 
   check(errors.length === 0, `${label}: no errors in the browser${errors.length ? ":\n    " + errors.join("\n    ") : ""}`);

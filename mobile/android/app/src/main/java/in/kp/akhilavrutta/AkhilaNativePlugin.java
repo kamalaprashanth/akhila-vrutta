@@ -43,6 +43,10 @@ import com.google.android.gms.auth.api.identity.AuthorizationResult;
 import com.google.android.gms.auth.api.identity.Identity;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.FirebaseOptions;
+import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import java.io.File;
@@ -67,6 +71,7 @@ import javax.crypto.spec.GCMParameterSpec;
  *                opens (never the phone's PIN), and that Android deletes when a fingerprint is added. The web
  *                code wraps the data key with this secret; the secret itself never leaves memory unencrypted.
  *  saveFile      a decrypted copy of a vault file into Downloads/Akhila Vrutta (Android 10 and newer).
+ *  appCheckToken a Firebase App Check token from Google Play Integrity, for the web code's Firebase calls.
  *  shareFile     Android's share sheet for a decrypted copy, kept in the app's cache only until the next share
  *                or the next start.
  */
@@ -310,6 +315,29 @@ public class AkhilaNativePlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             call.reject(e.getMessage() == null ? "Couldn't share the file" : e.getMessage(), "error", e);
+        }
+    }
+
+    /* ---------- Firebase App Check (Play Integrity) ---------- */
+
+    private FirebaseApp appCheckApp(String appId, String apiKey, String projectId) {
+        for (FirebaseApp a : FirebaseApp.getApps(getContext())) if ("appcheck".equals(a.getName())) return a;
+        FirebaseOptions o = new FirebaseOptions.Builder().setApplicationId(appId).setApiKey(apiKey).setProjectId(projectId).build();
+        FirebaseApp app = FirebaseApp.initializeApp(getContext(), o, "appcheck");
+        FirebaseAppCheck.getInstance(app).installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
+        return app;
+    }
+
+    @PluginMethod
+    public void appCheckToken(PluginCall call) {
+        String appId = call.getString("appId"), apiKey = call.getString("apiKey"), projectId = call.getString("projectId");
+        if (appId == null || apiKey == null || projectId == null) { call.reject("App Check isn't set up in this build", "config"); return; }
+        try {
+            FirebaseAppCheck.getInstance(appCheckApp(appId, apiKey, projectId)).getAppCheckToken(false)
+                .addOnSuccessListener(t -> { JSObject r = new JSObject(); r.put("token", t.getToken()); r.put("expires", t.getExpireTimeMillis()); call.resolve(r); })
+                .addOnFailureListener(e -> call.reject(e.getMessage() == null ? "App Check failed" : e.getMessage(), "error", e));
+        } catch (Exception e) {
+            call.reject(e.getMessage() == null ? "App Check failed" : e.getMessage(), "error", e);
         }
     }
 }

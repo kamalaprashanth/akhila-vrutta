@@ -23,7 +23,15 @@ What protects the data, and what was decided (25 Nov 2026, with the owner).
 - An in-app TOTP code: the passphrase is already the second lock after Google sign-in. Instead: 2-Step
   Verification (Authenticator or a passkey) on the Google account.
 
+## App Check (watch-only since 25 Nov 2026)
+- Providers registered (`.github/workflows/appcheck-setup.yml`): reCAPTCHA Enterprise for the website (site key
+  made by the owner, domains kp-akhila-vrutta.web.app and .firebaseapp.com), Play Integrity for the Android app
+  (Cloud project linked in Play Console by the owner).
+- Website: `initializeAppCheck` with ReCaptchaEnterpriseProvider (APP_CHECK_SITE_KEY at build). Android: a
+  CustomProvider asking our plugin (`AkhilaNative.appCheckToken`, Firebase App Check + Play Integrity natively,
+  with the Android app's id and key read from Firebase in CI, never committed). Failures are only logged.
+- Next: after a few days, look at the verified/unverified counts, then enforce on Firestore and the Claude
+  function (`enforceAppCheck`). The GitHub APK won't pass Play Integrity: installs are from Play only from then on.
+
 ## Next
-- Firebase App Check (reCAPTCHA Enterprise on the web, Play Integrity on Android): monitor, then enforce on
-  Firestore and the Claude function. Needs the owner to create the reCAPTCHA key and link Play Integrity.
 - A professional penetration test once the app holds documents.

@@ -9,7 +9,7 @@ export async function copySdk(dir) {
   const SDK = readFileSync("app/core/firebase.ts", "utf8").match(/const SDK = "([^"]+)"/)[1];
   const BASE = `https://www.gstatic.com/firebasejs/${SDK}/`;
   mkdirSync(`${dir}/firebase`, { recursive: true });
-  const todo = ["firebase-app.js", "firebase-auth.js", "firebase-firestore.js", "firebase-functions.js"], done = new Set();
+  const todo = ["firebase-app.js", "firebase-auth.js", "firebase-firestore.js", "firebase-functions.js", "firebase-app-check.js"], done = new Set();
   while (todo.length) {
     const f = todo.pop();
     if (done.has(f)) continue;
