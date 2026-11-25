@@ -29,11 +29,19 @@ async function auth(): Promise<string> {
   token = { v: await googleAccess(DRIVE_SCOPE), until: Date.now() + 50 * 60 * 1000 };
   return token.v;
 }
+/** Drive's own reason, in words: the Drive API switched off for the project, or the permission not given. */
+async function driveError(r: Response): Promise<string> {
+  let reason = "", msg = "";
+  try { const j = (await r.json()) as { error?: { message?: string; errors?: { reason?: string }[]; details?: { reason?: string }[] } }; msg = j.error?.message ?? ""; reason = j.error?.errors?.[0]?.reason ?? j.error?.details?.[0]?.reason ?? ""; } catch { /* no body */ }
+  if (/accessNotConfigured|SERVICE_DISABLED/i.test(reason + msg)) return "Google Drive isn't switched on for this app yet (Drive API disabled in the Google Cloud project)";
+  if (/insufficient|scope/i.test(reason + msg)) { token = null; return "Google Drive access wasn't given. Try again and allow access to the app's own files"; }
+  return `Google Drive said ${r.status}${msg ? `: ${msg.slice(0, 160)}` : ""}`;
+}
 async function call(url: string, init: RequestInit = {}): Promise<Response> {
   for (let i = 0; i < 2; i++) {
     const r = await fetch(url, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${await auth()}` } });
     if (r.status === 401 && i === 0) { token = null; continue; }   // expired: ask again once
-    if (!r.ok) throw new Error(`Google Drive said ${r.status}${r.status === 403 ? " (no access)" : ""}`);
+    if (!r.ok) throw new Error(await driveError(r));
     return r;
   }
   throw new Error("Google Drive refused the sign-in");

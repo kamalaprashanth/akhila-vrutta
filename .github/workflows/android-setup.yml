@@ -24,6 +24,11 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
       - uses: google-github-actions/setup-gcloud@v2
+      - name: Google Drive API on (for the vault)
+        continue-on-error: true
+        run: |
+          gcloud services enable drive.googleapis.com --project "$PROJECT"
+          gcloud services list --enabled --project "$PROJECT" --filter="config.name:drive.googleapis.com" --format="value(config.name)"
       - name: Signing key (made once, kept in Secret Manager)
         id: key
         continue-on-error: true
