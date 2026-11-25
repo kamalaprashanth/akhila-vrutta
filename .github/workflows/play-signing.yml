@@ -25,7 +25,7 @@ jobs:
         run: |
           AS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/apksigner
           $AS verify --print-certs play.apk | tee certs.txt
-          grep -E "SHA-1 digest|SHA-256 digest" certs.txt | head -2 | sed -E 's/.*digest: //' > sha.txt
+          grep -E "SHA-1 digest|SHA-256 digest" certs.txt | grep -v "Source Stamp" | sed -E 's/.*digest: //' | sort -u > sha.txt
           cat sha.txt
       - name: Add them to Firebase
         run: |
