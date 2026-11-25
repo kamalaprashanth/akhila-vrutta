@@ -47,23 +47,28 @@ if (mode === "test") {
     }
   };
   let { b, p } = await opened(launch);
+  // the emulator sometimes drops the connection to the WebView: reconnect and try once more
+  const ev = async (f, arg) => {
+    try { return await p.evaluate(f, arg); }
+    catch (e) { if (!/closed/.test(e.message)) throw e; console.log("  (lost the connection to the page; reconnecting)"); await sleep(2000); ({ p } = await connect()); return p.evaluate(f, arg); }
+  };
   const logs = []; p.on("console", (m) => logs.push(`${m.type()}: ${m.text()}`)); p.on("pageerror", (e) => logs.push(`error: ${e.message}`));
   process.on("exit", () => { if (fails) console.log("  page log:\n   " + logs.filter((l) => !/getPending|console\.groupEnd/.test(l)).slice(-40).join("\n   ")); });
   await p.waitForSelector("#moneyView #view > *", { timeout: 30000 });
-  ok(await p.evaluate(() => window.Capacitor?.isNativePlatform?.() === true), "runs as the Android app (Capacitor)");
-  const bio = await p.evaluate(() => window.Capacitor.Plugins.AkhilaNative.bioAvailable().then((r) => r, (e) => ({ err: e.message })));
+  ok(await ev(() => window.Capacitor?.isNativePlatform?.() === true), "runs as the Android app (Capacitor)");
+  const bio = await ev(() => window.Capacitor.Plugins.AkhilaNative.bioAvailable().then((r) => r, (e) => ({ err: e.message })));
   ok(typeof bio.available === "boolean", `the app's own plugin answers (fingerprint available on this emulator: ${bio.available})`);
-  const miss = await p.evaluate(() => window.Capacitor.Plugins.AkhilaNative.bioSecret().then(() => "unlocked?", (e) => e.code));
+  const miss = await ev(() => window.Capacitor.Plugins.AkhilaNative.bioSecret().then(() => "unlocked?", (e) => e.code));
   ok(miss === "missing", `no fingerprint key yet: unlocking with it says so (${miss})`);
   const ov = await p.innerText("#moneyView #view");
   ok(/Net worth|This month|Overview|Balance/i.test(ov), "Overview is drawn");
-  if (!/Net worth|This month|Overview|Balance/i.test(ov)) console.log("  page text:", ov.slice(0, 400).replace(/\s+/g, " "), "| hash", await p.evaluate(() => location.hash), "| body", (await p.innerText("body")).slice(0, 300).replace(/\s+/g, " "));
+  if (!/Net worth|This month|Overview|Balance/i.test(ov)) console.log("  page text:", ov.slice(0, 400).replace(/\s+/g, " "), "| hash", await ev(() => location.hash), "| body", (await p.innerText("body")).slice(0, 300).replace(/\s+/g, " "));
   await p.screenshot({ path: "test-results/android-overview.png" });
 
   // reminders: scheduled on the phone, names only
-  console.log("  permission:", JSON.stringify(await p.evaluate(() => window.Capacitor.Plugins.LocalNotifications.checkPermissions())));
+  console.log("  permission:", JSON.stringify(await ev(() => window.Capacitor.Plugins.LocalNotifications.checkPermissions())));
   let pend = [];
-  for (let i = 0; i < 20 && !pend.length; i++) { await sleep(1000); pend = (await p.evaluate(() => window.Capacitor.Plugins.LocalNotifications.getPending())).notifications; }
+  for (let i = 0; i < 20 && !pend.length; i++) { await sleep(1000); pend = (await ev(() => window.Capacitor.Plugins.LocalNotifications.getPending())).notifications; }
   ok(pend.length > 0, `bill reminders are scheduled on the phone (${pend.length})`);
   ok(pend.every((n) => !/₹|\d{3}/.test(`${n.title} ${n.body}`)), `…naming the bill only, no amounts (e.g. "${pend[0]?.title}")`);
   ok(pend.every((n) => new Date(n.schedule?.at).getHours() === 9), "…at 9 AM");
@@ -71,18 +76,18 @@ if (mode === "test") {
   // Back: closes a sheet, then goes back a page, then at Overview twice closes the app.
   // (The emulator delivers Back a moment later, so each step waits for its result.)
   const until = async (fn, ms = 10000) => { for (let t = 0; t < ms; t += 250) { if (await fn().catch(() => false)) return true; await sleep(250); } return false; };
-  const hash = () => p.evaluate(() => `${location.hash} (Backs seen ${window.__backs ?? "?"})`).catch(() => "the app's page closed");
+  const hash = () => ev(() => `${location.hash} (Backs seen ${window.__backs ?? "?"})`).catch(() => "the app's page closed");
   await p.click("#moneyAdd");
-  ok(await until(() => p.evaluate(() => !!document.querySelector("#mvLayer #modal .sheet"))), "+ opens the add form");
+  ok(await until(() => ev(() => !!document.querySelector("#mvLayer #modal .sheet"))), "+ opens the add form");
   // the form puts the cursor in a field, and Android's first Back only hides the keyboard
   const ime = () => /mInputShown=true|isInputViewShown=true/.test(adb("shell", "dumpsys", "input_method"));
   await sleep(1500);
   if (ime()) { back(); await until(async () => !ime(), 5000); await sleep(500); }
-  await p.evaluate(() => { window.__backs = 0; window.Capacitor.Plugins.App.addListener("backButton", () => { window.__backs++; }); });
+  await ev(() => { window.__backs = 0; window.Capacitor.Plugins.App.addListener("backButton", () => { window.__backs++; }); });
   back();
-  ok(await until(() => p.evaluate(() => !document.querySelector("#mvLayer #modal .sheet"))), `Back closes the form (Back seen by the page: ${await p.evaluate(() => window.__backs)}, keyboard shown: ${ime()})`);
-  await p.evaluate(() => { location.hash = "#/money/activity"; }); await sleep(800);
-  await p.evaluate(() => { location.hash = "#/money/plan"; }); await sleep(800);
+  ok(await until(() => ev(() => !document.querySelector("#mvLayer #modal .sheet"))), `Back closes the form (Back seen by the page: ${await ev(() => window.__backs)}, keyboard shown: ${ime()})`);
+  await ev(() => { location.hash = "#/money/activity"; }); await sleep(800);
+  await ev(() => { location.hash = "#/money/plan"; }); await sleep(800);
   back();
   ok(await until(async () => /activity/.test(await hash())), `Back goes to the page before (${await hash()})`);
   back();
@@ -99,15 +104,15 @@ if (mode === "test") {
   // closing kept the process (and its old WebView); start clean
   adb("shell", "am", "force-stop", PKG); await sleep(1000);
   ({ b, p } = await opened(launch));
-  await p.evaluate(() => { window.__still = 1; });
+  await ev(() => { window.__still = 1; });
   adb("shell", "input", "keyevent", "3"); await sleep(5000);
   adb("shell", "am", "start", "-n", `${PKG}/.MainActivity`); await sleep(2000);
-  ok(await p.evaluate(() => window.__still === 1), "5 seconds away: still open");
+  ok(await ev(() => window.__still === 1), "5 seconds away: still open");
   adb("shell", "input", "keyevent", "3"); await sleep(65000);
   adb("shell", "am", "start", "-n", `${PKG}/.MainActivity`); await sleep(3000);
   await b.close().catch(() => {});
   ({ b, p } = await opened(connect));
-  ok(await p.evaluate(() => window.__still === undefined), "over a minute away: locked (opened afresh)");
+  ok(await ev(() => window.__still === undefined), "over a minute away: locked (opened afresh)");
   await b.close().catch(() => {});
 }
 
