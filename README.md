@@ -11,6 +11,7 @@ Live at **https://kp-akhila-vrutta.web.app** (Firebase project `akhila-vrutta`).
 | `app/core/` | Shared code: money in paise, DOM helpers, Firebase |
 | `app/modules/` | One folder per area; each exports a `Module` |
 | `static/` | `index.html`, manifest, icons; copied as-is |
+| `mobile/` | The Android app (Capacitor): see `docs/android.md` |
 | `scripts/build.mjs` | esbuild bundle into `dist/`, writes `dist/config.js` |
 | `tests/unit/` | `node:test` tests, run with native TypeScript |
 | `tests/e2e/` | Playwright smoke test over `dist/` |
@@ -36,13 +37,15 @@ A local build has no Firebase config, so sign-in is switched off. In CI the
 | Cloud: sign-in, passphrase, import, encrypted saving, reload, second device, sync, passphrase change, fingerprint, another account refused, database rules | `tests/cloud` on Firebase emulators | every push |
 | Money pages identical to KP Money Planner on a real export | `tests/parity` | locally, with `AV_EXPORT` and `OLD_APP` |
 | Files, types, headers, real CSP, lock screen, the old planner not served, on a deployed address | `tests/live` | preview and live, on `main` |
+| Android app on an emulator: native plugins, pages, bill reminders, Back, auto-lock, sign-in screen with its own Firebase | `tests/android` | every push |
 
 ## Deploys
 
 Pushes to `main` release themselves (`.github/workflows/ci.yml`):
 checks → deploy to a preview channel → `tests/live` on the preview → database rules → that exact build
 cloned to live → `tests/live` on live → automatic rollback to the previous version if that fails.
-Each release also rehearses the rollback on a throwaway preview. Screenshots from every stage are kept
+Each release also rehearses the rollback on a throwaway preview. On `main` the Android app is also signed
+(key in Secret Manager) and attached to a GitHub release for installing on the phone. Screenshots from every stage are kept
 as run artifacts.
 
 ## Rules that don't bend
