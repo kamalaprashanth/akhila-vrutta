@@ -30,6 +30,11 @@ async function connect() {
 const running = () => { try { return !!adb("shell", "pidof", PKG); } catch { return false; } };
 const back = () => adb("shell", "input", "keyevent", "4");
 
+// when something goes wrong, what Android said (a crash, the WebView's renderer going away)
+const androidLog = () => { try { return adb("logcat", "-d", "-v", "brief", "AndroidRuntime:E", "chromium:W", "cr_*:W", "Capacitor:W", "ActivityManager:I", "*:S").split("\n").filter((l) => /akhilavrutta|FATAL|crash|renderer|Kill|died|chromium|Capacitor/i.test(l)).slice(-40).join("\n   "); } catch (e) { return String(e); } };
+process.on("uncaughtException", (e) => { console.log(`✗ stopped: ${e.message.split("\n")[0]}\n  Android log:\n   ${androidLog()}`); process.exit(1); });
+process.on("unhandledRejection", (e) => { console.log(`✗ stopped: ${String(e?.message ?? e).split("\n")[0]}\n  Android log:\n   ${androidLog()}`); process.exit(1); });
+adb("logcat", "-c");
 adb("install", "-r", "-g", apk);
 adb("shell", "am", "force-stop", PKG);
 
