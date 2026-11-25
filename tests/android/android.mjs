@@ -62,6 +62,8 @@ if (mode === "test") {
   const hash = () => p.evaluate(() => location.hash);
   await p.click("#moneyAdd");
   ok(await until(() => p.evaluate(() => !!document.querySelector("#mvLayer #modal .sheet"))), "+ opens the add form");
+  // the form puts the cursor in a field, and Android's first Back only hides the keyboard
+  await p.evaluate(() => document.activeElement?.blur()); await sleep(1500);
   back();
   ok(await until(() => p.evaluate(() => !document.querySelector("#mvLayer #modal .sheet"))), "Back closes the form");
   await p.evaluate(() => { location.hash = "#/money/activity"; }); await sleep(800);
