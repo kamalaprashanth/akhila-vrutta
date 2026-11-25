@@ -96,6 +96,8 @@ if (mode === "test") {
   await b.close().catch(() => {});
 
   // auto-lock: a few seconds away keeps the page; more than a minute away locks (reloads) it
+  // closing kept the process (and its old WebView); start clean
+  adb("shell", "am", "force-stop", PKG); await sleep(1000);
   ({ b, p } = await opened(launch));
   await p.evaluate(() => { window.__still = 1; });
   adb("shell", "input", "keyevent", "3"); await sleep(5000);
