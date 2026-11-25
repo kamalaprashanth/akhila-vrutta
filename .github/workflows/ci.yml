@@ -111,8 +111,12 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
-          target: google_apis
+          # no Google Play services: on the CI machine they keep crashing and take the app down with them
+          # (Google sign-in needs them, and isn't tested here anyway)
+          target: default
           arch: x86_64
+          cores: 4
+          ram-size: 4096M
           disable-animations: true
           disk-size: 4G
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
