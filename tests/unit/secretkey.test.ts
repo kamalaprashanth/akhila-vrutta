@@ -5,14 +5,14 @@ import { makeBackup, openBackup, readOutside } from "../../app/core/backup.ts";
 import { kitPdf, qrModules } from "../../app/core/kit.ts";
 
 test("a Secret Key is written for people, and read back however it's typed", () => {
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 2000; i++) {
     const b = newSecretKey(), s = formatSecretKey(b);
     assert.match(s, /^A1-[0-9A-HJKMNP-TV-Z]{6}-[0-9A-HJKMNP-TV-Z]{6}-[0-9A-HJKMNP-TV-Z]{6}-[0-9A-HJKMNP-TV-Z]{6}-[0-9A-HJKMNP-TV-Z]{4}$/);
     assert.deepEqual(parseSecretKey(s), b);
     assert.deepEqual(parseSecretKey(s.toLowerCase().replace(/-/g, " ")), b);
     assert.deepEqual(parseSecretKey(s.slice(3)), b);                       // without "A1-"
   }
-  const s = formatSecretKey(newSecretKey());
+  const s = formatSecretKey(new Uint8Array([1, 35, 69, 103, 137, 171, 205, 239, 254, 220, 186, 152, 118, 84, 50, 16]));
   const typo = s.slice(0, 5) + (s[5] === "7" ? "8" : "7") + s.slice(6);
   assert.equal(parseSecretKey(typo), null, "a mistyped character is caught by the check characters");
   assert.equal(parseSecretKey("A1-123"), null);

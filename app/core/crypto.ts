@@ -167,7 +167,7 @@ export function formatSecretKey(b: Uint8Array): string {
 /** Reads a Secret Key as typed (any case, spaces or dashes, O for 0, I or L for 1); null if it isn't one. */
 export function parseSecretKey(t: string): Uint8Array<ArrayBuffer> | null {
   let s = t.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
-  if (s.startsWith("A1")) s = s.slice(2);
+  if (s.length === 30 && s.startsWith("A1")) s = s.slice(2);   // the "A1-" in front is optional
   if (s.length !== 28 || [...s].some((ch) => !B32.includes(ch))) return null;
   let bits = "";
   for (const ch of s.slice(0, 26)) bits += B32.indexOf(ch).toString(2).padStart(5, "0");
