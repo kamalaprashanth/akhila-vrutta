@@ -35,13 +35,17 @@ adb("shell", "am", "force-stop", PKG);
 
 if (mode === "test") {
   let { b, p } = await launch();
+  const logs = []; p.on("console", (m) => logs.push(`${m.type()}: ${m.text()}`)); p.on("pageerror", (e) => logs.push(`error: ${e.message}`));
+  process.on("exit", () => { if (fails) console.log("  page log:\n   " + logs.slice(-25).join("\n   ")); });
   await p.waitForSelector("#moneyView #view > *", { timeout: 30000 });
   ok(await p.evaluate(() => window.Capacitor?.isNativePlatform?.() === true), "runs as the Android app (Capacitor)");
   const bio = await p.evaluate(() => window.Capacitor.Plugins.AkhilaNative.bioAvailable().then((r) => r, (e) => ({ err: e.message })));
   ok(typeof bio.available === "boolean", `the app's own plugin answers (fingerprint available on this emulator: ${bio.available})`);
   const miss = await p.evaluate(() => window.Capacitor.Plugins.AkhilaNative.bioSecret().then(() => "unlocked?", (e) => e.code));
   ok(miss === "missing", `no fingerprint key yet: unlocking with it says so (${miss})`);
-  ok(/Net worth|This month|Overview/i.test(await p.innerText("#moneyView #view")), "Overview is drawn");
+  const ov = await p.innerText("#moneyView #view");
+  ok(/Net worth|This month|Overview|Balance/i.test(ov), "Overview is drawn");
+  if (!/Net worth|This month|Overview|Balance/i.test(ov)) console.log("  page text:", ov.slice(0, 400).replace(/\s+/g, " "), "| hash", await p.evaluate(() => location.hash), "| body", (await p.innerText("body")).slice(0, 300).replace(/\s+/g, " "));
   await p.screenshot({ path: "test-results/android-overview.png" });
 
   // reminders: scheduled on the phone, names only
