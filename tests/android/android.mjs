@@ -36,7 +36,7 @@ adb("shell", "am", "force-stop", PKG);
 if (mode === "test") {
   let { b, p } = await launch();
   const logs = []; p.on("console", (m) => logs.push(`${m.type()}: ${m.text()}`)); p.on("pageerror", (e) => logs.push(`error: ${e.message}`));
-  process.on("exit", () => { if (fails) console.log("  page log:\n   " + logs.slice(-25).join("\n   ")); });
+  process.on("exit", () => { if (fails) console.log("  page log:\n   " + logs.filter((l) => !/getPending|console\.groupEnd/.test(l)).slice(-40).join("\n   ")); });
   await p.waitForSelector("#moneyView #view > *", { timeout: 30000 });
   ok(await p.evaluate(() => window.Capacitor?.isNativePlatform?.() === true), "runs as the Android app (Capacitor)");
   const bio = await p.evaluate(() => window.Capacitor.Plugins.AkhilaNative.bioAvailable().then((r) => r, (e) => ({ err: e.message })));
@@ -49,6 +49,7 @@ if (mode === "test") {
   await p.screenshot({ path: "test-results/android-overview.png" });
 
   // reminders: scheduled on the phone, names only
+  console.log("  permission:", JSON.stringify(await p.evaluate(() => window.Capacitor.Plugins.LocalNotifications.checkPermissions())));
   let pend = [];
   for (let i = 0; i < 20 && !pend.length; i++) { await sleep(1000); pend = (await p.evaluate(() => window.Capacitor.Plugins.LocalNotifications.getPending())).notifications; }
   ok(pend.length > 0, `bill reminders are scheduled on the phone (${pend.length})`);

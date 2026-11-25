@@ -58,7 +58,13 @@ export function schedulePhone(items: () => DueItem[], wait = 3000): void {
   clearTimeout(timer);
   timer = window.setTimeout(() => void (async () => {
     try {
-      if (!asked) { asked = true; await nativeCall("LocalNotifications", "requestPermissions"); }
+      // Android 13+ asks once whether the app may show notifications
+      const perm = await nativeCall<{ display: string }>("LocalNotifications", "checkPermissions");
+      if (perm.display !== "granted") {
+        if (asked) return;
+        asked = true;
+        if ((await nativeCall<{ display: string }>("LocalNotifications", "requestPermissions")).display !== "granted") return;
+      }
       const pend = await nativeCall<{ notifications: { id: number }[] }>("LocalNotifications", "getPending");
       if (pend.notifications.length) await nativeCall("LocalNotifications", "cancel", { notifications: pend.notifications.map((n) => ({ id: n.id })) });
       const list = phoneReminders(items());

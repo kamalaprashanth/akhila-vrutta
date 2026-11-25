@@ -31,7 +31,7 @@ import { pxLine, pxRefresh } from "./ui/prices.ts";
 import { maybeNotify, plannerData } from "./ui/dataio.ts";
 import { autoEntries } from "./ui/auto.ts";
 import { closeModal, ensureLayer, onSheet, sheetOpen, toast as kitToast } from "./ui/kit.ts";
-import { schedulePhone } from "./ui/phone.ts";
+import { phoneReminders, schedulePhone } from "./ui/phone.ts";
 import { notePage, onBackClose } from "../../core/native.ts";
 import { prefGet, prefSet, setEnv, uid, type WriteOp as MoneyWrite } from "./ui/env.ts";
 import { txnForm } from "./ui/txform.ts";
@@ -165,6 +165,8 @@ function testHooks(): void {
   w.ymOf = ymOf;
   w.addM = addM;
   w.txFilterSheet = txFilterSheet;
+  w.phoneReminders = () => phoneReminders(dueItems()).map((r) => ({ ...r, at: r.at.toISOString() }));
+  w.dueItems = dueItems;
 }
 
 function start(): void {
