@@ -10,8 +10,8 @@ const BASE = "http://localhost:5050"; // localhost, not 127.0.0.1: fingerprint (
 const AUTH = "http://127.0.0.1:9099";
 const FS = `http://127.0.0.1:8080/v1/projects/${PROJECT}/databases/(default)/documents`;
 const FN = `http://127.0.0.1:5001/${PROJECT}/asia-south1`;
-const PASS1 = "first test passphrase";
-const PASS2 = "second test passphrase";
+const PASS1 = "first mango river kite lamp";
+const PASS2 = "second tiger cloud orange bench";
 const SHOTS = "test-results/cloud";
 const SAMPLE = "tests/fixtures/sample-export.json";
 mkdirSync(SHOTS, { recursive: true });

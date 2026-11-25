@@ -2,30 +2,16 @@
 // in (so the app opens offline; their links to each other point at /firebase), and the app icon and splash
 // images drawn from the site's logo for @capacitor/assets.
 //   node mobile/prepare.mjs <site dir> [--icons]
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { copySdk } from "../scripts/firebase-sdk.mjs";
 
 const src = process.argv[2] ?? "dist";
 const WWW = "mobile/www";
 rmSync(WWW, { recursive: true, force: true });
 cpSync(src, WWW, { recursive: true });
 
-/* the Firebase SDK the app asks for, at the version firebase.ts pins */
-const SDK = readFileSync("app/core/firebase.ts", "utf8").match(/const SDK = "([^"]+)"/)[1];
-const BASE = `https://www.gstatic.com/firebasejs/${SDK}/`;
-mkdirSync(`${WWW}/firebase`, { recursive: true });
-const todo = process.argv.includes("--no-sdk") ? [] : ["firebase-app.js", "firebase-auth.js", "firebase-firestore.js", "firebase-functions.js"], done = new Set();
-while (todo.length) {
-  const f = todo.pop();
-  if (done.has(f)) continue;
-  done.add(f);
-  const r = await fetch(BASE + f);
-  if (!r.ok) throw new Error(`Firebase SDK ${f}: HTTP ${r.status}`);
-  let t = await r.text();
-  for (const m of t.matchAll(/https:\/\/www\.gstatic\.com\/firebasejs\/[^/]+\/([\w.-]+\.js)/g)) todo.push(m[1]);
-  t = t.replace(/https:\/\/www\.gstatic\.com\/firebasejs\/[^/"']+\//g, "/firebase/");
-  writeFileSync(`${WWW}/firebase/${f}`, t);
-}
-console.log(`Firebase SDK ${SDK}: ${[...done].join(", ")}`);
+/* the Firebase SDK the app asks for (scripts/firebase-sdk.mjs) */
+if (!process.argv.includes("--no-sdk")) await copySdk(WWW);
 
 /* icon and splash, from the logo */
 if (process.argv.includes("--icons")) {

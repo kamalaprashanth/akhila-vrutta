@@ -1,5 +1,7 @@
 /** The lock screen: first-time setup on a device, and unlocking every time the app opens. */
 import { html, raw, toast } from "./dom.ts";
+import { attachMeter, strength } from "./strength.ts";
+import { failsSoFar, noteRight, noteWrong, waitLabel, waitLeft } from "./attempts.ts";
 import { aesKey } from "./crypto.ts";
 import {
   bioCapable, createHome, currentUser, deviceInfo, forgetDevice, homeOf, setMode, signIn,
@@ -56,24 +58,42 @@ function askPassphrase<T>(title: string, note: string, o: AskOpts<T>): Promise<T
       <input type="text" name="username" value="akhila-vrutta" autocomplete="username" hidden>
       <label class="lockl" for="lk_p">${title}</label>
       <input id="lk_p" type="password" autocomplete="${o.create ? "new-password" : "current-password"}" required>
-      ${raw(o.create ? html`<label class="lockl" for="lk_p2">Type it again</label><input id="lk_p2" type="password" autocomplete="new-password" required>` : "")}
+      ${raw(o.create ? html`<div id="lk_m"></div><label class="lockl" for="lk_p2">Type it again</label><input id="lk_p2" type="password" autocomplete="new-password" required>` : "")}
       <p class="lockm err" id="lk_e" hidden></p>
-      <button class="btn pri" type="submit" data-lbl="${btn}">${btn}</button></form>`);
+      <button class="btn pri" type="submit" data-lbl="${btn}">${btn}</button></form>
+      ${raw(o.create ? html`<p class="lockm small">Tip: 5 or more unrelated words, like <i>mango kite river seventy lamp</i>. Write it down and keep it at home: nobody can recover it for you.</p>` : "")}`);
     const err = e.querySelector<HTMLElement>("#lk_e")!;
+    const pass = e.querySelector<HTMLInputElement>("#lk_p")!, go = e.querySelector<HTMLButtonElement>(".btn.pri")!;
     const fail = (t: string) => { err.hidden = false; err.textContent = t; };
+    if (o.create) attachMeter(pass, e.querySelector<HTMLElement>("#lk_m")!);
+    // after 5 wrong tries on this device: a wait, counted down on the button
+    let timer = 0;
+    const hold = (): boolean => {
+      const ms = waitLeft();
+      if (!ms || o.create) { go.disabled = false; pass.disabled = false; go.textContent = btn; return false; }
+      go.disabled = true; pass.disabled = true;
+      go.textContent = `${btn} (${waitLabel(ms)})`;
+      fail(`${failsSoFar()} wrong tries. Wait ${waitLabel(ms)} before trying again.`);
+      clearTimeout(timer); timer = window.setTimeout(() => { if (!hold()) { err.hidden = true; pass.focus(); } }, 1000);
+      return true;
+    };
+    hold();
     e.querySelector("form")!.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      const p = e.querySelector<HTMLInputElement>("#lk_p")!.value;
+      if (!o.create && hold()) return;
+      const p = pass.value;
       if (o.create) {
-        if (p.length < 10) return fail("Use at least 10 characters. A short sentence is easiest to remember.");
+        if (p.length < 10) return fail("Use at least 10 characters. A few words are easiest to remember.");
+        if (strength(p).level === 0) return fail("That would be quick to guess. Add another unrelated word or two.");
         if (p !== e.querySelector<HTMLInputElement>("#lk_p2")!.value) return fail("The two entries don't match.");
       }
       busy(e, true, o.create ? "Setting up…" : "Unlocking…");
       let r: T | null = null;
       try { r = await o.check(p); } catch (x) { busy(e, false); return fail(x instanceof Error ? x.message : "Something went wrong."); }
       busy(e, false);
-      if (r) resolve(r);
-      else { fail(o.wrong ?? "That passphrase doesn't match. Try again."); e.querySelector<HTMLInputElement>("#lk_p")!.select(); }
+      if (r) { if (!o.create) noteRight(); clearTimeout(timer); resolve(r); return; }
+      if (!o.create) { noteWrong(); if (hold()) return; }
+      fail(o.wrong ?? "That passphrase doesn't match. Try again."); pass.select();
     });
   });
 }

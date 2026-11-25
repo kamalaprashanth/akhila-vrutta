@@ -122,3 +122,12 @@ body[data-mod="money"] main{padding:0}
   #moneyView{left:96px;bottom:0}
   .fab{bottom:24px;right:24px}
 }
+
+/* passphrase strength */
+.pwmeter{display:grid;gap:4px;text-align:left}
+.pwmeter .bars{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.pwmeter .bars i{height:6px;border-radius:3px;background:var(--line)}
+.pwmeter.l0 .bars i.on{background:#b4442e}.pwmeter.l1 .bars i.on{background:#c98a1b}.pwmeter.l2 .bars i.on,.pwmeter.l3 .bars i.on{background:var(--accent)}
+.pwnote{font-size:12.5px;color:var(--muted)}
+.pwmeter.l0 .pwnote b{color:#b4442e}.pwmeter.l1 .pwnote b{color:#b06d0f}.pwmeter.l2 .pwnote b,.pwmeter.l3 .pwnote b{color:var(--accent)}
+.lockm.small{font-size:13px}

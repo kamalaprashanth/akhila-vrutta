@@ -5,6 +5,7 @@ import { ctx } from "../core/app.ts";
 import { bioCapable, changePassphrase, forgetDevice, MODE_LABEL, setMode, type UnlockMode } from "../core/vault.ts";
 import { confirmPassphrase } from "../core/lock.ts";
 import { META } from "../core/store.ts";
+import { attachMeter, strength } from "../core/strength.ts";
 import { isEncryptedBackup, openOldBackup, parseOldExport, type Parsed } from "./money/import.ts";
 
 const ICON = "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .3-1.5-1.5L17 5l-3-1-1 2h-2l-1-2-3 1 .5 1.8L6 8.3 4 8l-1 3 2 1v0l-2 1 1 3 2-.3 1.5 1.5L7 19l3 1 1-2h2l1 2 3-1-.5-1.8 1.5-1.5 2 .3 1-3z";
@@ -136,15 +137,17 @@ async function wireSecurity(root: HTMLElement): Promise<void> {
     area.innerHTML = html`<form class="inl" id="passF" autocomplete="off">
       <input type="text" name="username" value="akhila-vrutta" autocomplete="username" hidden>
       <label for="op">Current passphrase</label><input id="op" type="password" autocomplete="current-password" required>
-      <label for="np">New passphrase (10+ characters)</label><input id="np" type="password" autocomplete="new-password" required>
+      <label for="np">New passphrase (10+ characters; 5 or more words is best)</label><input id="np" type="password" autocomplete="new-password" required><div id="npm"></div>
       <label for="np2">New passphrase again</label><input id="np2" type="password" autocomplete="new-password" required>
       <p class="note">Only the key is re-locked, so this is quick. Your other devices keep their fingerprint unlock.</p>
       <div class="btns"><button class="btn pri" type="submit">Change</button><button class="btn ghost" type="button" id="px">Cancel</button></div></form>`;
     area.querySelector("#px")!.addEventListener("click", () => { area.innerHTML = ""; });
+    attachMeter(area.querySelector<HTMLInputElement>("#np")!, area.querySelector<HTMLElement>("#npm")!);
     area.querySelector("form")!.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const v = (id: string) => area.querySelector<HTMLInputElement>(`#${id}`)!.value;
       if (v("np").length < 10) return toast("Use at least 10 characters.");
+      if (strength(v("np")).level === 0) return toast("That would be quick to guess. Add another unrelated word or two.");
       if (v("np") !== v("np2")) return toast("The new passphrases don't match.");
       const b = area.querySelector<HTMLButtonElement>(".btn.pri")!;
       b.disabled = true; b.textContent = "Changing…";

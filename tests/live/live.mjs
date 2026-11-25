@@ -54,6 +54,8 @@ for (const [label, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { 
     await page.waitForFunction(() => performance.getEntriesByType("resource").some((e) => /firebase-firestore\.js/.test(e.name)), null, { timeout: 20000 });
     await page.waitForTimeout(1500);
     check(true, `${label}: lock screen shows and Firebase loads`);
+    const sdk = await page.evaluate(() => performance.getEntriesByType("resource").map((e) => e.name).filter((n) => /firebase-(app|auth|firestore)\.js/.test(n)));
+    check(sdk.length >= 3 && sdk.every((u) => u.startsWith(location.origin + "/firebase/")), `${label}: the Firebase SDK comes from the site itself, not Google's CDN`);
   } catch { check(false, `${label}: lock screen or Firebase didn't load`); }
   await page.screenshot({ path: `${SHOTS}/${label}-lock.png` });
 

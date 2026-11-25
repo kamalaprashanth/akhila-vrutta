@@ -56,6 +56,8 @@ if (mode === "test") {
   process.on("exit", () => { if (fails) console.log("  page log:\n   " + logs.filter((l) => !/getPending|console\.groupEnd/.test(l)).slice(-40).join("\n   ")); });
   await p.waitForSelector("#moneyView #view > *", { timeout: 30000 });
   ok(await ev(() => window.Capacitor?.isNativePlatform?.() === true), "runs as the Android app (Capacitor)");
+  const win = adb("shell", "dumpsys", "window", "windows").split(/\n(?=\s*Window #)/).find((b) => b.includes(`${PKG}/${PKG}.MainActivity`) || b.includes(`${PKG}/.MainActivity`)) ?? "";
+  ok(/\bSECURE\b/.test(win), "the app's window is marked secure (blank in recent apps, no screenshots)");
   const bio = await ev(() => window.Capacitor.Plugins.AkhilaNative.bioAvailable().then((r) => r, (e) => ({ err: e.message })));
   ok(typeof bio.available === "boolean", `the app's own plugin answers (fingerprint available on this emulator: ${bio.available})`);
   const miss = await ev(() => window.Capacitor.Plugins.AkhilaNative.bioSecret().then(() => "unlocked?", (e) => e.code));
