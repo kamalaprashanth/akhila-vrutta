@@ -95,7 +95,7 @@ function draw(root: HTMLElement): void {
 
 function onTap(e: Event): void {
   const el = (e.target as HTMLElement).closest<HTMLElement>("[data-home],[data-tab],[data-list],[data-job],[data-appl],[data-item],[data-tick],[data-starter],#addJob,#addAppl,#addHome,#clearDone");
-  if (!el || !rootEl?.contains(el)) return;
+  if (!el || !rootEl?.contains(el) || document.body.dataset.mod !== "household") return;
   const d = el.dataset, r = reader();
   if (d.home !== undefined) { view.home = d.home; keep(); return redraw(); }
   if (d.tab) { view.tab = d.tab as View["tab"]; keep(); return redraw(); }

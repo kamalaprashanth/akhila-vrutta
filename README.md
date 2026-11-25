@@ -1,6 +1,6 @@
 # Akhila Vrutta
 
-One private app for money, household, health and documents. Built for one person first, family later.
+One private app for money, household, habits, health and documents. Built for one person first, family later.
 Live at **https://kp-akhila-vrutta.web.app** (Firebase project `akhila-vrutta`).
 
 ## Layout
@@ -13,6 +13,7 @@ Live at **https://kp-akhila-vrutta.web.app** (Firebase project `akhila-vrutta`).
 | `static/` | `index.html`, manifest, icons; copied as-is |
 | `mobile/` | The Android app (Capacitor): see `docs/android.md` |
 | `app/modules/household/` | Household: jobs, appliances, lists; files in the encrypted vault (`docs/household.md`) |
+| `app/modules/habits/` | Habits: daily, amounts, times a week, avoid, a set number of days; evening nudge (`docs/habits.md`) |
 | `scripts/build.mjs` | esbuild bundle into `dist/`, writes `dist/config.js` |
 | `tests/unit/` | `node:test` tests, run with native TypeScript |
 | `tests/e2e/` | Playwright smoke test over `dist/` |

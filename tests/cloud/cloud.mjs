@@ -116,6 +116,17 @@ try {
 
   progress("import");
   /* 2. Import the sample export */
+  /* Habits: a habit and today's tick are saved encrypted too (checked again after the re-import and reload) */
+  await A.page.goto(`${BASE}/#/habits`);
+  await A.page.waitForSelector("#hbView #hbStarters", { timeout: 20000 });
+  await A.page.click("#hbView #hbStarters");
+  await A.page.check("#mvLayer #hs0");
+  await A.page.click("#mvLayer #sv");
+  await A.page.click("#hbView .hbrow .hbtick");
+  await A.page.waitForTimeout(3000);
+  const hbDocs = [...((await api(`${FS}/homes/${home}/habits?pageSize=50`)).body.documents ?? []), ...((await api(`${FS}/homes/${home}/habitLog?pageSize=50`)).body.documents ?? [])];
+  const hbPlain = hbDocs.filter((d) => ["Walk 30 min", "habitLog"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  check(hbDocs.length >= 2 && hbPlain === 0 && hbDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a habit and its tick are in the cloud as ciphertext only (${hbDocs.length} records)`);
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.setInputFiles("#impFile", SAMPLE);
   await A.page.click("#impGo");
@@ -234,6 +245,9 @@ try {
   await A.page.waitForTimeout(500);
   const hhText = await A.page.innerText("#hhView");
   check(/Cloud home/.test(hhText) && /Cloud to-do 9/.test(hhText), "after a Money re-import and a reload, the home and the to-do are still there");
+  await A.page.goto(`${BASE}/#/habits`);
+  await A.page.waitForSelector("#hbView .hbrow", { timeout: 20000 });
+  check(/Walk 30 min/.test(await A.page.innerText("#hbView")) && (await A.page.$$("#hbView .hbtick.on")).length === 1, "…and so are the habit and today's tick");
   await moneyFrame(A.page, "activity");   // back to Transactions for the next steps
 
   progress("second device");

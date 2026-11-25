@@ -4,6 +4,7 @@ import { ctx } from "../core/app.ts";
 import { settings } from "./settings.ts";
 import { money } from "./money/index.ts";
 import { household } from "./household/index.ts";
+import { habits } from "./habits/index.ts";
 
 const ICONS = {
   home: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
@@ -71,10 +72,11 @@ export const health: Module = {
 export const docs: Module = {
   id: "docs",
   label: "Documents",
+  tab: "Docs",
   icon: ICONS.docs,
   render(root) {
     root.innerHTML = soon("Documents", 7, "Passport, licence and policies, encrypted in your Drive, with expiry reminders.");
   },
 };
 
-export const MODULES: Module[] = [home, money, household, health, docs, settings];
+export const MODULES: Module[] = [home, money, household, habits, health, docs, settings];

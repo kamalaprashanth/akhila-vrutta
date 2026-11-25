@@ -16,10 +16,11 @@ export const MONEY_COLLECTIONS = [
 /** Household: homes not in Money, maintenance jobs, what was done, appliances, to-do and grocery lists. */
 export const HOUSEHOLD_COLLECTIONS = ["hhHomes", "hhJobs", "hhDone", "hhAppliances", "hhItems"] as const;
 /** Files kept encrypted in Google Drive: what they are and where (the vault). */
+export const HABIT_COLLECTIONS = ["habits", "habitLog", "habitPrefs"] as const;
 export const FILES = "files";
 /** Housekeeping: schema versions and where the data came from. */
 export const META = "meta";
-export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, FILES, META];
+export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, ...HABIT_COLLECTIONS, FILES, META];
 /** What a KP Money Planner import replaces (never Household or files). */
 export const IMPORT_SCOPE: readonly string[] = [...MONEY_COLLECTIONS, META];
 

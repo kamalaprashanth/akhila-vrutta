@@ -8,6 +8,7 @@ import { closeLock, lockProgress, unlock } from "./core/lock.ts";
 import { Store } from "./core/store.ts";
 import { hideMoney, startMoney } from "./modules/money/index.ts";
 import { startHousehold } from "./modules/household/index.ts";
+import { startHabits } from "./modules/habits/index.ts";
 
 const AUTO_LOCK_MS = 2 * 60 * 1000;
 
@@ -16,7 +17,7 @@ const routeId = (): string => location.hash.replace(/^#\/?/, "").split("/")[0] |
 function renderNav(active: string): string {
   return MODULES.map((m) =>
     html`<a href="#/${m.id}" class="tab${m.id === active ? " on" : ""}" ${raw(m.id === active ? 'aria-current="page"' : "")}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${m.icon}"/></svg><span>${m.label}</span></a>`,
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${m.icon}"/></svg><span>${m.tab ?? m.label}</span></a>`,
   ).join("");
 }
 
@@ -62,9 +63,10 @@ async function boot(): Promise<void> {
   });
   render();
   closeLock();
-  // Phone reminders from Money and Household, whichever tab is open
+  // Phone reminders from Money, Household and Habits, whichever tab is open
   startMoney();
   startHousehold();
+  startHabits();
 
   // The Android app: Back, and locking after a minute away (choosing a file also leaves the app for a moment).
   installNative({ home: "#/home", hint: (t) => toast(t), lockAfterMs: 60 * 1000, lock: () => location.reload(), locks: () => session.mode !== "remember" });
