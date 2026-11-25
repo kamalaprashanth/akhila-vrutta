@@ -13,7 +13,7 @@ cpSync(src, WWW, { recursive: true });
 const SDK = readFileSync("app/core/firebase.ts", "utf8").match(/const SDK = "([^"]+)"/)[1];
 const BASE = `https://www.gstatic.com/firebasejs/${SDK}/`;
 mkdirSync(`${WWW}/firebase`, { recursive: true });
-const todo = ["firebase-app.js", "firebase-auth.js", "firebase-firestore.js", "firebase-functions.js"], done = new Set();
+const todo = process.argv.includes("--no-sdk") ? [] : ["firebase-app.js", "firebase-auth.js", "firebase-firestore.js", "firebase-functions.js"], done = new Set();
 while (todo.length) {
   const f = todo.pop();
   if (done.has(f)) continue;
@@ -42,10 +42,16 @@ if (process.argv.includes("--icons")) {
   mkdirSync("mobile/assets", { recursive: true });
   const b = await chromium.launch();
   for (const [name, size, body] of shots) {
-    const p = await b.newPage({ viewport: { width: size, height: size } });
-    await p.setContent(`<style>html,body{margin:0;background:transparent}</style>${body}`);
-    await p.screenshot({ path: `mobile/assets/${name}`, omitBackground: true });
-    await p.close();
+    // big images are drawn at half size and twice the pixel density (a 2732-px screenshot can fail in CI)
+    const k = size > 1500 ? 2 : 1;
+    for (let tries = 0; ; tries++) {
+      const p = await b.newPage({ viewport: { width: size / k, height: size / k }, deviceScaleFactor: k });
+      try {
+        await p.setContent(`<style>html,body{margin:0;background:transparent}body{zoom:${1 / k}}</style>${body}`);
+        await p.screenshot({ path: `mobile/assets/${name}`, omitBackground: true });
+        break;
+      } catch (e) { if (tries === 2) throw e; } finally { await p.close(); }
+    }
   }
   await b.close();
   console.log("icons: mobile/assets/*.png");
