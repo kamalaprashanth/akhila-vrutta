@@ -268,7 +268,9 @@ jobs:
       - name: Rehearse the rollback (releases the previous version on a throwaway preview, never on live)
         if: success() && steps.before.outputs.version != ''
         run: |
-          $FT hosting:channel:create rollback-rehearsal --site "$SITE" --project "$PROJECT" --expires 1d || true
+          # a fresh channel each time (an old one can have expired, and an expired channel takes no release)
+          $FT hosting:channel:delete rollback-rehearsal --site "$SITE" --project "$PROJECT" --force || true
+          $FT hosting:channel:create rollback-rehearsal --site "$SITE" --project "$PROJECT" --expires 1d
           node scripts/release-version.mjs rollback-rehearsal "${{ steps.before.outputs.version }}"
       - uses: actions/upload-artifact@v4
         if: always()
