@@ -25,9 +25,10 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Signing key (made once, kept in Secret Manager)
+        id: key
+        continue-on-error: true
         run: |
           set -e
-          gcloud services enable secretmanager.googleapis.com --project "$PROJECT" || true
           if gcloud secrets versions access latest --secret android-keystore --project "$PROJECT" > ks.json 2>/dev/null; then
             echo "::notice::Signing key already in Secret Manager"
           else
@@ -41,6 +42,7 @@ jobs:
           node -e 'const fs=require("fs"), j=JSON.parse(fs.readFileSync("ks.json")); fs.writeFileSync("ks.jks", Buffer.from(j.jks,"base64")); fs.writeFileSync("ks.pass", j.pass)'
           keytool -list -v -keystore ks.jks -storepass "$(cat ks.pass)" | grep -E "SHA1:|SHA256:" | sed 's/^ *//' | tee sha.txt
       - name: Android app in Firebase, with the key's fingerprints
+        continue-on-error: true
         run: |
           set -e
           $FT apps:list ANDROID --project "$PROJECT" --json > apps.json
@@ -50,6 +52,7 @@ jobs:
             ID=$(node -e 'const j=require("./made.json"); console.log(j.result.appId)')
           fi
           echo "Android app: $ID"
+          [ -s sha.txt ] || { echo "::warning::No signing key yet, so no fingerprints added"; exit 0; }
           for H in $(sed -E 's/^SHA(1|256): //' sha.txt | tr -d ':'); do $FT apps:android:sha:create "$ID" "$H" --project "$PROJECT" || true; done
           $FT apps:android:sha:list "$ID" --project "$PROJECT" || true
           $FT apps:sdkconfig ANDROID "$ID" --project "$PROJECT" -o gs.json
