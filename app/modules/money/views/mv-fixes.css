@@ -42,6 +42,9 @@
 .mv .hhfile.add{border-style:dashed;color:var(--accent)}
 .mv .hhfile.busy{width:auto;min-width:92px;cursor:default;color:var(--muted)}
 .mv .hhview img{width:100%;border-radius:var(--r-sm)}
+.mv .hhout .btn{flex:1}
+.mv .hhwarn{margin-top:10px;padding:12px 14px;border-radius:var(--r-sm);background:var(--warn-soft);color:var(--ink)}
+.mv .hhwarn p{margin:0 0 8px}
 .mv .hhview canvas{display:block;margin-bottom:8px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
 .mv.hhv{min-width:0;max-width:100%;overflow-x:clip}
 .mv.hhv .wrap{min-width:0}

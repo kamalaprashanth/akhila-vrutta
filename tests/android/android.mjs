@@ -73,6 +73,20 @@ if (mode === "test") {
   ok(pend.every((n) => !/₹|\d{3}/.test(`${n.title} ${n.body}`)), `…naming the bill only, no amounts (e.g. "${pend[0]?.title}")`);
   ok(pend.every((n) => new Date(n.schedule?.at).getHours() === 9), "…at 9 AM");
 
+  // a vault file out of the app: a decrypted copy saved to Downloads/Akhila Vrutta, or handed to the share sheet
+  const name = `av-test-${Date.now()}.txt`, text = "Akhila Vrutta: a decrypted copy";
+  const saved = await ev(([n, t]) => window.Capacitor.Plugins.AkhilaNative.saveFile({ name: n, mime: "text/plain", data: btoa(t) }).then((r) => r, (e) => ({ err: e.message })), [name, text]);
+  let onDisk = ""; try { onDisk = adb("shell", "cat", `"/sdcard/Download/Akhila Vrutta/${name}"`); } catch (e) { onDisk = String(e).slice(0, 200); }
+  ok(!saved.err && onDisk === text, `Save to phone puts the file in Downloads/Akhila Vrutta (${saved.err ?? saved.folder}; on disk: ${onDisk.slice(0, 60)})`);
+  adb("shell", "rm", "-f", `"/sdcard/Download/Akhila Vrutta/${name}"`);
+  const sh = await ev(([n, t]) => window.Capacitor.Plugins.AkhilaNative.shareFile({ name: n, mime: "text/plain", data: btoa(t) }).then(() => "ok", (e) => e.message), [name, text]);
+  const focus = () => adb("shell", "dumpsys", "window").split("\n").filter((l) => /mCurrentFocus/.test(l)).join(" ");
+  let chooser = false; for (let i = 0; i < 20 && !chooser; i++) { await sleep(500); chooser = /Chooser|Resolver|intentresolver/i.test(focus()); }
+  ok(sh === "ok" && chooser, `Share opens Android's share sheet (${sh}; ${focus().trim().slice(0, 120)})`);
+  let mine = false; for (let i = 0; i < 6 && !mine; i++) { back(); await sleep(1000); mine = focus().includes(PKG); }
+  ok(mine, "…and Back from it returns to the app");
+  await sleep(1000);
+
   // Back: closes a sheet, then goes back a page, then at Overview twice closes the app.
   // (The emulator delivers Back a moment later, so each step waits for its result.)
   const until = async (fn, ms = 10000) => { for (let t = 0; t < ms; t += 250) { if (await fn().catch(() => false)) return true; await sleep(250); } return false; };

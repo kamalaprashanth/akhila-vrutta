@@ -2,11 +2,16 @@ package in.kp.akhilavrutta;
 
 import android.accounts.Account;
 import android.app.Activity;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.os.CancellationSignal;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyPermanentlyInvalidatedException;
@@ -17,6 +22,7 @@ import androidx.annotation.NonNull;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.credentials.Credential;
 import androidx.credentials.CredentialManager;
 import androidx.credentials.CredentialManagerCallback;
@@ -39,6 +45,9 @@ import com.google.android.gms.common.api.Scope;
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.security.KeyStore;
 import java.util.Collections;
 import java.security.SecureRandom;
@@ -57,6 +66,9 @@ import javax.crypto.spec.GCMParameterSpec;
  *  bio*          a 32-byte secret kept encrypted under an Android Keystore key that only a strong fingerprint
  *                opens (never the phone's PIN), and that Android deletes when a fingerprint is added. The web
  *                code wraps the data key with this secret; the secret itself never leaves memory unencrypted.
+ *  saveFile      a decrypted copy of a vault file into Downloads/Akhila Vrutta (Android 10 and newer).
+ *  shareFile     Android's share sheet for a decrypted copy, kept in the app's cache only until the next share
+ *                or the next start.
  */
 @CapacitorPlugin(name = "AkhilaNative", requestCodes = { AkhilaNativePlugin.AUTH_REQ })
 public class AkhilaNativePlugin extends Plugin {
@@ -232,4 +244,72 @@ public class AkhilaNativePlugin extends Plugin {
 
     private static String b64(byte[] b) { return Base64.encodeToString(b, Base64.NO_WRAP); }
     private static byte[] unb64(String s) { return Base64.decode(s, Base64.NO_WRAP); }
+
+    /* ---------- a vault file out of the app: saved to Downloads, or shared ---------- */
+
+    static final String FOLDER = "Akhila Vrutta";
+    /** File names safe for Android: no slashes or control characters, not empty. */
+    static String safeName(String n) {
+        String s = n == null ? "" : n.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim();
+        return s.isEmpty() ? "file" : s;
+    }
+    private File shareDir() { return new File(getContext().getCacheDir(), "share"); }
+    /** Shared copies are removed at the next share and when the app starts. */
+    void clearShared() {
+        File[] old = shareDir().listFiles();
+        if (old != null) for (File f : old) f.delete();
+    }
+    @Override public void load() { clearShared(); }
+
+    @PluginMethod
+    public void saveFile(PluginCall call) {
+        String name = safeName(call.getString("name")), mime = call.getString("mime", "application/octet-stream"), data = call.getString("data");
+        if (data == null) { call.reject("No file", "error"); return; }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) { call.reject("Saving to Downloads needs Android 10 or newer. Use Share instead.", "old"); return; }
+        ContentResolver cr = getContext().getContentResolver();
+        ContentValues v = new ContentValues();
+        v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+        v.put(MediaStore.MediaColumns.MIME_TYPE, mime);
+        v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + FOLDER);
+        v.put(MediaStore.MediaColumns.IS_PENDING, 1);
+        Uri uri = null;
+        try {
+            uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+            if (uri == null) throw new Exception("Android didn't make the file");
+            try (OutputStream o = cr.openOutputStream(uri)) { o.write(Base64.decode(data, Base64.DEFAULT)); }
+            ContentValues done = new ContentValues();
+            done.put(MediaStore.MediaColumns.IS_PENDING, 0);
+            cr.update(uri, done, null, null);
+            JSObject r = new JSObject();
+            r.put("folder", Environment.DIRECTORY_DOWNLOADS + "/" + FOLDER);
+            call.resolve(r);
+        } catch (Exception e) {
+            if (uri != null) cr.delete(uri, null, null);
+            call.reject(e.getMessage() == null ? "Couldn't save the file" : e.getMessage(), "error", e);
+        }
+    }
+
+    @PluginMethod
+    public void shareFile(PluginCall call) {
+        String name = safeName(call.getString("name")), mime = call.getString("mime", "application/octet-stream"), data = call.getString("data");
+        if (data == null) { call.reject("No file", "error"); return; }
+        try {
+            clearShared();
+            File dir = shareDir();
+            dir.mkdirs();
+            File f = new File(dir, name);
+            try (FileOutputStream o = new FileOutputStream(f)) { o.write(Base64.decode(data, Base64.DEFAULT)); }
+            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", f);
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType(mime);
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, name);
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject(e.getMessage() == null ? "Couldn't share the file" : e.getMessage(), "error", e);
+        }
+    }
 }

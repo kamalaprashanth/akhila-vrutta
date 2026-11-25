@@ -40,6 +40,8 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   console.log(name);
   const ctx = await browser.newContext({ viewport: vp });
   await ctx.route(/fonts\.g/, (r) => r.abort());
+  // a browser that can share files (as phone browsers can): records what was shared
+  await ctx.addInitScript(() => { navigator.canShare = () => true; navigator.share = async (d) => { window.SHARED = `${d.files[0].name}:${d.files[0].type}:${d.files[0].size}`; }; });
   const p = await ctx.newPage();
   const errors = [];
   p.on("pageerror", (e) => errors.push(e.message));
@@ -130,6 +132,20 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${L} [data-file="${photo.id}"]`);
   await p.waitForSelector(`${L} .hhview img`, { timeout: 10000 });
   ok(await p.$eval(`${L} .hhview img`, (i) => new Promise((r) => (i.complete ? r(i.naturalWidth) : (i.onload = () => r(i.naturalWidth))))) > 50, "the photo opens (decrypted on this device)");
+  // a decrypted copy out of the app: saved or shared, after saying each time that it won't be encrypted
+  const photoBytes = await readFile("test-results/hh-photo.png");
+  await p.click(`${L} #fsave`); await settle();
+  ok(/won't be encrypted/.test(await p.innerText(`${L} #hhWarn`)) && /downloads/i.test(await p.innerText(`${L} #hhWarn`)), "Save (Download in a browser) first says the copy won't be encrypted");
+  await p.click(`${L} #fno`); await settle();
+  ok(!(await p.$(`${L} #hhWarn`)) && !!(await p.$(`${L} #fsave`)), "…Cancel goes back, nothing saved");
+  await p.click(`${L} #fsave`); await settle();
+  const [dl] = await Promise.all([p.waitForEvent("download"), p.click(`${L} #fgo`)]);
+  const saved = await readFile(await dl.path());
+  ok(dl.suggestedFilename() === photo.name && Buffer.compare(saved, photoBytes) === 0, `…Save copy downloads the decrypted file (${dl.suggestedFilename()}, same bytes as added)`);
+  await p.click(`${L} #fshare`); await settle();
+  ok(/won't be encrypted/.test(await p.innerText(`${L} #hhWarn`)), "Share also says so, every time");
+  await p.click(`${L} #fgo`); await settle();
+  ok(await p.evaluate(() => window.SHARED) === `${photo.name}:image/png:${photoBytes.length}`, "…and hands the decrypted file to the share sheet");
   await p.click(`${L} #cx`); await settle();
   await p.click(`${L} [data-file="${inv.id}"]`);
   await p.waitForSelector(`${L} .hhview canvas`, { timeout: 15000 });

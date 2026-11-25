@@ -1,9 +1,10 @@
 /** Household's forms and sheets (Money's sheet kit, so they look and work the same). */
 import { html, raw } from "../../core/dom.ts";
 import type { Rec } from "../../core/store.ts";
-import { addFile, connectDrive, fileSize, filesOf, isPopupBlocked, needsDriveTap, readFile, removeFile, type FileRec } from "../../core/files.ts";
+import { addFile, canShareFile, connectDrive, fileSize, filesOf, isPopupBlocked, needsDriveTap, readFile, removeFile, saveCopy, shareCopy, type FileRec } from "../../core/files.ts";
 import { accOpts, askConfirm, catOpts, closeModal, field, openSheet, toast, val } from "../money/ui/kit.ts";
 import { pdfCanvases } from "../money/ui/pdf.ts";
+import { isNative } from "../../core/native.ts";
 import { moneyNow, moneyWrite } from "../money/index.ts";
 import { mainAcc } from "../money/calc/forecast.ts";
 import { addMonths, dayLabel, everyLabel, homeName, homes, live, nextDue, STARTERS, type Appliance, type Done, type Item, type Job } from "./data.ts";
@@ -205,22 +206,43 @@ export function serviceForm(applianceId: string): void {
   });
 }
 
-/** A file from the vault, decrypted here: a picture or a PDF's pages. */
+/**
+ * A file from the vault, decrypted here: a picture or a PDF's pages. It can be saved to the phone or shared
+ * to another app; each time the app first says the copy won't be encrypted (asked for by the owner).
+ */
 export function viewFile(f: FileRec, back: () => void): void {
   openSheet(f.name, html`<div class="hhview" id="hhViewF"><p class="note">Fetching from Google Drive and decrypting…</p></div>
-    <div class="btns"><button class="btn" id="cx" type="button">Back</button><a class="btn" id="dlf" hidden>Save a copy</a><button class="btn danger" id="dl" type="button">Delete</button></div>`, (s) => {
-    let url = "";
+    <div id="hhOut"></div>
+    <div class="btns"><button class="btn" id="cx" type="button">Back</button><button class="btn danger" id="dl" type="button">Delete</button></div>`, (s) => {
+    let url = "", blob: Blob | null = null;
     const done = (): void => { if (url) URL.revokeObjectURL(url); };
     $(s, "cx").onclick = () => { done(); closeModal(); back(); };
     $(s, "dl").onclick = () => askConfirm(`Delete ${f.name} from Google Drive?`, "Delete", () => { void removeFile(f).then(() => { done(); back(); }, (e) => toast(`Couldn't delete: ${e instanceof Error ? e.message : "error"}`)); });
+    const share = canShareFile(f);
+    const actions = (): void => {
+      $(s, "hhOut").innerHTML = html`<div class="btns hhout"><button class="btn pri" id="fsave" type="button">⬇&nbsp; ${isNative() ? "Save to phone" : "Download"}</button>${raw(share ? html`<button class="btn pri" id="fshare" type="button">↗&nbsp; Share</button>` : "")}</div>`;
+      $(s, "fsave").onclick = () => ask("save");
+      if (share) $(s, "fshare").onclick = () => ask("share");
+    };
+    // every time: the copy leaves the vault unencrypted
+    const ask = (what: "save" | "share"): void => {
+      $(s, "hhOut").innerHTML = html`<div class="hhwarn" id="hhWarn"><p><b>This copy won't be encrypted.</b> ${what === "save" ? (isNative() ? "Anyone who can open your phone's Downloads can read it." : "Anyone who can open your downloads can read it.") : "The app you share it to, and anyone it reaches, can read it."}</p>
+        <div class="btns"><button class="btn pri" id="fgo" type="button">${what === "save" ? "Save copy" : "Share"}</button><button class="btn" id="fno" type="button">Cancel</button></div></div>`;
+      $(s, "fno").onclick = actions;
+      $(s, "fgo").onclick = () => {
+        const b = blob; if (!b) return;
+        actions();
+        if (what === "save") void saveCopy(f, b).then(toast, (e) => toast(`Couldn't save: ${e instanceof Error ? e.message : "error"}`));
+        else void shareCopy(f, b).catch((e) => toast(`Couldn't share: ${e instanceof Error ? e.message : "error"}`));
+      };
+    };
     void (async () => {
       try {
         const b = await readFile(f), box = $(s, "hhViewF");
-        url = URL.createObjectURL(b);
-        const a = $<HTMLAnchorElement>(s, "dlf"); a.href = url; a.download = f.name; a.hidden = !!(window as { Capacitor?: unknown }).Capacitor;
+        blob = b; url = URL.createObjectURL(b); actions();
         if (f.mime.startsWith("image/")) box.innerHTML = html`<img src="${url}" alt="${f.name}">`;
         else if (f.mime === "application/pdf") { box.innerHTML = ""; for (const c of await pdfCanvases(new Uint8Array(await b.arrayBuffer()), box.clientWidth || 340)) box.appendChild(c); }
-        else box.innerHTML = html`<p class="note">${f.name} · ${fileSize(f.size)}. This kind of file can't be shown here.</p>`;
+        else box.innerHTML = html`<p class="note">${f.name} · ${fileSize(f.size)}. This kind of file can't be shown here; save or share it to open it in another app.</p>`;
       } catch (e) { $(s, "hhViewF").innerHTML = html`<p class="note">Couldn't open it: ${e instanceof Error ? e.message : "error"}</p>`; }
     })();
   });

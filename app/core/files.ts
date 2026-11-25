@@ -8,7 +8,7 @@
 import { ctx } from "./app.ts";
 import { fromB64, open, seal, toB64 } from "./crypto.ts";
 import { googleAccess } from "./firebase.ts";
-import { isNative } from "./native.ts";
+import { isNative, nativeCall } from "./native.ts";
 import { FILES, type Rec } from "./store.ts";
 
 export interface FileRec extends Rec { drive: string; name: string; mime: string; size: number; iv: string; z?: 0 | 1; owner: { c: string; id: string }; added: number; deleted?: boolean }
@@ -115,3 +115,34 @@ export async function removeFile(r: FileRec): Promise<void> {
 export const filesOf = (owner: { c: string; id: string }): FileRec[] =>
   (ctx.store?.all<FileRec>(FILES) ?? []).filter((f) => !f.deleted && f.owner?.c === owner.c && f.owner?.id === owner.id).sort((a, b) => a.added - b.added);
 export const fileSize = (n: number): string => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+/* ---------- a decrypted copy out of the app: saved, or shared to another app ---------- */
+
+const asB64 = (b: Blob): Promise<string> => new Promise((ok, no) => {
+  const r = new FileReader();
+  r.onload = () => ok(String(r.result).replace(/^data:[^,]*,/, ""));
+  r.onerror = () => no(r.error ?? new Error("Couldn't read the file"));
+  r.readAsDataURL(b);
+});
+/** Share works in the Android app, and in browsers that can share files (most phone browsers). */
+export const canShareFile = (r: FileRec): boolean => {
+  if (isNative()) return true;
+  try { return !!navigator.canShare?.({ files: [new File([], r.name, { type: r.mime })] }); } catch { return false; }
+};
+/** Saves a decrypted copy: Downloads/Akhila Vrutta on the phone, the browser's downloads elsewhere. Says where. */
+export async function saveCopy(r: FileRec, b: Blob): Promise<string> {
+  if (isNative()) {
+    const o = await nativeCall<{ folder?: string }>("AkhilaNative", "saveFile", { name: r.name, mime: r.mime, data: await asB64(b) });
+    return `Saved to ${(o?.folder ?? "Download/Akhila Vrutta").replace(/^Download\b/, "Downloads")}`;
+  }
+  const url = URL.createObjectURL(b), a = document.createElement("a");
+  a.href = url; a.download = r.name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return "Saved to your downloads";
+}
+/** Opens the share sheet with a decrypted copy. Resolves false when the person closed it without sharing. */
+export async function shareCopy(r: FileRec, b: Blob): Promise<boolean> {
+  if (isNative()) { await nativeCall("AkhilaNative", "shareFile", { name: r.name, mime: r.mime, data: await asB64(b) }); return true; }
+  try { await navigator.share({ files: [new File([b], r.name, { type: r.mime })], title: r.name }); return true; }
+  catch (e) { if ((e as Error)?.name === "AbortError") return false; throw e; }
+}
