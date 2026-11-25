@@ -5,6 +5,8 @@ import { BACKED_UP, backupDrive, fileName, lastBackup, logBackup, openBackup, re
 import { backupNow, weeklyBackup } from "../core/backup-auto.ts";
 import { connectDrive, fileSize, isPopupBlocked, needsDriveTap, saveBlob } from "../core/files.ts";
 import { isNative } from "../core/native.ts";
+import { parseSecretKey } from "../core/crypto.ts";
+import { localSecretKey } from "../core/vault.ts";
 import { BACKUP_LOG } from "../core/store.ts";
 
 const when = (t: number | string): string => new Date(t).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
@@ -91,6 +93,7 @@ export function wireBackup(root: HTMLElement): void {
     area.innerHTML = html`<form class="inl bkstep" id="bkPassF" autocomplete="off"><p><b>${name}</b><br><span class="note">Made ${when(f.made)}</span></p>
       <input type="text" name="username" value="akhila-vrutta" autocomplete="username" hidden>
       <label for="bkPass">Passphrase this backup was made with</label><input id="bkPass" type="password" autocomplete="current-password" required>
+      <div id="bkSkW" hidden><label for="bkSk">Secret Key (from your Emergency Kit)</label><input id="bkSk" type="text" autocomplete="off" spellcheck="false" class="skin"></div>
       <div class="btns"><button class="btn pri" type="submit">Open</button><button class="btn ghost" type="button" id="bkX">Cancel</button></div></form>`;
     area.querySelector("#bkX")!.addEventListener("click", () => { area.innerHTML = ""; });
     area.querySelector("form")!.addEventListener("submit", async (ev) => {
@@ -98,8 +101,16 @@ export function wireBackup(root: HTMLElement): void {
       const b = area.querySelector<HTMLButtonElement>(".btn.pri")!;
       busy(b, true, "Opening…");
       try {
-        const r = await openBackup(f, area.querySelector<HTMLInputElement>("#bkPass")!.value, ctx.session?.dek);
-        if (!r) { busy(b, false, ""); return toast("That passphrase doesn't open this backup."); }
+        // the Secret Key: this device's copy, or typed in (shown when the backup needs it and the device has none)
+        const skW = area.querySelector<HTMLElement>("#bkSkW")!, typed = area.querySelector<HTMLInputElement>("#bkSk")!.value.trim();
+        let sk: Uint8Array<ArrayBuffer> | undefined;
+        if (f.wrap.sk) {
+          const kept = await localSecretKey();
+          sk = (!skW.hidden && typed ? parseSecretKey(typed) : kept ? parseSecretKey(kept) : null) ?? undefined;
+          if (!sk) { skW.hidden = false; busy(b, false, ""); return toast(typed ? "That Secret Key isn't right: check it against your Emergency Kit." : "This backup also needs your Secret Key."); }
+        }
+        const r = await openBackup(f, area.querySelector<HTMLInputElement>("#bkPass")!.value, ctx.session?.dek, sk);
+        if (!r) { busy(b, false, ""); return toast(f.wrap.sk ? "That passphrase or Secret Key doesn't open this backup." : "That passphrase doesn't open this backup."); }
         confirmRestore(f, name, r.contents, r.sameKey);
       } catch (e) { busy(b, false, ""); toast(`Couldn't open it: ${err(e)}`); }
     });

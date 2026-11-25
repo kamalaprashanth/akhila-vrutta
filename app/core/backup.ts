@@ -2,7 +2,8 @@
  * Full backup: one file with every record (Money, Household, Habits, the list of vault files), encrypted with
  * the data key. The file also carries the data key wrapped by the passphrase (as the cloud keeps it), so it
  * opens with the passphrase it was made with, and needs no passphrase to be made (weekly backups run by
- * themselves). The vault files stay in Drive, encrypted with the same data key.
+ * themselves). The vault files stay in Drive, encrypted with the same data key. If the Secret Key was on when
+ * it was made, opening it needs the Secret Key too.
  *   { kind: "akhila-vrutta-backup", v: 1, made, build, wrap: PassWrap, data: Sealed }
  *   data opens (aad "backup") to { made, counts, collections: { name: Rec[] } }
  * Weekly: the first time the app opens on or after Sunday, into "Akhila Vrutta/Backups" in Drive; the last
@@ -56,8 +57,8 @@ export function readOutside(bytes: Uint8Array): BackupFile {
 }
 
 /** Opens a backup with the passphrase it was made with; null when the passphrase doesn't match. */
-export async function openBackup(f: BackupFile, pass: string, current?: CryptoKey): Promise<{ contents: Contents; sameKey: boolean } | null> {
-  const raw = await unwrapWithPass(pass, f.wrap);
+export async function openBackup(f: BackupFile, pass: string, current?: CryptoKey, sk?: Uint8Array<ArrayBuffer>): Promise<{ contents: Contents; sameKey: boolean } | null> {
+  const raw = await unwrapWithPass(pass, f.wrap, sk);
   if (!raw) return null;
   const key = await aesKey(raw);
   raw.fill(0);

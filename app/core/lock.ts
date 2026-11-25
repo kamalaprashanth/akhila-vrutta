@@ -1,5 +1,6 @@
 /** The lock screen: first-time setup on a device, and unlocking every time the app opens. */
 import { html, raw, toast } from "./dom.ts";
+import { formatSecretKey, parseSecretKey, SecretKeyNeeded } from "./crypto.ts";
 import { attachMeter, strength } from "./strength.ts";
 import { failsSoFar, noteRight, noteWrong, waitLabel, waitLeft } from "./attempts.ts";
 import { aesKey } from "./crypto.ts";
@@ -48,7 +49,7 @@ interface AskOpts<T> {
   create?: boolean;
   btn?: string;
   wrong?: string;
-  check(p: string): Promise<T | null>;
+  check(p: string, sk?: string): Promise<T | null>;
 }
 
 function askPassphrase<T>(title: string, note: string, o: AskOpts<T>): Promise<T> {
@@ -59,6 +60,7 @@ function askPassphrase<T>(title: string, note: string, o: AskOpts<T>): Promise<T
       <label class="lockl" for="lk_p">${title}</label>
       <input id="lk_p" type="password" autocomplete="${o.create ? "new-password" : "current-password"}" required>
       ${raw(o.create ? html`<div id="lk_m"></div><label class="lockl" for="lk_p2">Type it again</label><input id="lk_p2" type="password" autocomplete="new-password" required>` : "")}
+      ${raw(o.create ? "" : skField())}
       <p class="lockm err" id="lk_e" hidden></p>
       <button class="btn pri" type="submit" data-lbl="${btn}">${btn}</button></form>
       ${raw(o.create ? html`<p class="lockm small">Tip: 5 or more unrelated words, like <i>mango kite river seventy lamp</i>. Write it down and keep it at home: nobody can recover it for you.</p>` : "")}`);
@@ -66,6 +68,7 @@ function askPassphrase<T>(title: string, note: string, o: AskOpts<T>): Promise<T
     const pass = e.querySelector<HTMLInputElement>("#lk_p")!, go = e.querySelector<HTMLButtonElement>(".btn.pri")!;
     const fail = (t: string) => { err.hidden = false; err.textContent = t; };
     if (o.create) attachMeter(pass, e.querySelector<HTMLElement>("#lk_m")!);
+    const sk = wireSkField(e);
     // after 5 wrong tries on this device: a wait, counted down on the button
     let timer = 0;
     const hold = (): boolean => {
@@ -89,11 +92,15 @@ function askPassphrase<T>(title: string, note: string, o: AskOpts<T>): Promise<T
       }
       busy(e, true, o.create ? "Setting up…" : "Unlocking…");
       let r: T | null = null;
-      try { r = await o.check(p); } catch (x) { busy(e, false); return fail(x instanceof Error ? x.message : "Something went wrong."); }
+      try { r = await o.check(p, sk.value()); } catch (x) {
+        busy(e, false);
+        if (x instanceof SecretKeyNeeded) { sk.show(); return fail("This account also needs its Secret Key. It's on your Emergency Kit."); }
+        return fail(x instanceof Error ? x.message : "Something went wrong.");
+      }
       busy(e, false);
       if (r) { if (!o.create) noteRight(); clearTimeout(timer); resolve(r); return; }
       if (!o.create) { noteWrong(); if (hold()) return; }
-      fail(o.wrong ?? "That passphrase doesn't match. Try again."); pass.select();
+      fail(o.wrong ?? (sk.shown() ? "That passphrase or Secret Key doesn't match. Try again." : "That passphrase doesn't match. Try again.")); pass.select();
     });
   });
 }
@@ -165,7 +172,7 @@ async function unlockDevice(dev0: Device): Promise<Session> {
     });
     if (r !== "pass") return done(r);
   }
-  const keyRaw = await askPassphrase("Passphrase", "Enter your passphrase to open your data.", { check: (p) => unlockPass(dev, p) });
+  const keyRaw = await askPassphrase("Passphrase", "Enter your passphrase to open your data.", { check: (p, sk) => unlockPass(dev, p, sk) });
   const key = await aesKey(keyRaw);
   if (dev.mode === "remember") await setMode(dev, "remember", keyRaw);
   if (redo) { const m = await chooseMode(await bioCapable()); dev = await applyMode(dev, m, keyRaw); }
@@ -204,7 +211,7 @@ async function setup(): Promise<Session> {
   let dekRaw: Uint8Array<ArrayBuffer>;
   if (home) {
     const h = home;
-    dekRaw = await askPassphrase("Passphrase", "Welcome back. Enter your Akhila Vrutta passphrase to set up this device.", { check: (p) => unlockPass({ uid, home: h }, p) });
+    dekRaw = await askPassphrase("Passphrase", "Welcome back. Enter your Akhila Vrutta passphrase to set up this device.", { check: (p, sk) => unlockPass({ uid, home: h }, p, sk) });
   } else {
     const r = await askPassphrase("Create a passphrase",
       "<b>Choose a passphrase.</b> It encrypts everything. Nobody, not Google and not Claude, can recover it, so <b>save it in your password manager</b>. It can be the same as your KP Money Planner passphrase.",
@@ -226,16 +233,49 @@ export function confirmPassphrase(s: Session, note: string): Promise<Uint8Array<
     const e = show(html`${raw(msg(note))}<form class="lockf" autocomplete="off">
       <input type="text" name="username" value="akhila-vrutta" autocomplete="username" hidden>
       <label class="lockl" for="lk_p">Passphrase</label><input id="lk_p" type="password" autocomplete="current-password" required>
+      ${raw(skField())}
       <p class="lockm err" id="lk_e" hidden></p>
       <button class="btn pri" type="submit" data-lbl="Continue">Continue</button><button class="btn lockalt" type="button" id="lk_x">Cancel</button></form>`);
     e.querySelector("#lk_x")!.addEventListener("click", () => { closeLock(); resolve(null); });
+    const sk = wireSkField(e);
     e.querySelector("form")!.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       busy(e, true, "Checking…");
-      const r = await unlockPass(s, e.querySelector<HTMLInputElement>("#lk_p")!.value).catch(() => null);
+      const t = e.querySelector<HTMLElement>("#lk_e")!;
+      const r = await unlockPass(s, e.querySelector<HTMLInputElement>("#lk_p")!.value, sk.value()).catch((x) => {
+        if (x instanceof SecretKeyNeeded) sk.show();
+        t.hidden = false; t.textContent = x instanceof SecretKeyNeeded ? "This also needs your Secret Key (on your Emergency Kit)." : x instanceof Error ? x.message : "Something went wrong.";
+        return undefined;
+      });
       busy(e, false);
       if (r) { closeLock(); resolve(r); }
-      else { const t = e.querySelector<HTMLElement>("#lk_e")!; t.hidden = false; t.textContent = "That passphrase doesn't match."; }
+      else if (r === null) { t.hidden = false; t.textContent = sk.shown() ? "That passphrase or Secret Key doesn't match." : "That passphrase doesn't match."; }
     });
   });
+}
+
+/* ---------- the Secret Key field (shown when an account needs it on this device) ---------- */
+function skField(): string {
+  return html`<div id="lk_skw" hidden><label class="lockl" for="lk_sk">Secret Key</label>
+    <input id="lk_sk" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="A1-XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXX" class="skin">
+    ${raw("BarcodeDetector" in window ? html`<label class="btn" for="lk_scan">📷 Scan the Emergency Kit</label><input id="lk_scan" type="file" accept="image/*" capture="environment" hidden>` : "")}
+    <p class="lockm small">This device will remember it, so you won't be asked again here.</p></div>`;
+}
+function wireSkField(e: HTMLElement): { value(): string | undefined; show(): void; shown(): boolean } {
+  const w = e.querySelector<HTMLElement>("#lk_skw"), inp = e.querySelector<HTMLInputElement>("#lk_sk");
+  e.querySelector<HTMLInputElement>("#lk_scan")?.addEventListener("change", async (ev) => {
+    const f = (ev.target as HTMLInputElement).files?.[0];
+    if (!f || !inp) return;
+    try {
+      const D = (window as unknown as { BarcodeDetector: new (o: object) => { detect(i: ImageBitmap): Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+      const found = await new D({ formats: ["qr_code"] }).detect(await createImageBitmap(f));
+      const v = found.map((x) => x.rawValue).find((x) => parseSecretKey(x));
+      if (v) inp.value = formatSecretKey(parseSecretKey(v)!); else toast("No Secret Key found in that photo. Type it instead.");
+    } catch { toast("Couldn't read that photo. Type the key instead."); }
+  });
+  return {
+    value: () => (w && !w.hidden && inp?.value.trim() ? inp.value.trim() : undefined),
+    show: () => { if (w) { w.hidden = false; inp?.focus(); } },
+    shown: () => !!w && !w.hidden,
+  };
 }

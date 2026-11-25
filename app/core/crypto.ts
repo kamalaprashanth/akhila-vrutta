@@ -82,6 +82,8 @@ export const openJSON = async <T = unknown>(key: CryptoKey, s: Sealed, aad?: str
  * The passphrase record kept in the cloud: how the key is derived, a check value and the wrapped data key.
  *   kdf "argon2id": salt (16 bytes), m (KiB), t (passes), p (lanes)
  *   kdf absent or "pbkdf2": salt, iter (PBKDF2-SHA256), the older form
+ *   sk 1: a Secret Key is mixed in (HKDF-SHA256 over the derived key and the 128-bit Secret Key), so the
+ *         passphrase alone opens nothing; the Secret Key lives only on the owner's devices and Emergency Kit
  */
 export interface PassWrap {
   salt: string;
@@ -90,6 +92,7 @@ export interface PassWrap {
   m?: number;
   t?: number;
   p?: number;
+  sk?: 1;
   check: Sealed;
   dek: Sealed;
 }
@@ -102,30 +105,74 @@ export async function argon2Raw(pass: string, saltB64: string, m: number, t: num
   const out = await argon2id({ password: TE.encode(pass.normalize("NFKC")), salt: fromB64(saltB64), parallelism: p, iterations: t, memorySize: m, hashLength: 32, outputType: "binary" });
   return new Uint8Array(out);
 }
-/** The key that opens a wrap, derived from the passphrase the way the wrap says. */
-async function kekFor(pass: string, w: PassWrap): Promise<CryptoKey> {
-  if (w.kdf === "argon2id") return aesKey(await argon2Raw(pass, w.salt, w.m!, w.t!, w.p!));
-  if (w.kdf && w.kdf !== "pbkdf2") throw new Error("This key was made by a newer version of the app.");
-  return aesKey(await deriveRaw(pass, w.salt, w.iter ?? PBKDF2_ITER));
+/** Asked for when a wrap needs the Secret Key and none was given. */
+export class SecretKeyNeeded extends Error { constructor() { super("This needs your Secret Key (it's on your Emergency Kit)."); this.name = "SecretKeyNeeded"; } }
+
+/** The key that opens a wrap, derived from the passphrase the way the wrap says (and the Secret Key, if it has one). */
+async function kekFor(pass: string, w: PassWrap, sk?: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
+  let raw: Uint8Array<ArrayBuffer>;
+  if (w.kdf === "argon2id") raw = await argon2Raw(pass, w.salt, w.m!, w.t!, w.p!);
+  else if (w.kdf && w.kdf !== "pbkdf2") throw new Error("This key was made by a newer version of the app.");
+  else raw = await deriveRaw(pass, w.salt, w.iter ?? PBKDF2_ITER);
+  if (!w.sk) return aesKey(raw);
+  if (!sk) { raw.fill(0); throw new SecretKeyNeeded(); }
+  return aesKey(await mixSecretKey(raw, sk, w.salt));
 }
+/** HKDF-SHA256 over (passphrase key ‖ Secret Key), salted with the wrap's salt: 32 bytes. */
+export async function mixSecretKey(passKey: Uint8Array<ArrayBuffer>, sk: Uint8Array<ArrayBuffer>, saltB64: string): Promise<Uint8Array<ArrayBuffer>> {
+  const ikm = new Uint8Array(passKey.length + sk.length);
+  ikm.set(passKey); ikm.set(sk, passKey.length);
+  const base = await CR.importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
+  ikm.fill(0); passKey.fill(0);
+  return new Uint8Array(await CR.deriveBits({ name: "HKDF", hash: "SHA-256", salt: fromB64(saltB64), info: TE.encode("akhila-vrutta secret key v1") }, base, 256));
+}
+
 /** An older (PBKDF2) wrap, or Argon2id with lighter settings than today's: re-wrap at the next unlock. */
 export const needsUpgrade = (w: PassWrap): boolean => w.kdf !== "argon2id" || (w.m ?? 0) < ARGON2.m || (w.t ?? 0) < ARGON2.t;
 
 /** Wraps the data key under a passphrase (Argon2id; "pbkdf2" only for tests of the older form). */
-export async function wrapWithPass(pass: string, dekRaw: Uint8Array<ArrayBuffer>, kdf: "argon2id" | "pbkdf2" = "argon2id"): Promise<PassWrap> {
+export async function wrapWithPass(pass: string, dekRaw: Uint8Array<ArrayBuffer>, kdf: "argon2id" | "pbkdf2" = "argon2id", sk?: Uint8Array<ArrayBuffer>): Promise<PassWrap> {
   const salt = toB64(rnd(16));
-  const head: Omit<PassWrap, "check" | "dek"> = kdf === "argon2id" ? { salt, kdf, ...ARGON2 } : { salt, iter: PBKDF2_ITER };
-  const kek = await kekFor(pass, head as PassWrap);
+  const head: Omit<PassWrap, "check" | "dek"> = { ...(kdf === "argon2id" ? { salt, kdf, ...ARGON2 } : { salt, iter: PBKDF2_ITER }), ...(sk ? { sk: 1 as const } : {}) };
+  const kek = await kekFor(pass, head as PassWrap, sk);
   return { ...head, check: await seal(kek, TE.encode(CHECK_TXT)), dek: await seal(kek, dekRaw, "dek") };
 }
 
 /** Returns the raw data key, or null when the passphrase is wrong. */
-export async function unwrapWithPass(pass: string, w: PassWrap): Promise<Uint8Array<ArrayBuffer> | null> {
-  const kek = await kekFor(pass, w);
+export async function unwrapWithPass(pass: string, w: PassWrap, sk?: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer> | null> {
+  const kek = await kekFor(pass, w, sk);
   try {
     if (TD.decode(await open(kek, w.check)) !== CHECK_TXT) return null;
     return await open(kek, w.dek, "dek");
   } catch {
     return null;
   }
+}
+
+/* ---------- the Secret Key: 128 random bits, written for people ---------- */
+// Crockford base32 (no I, L, O, U), 26 characters, then 2 check characters; "A1-" says which kind of key.
+const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+export const newSecretKey = (): Uint8Array<ArrayBuffer> => rnd(16);
+const check2 = (b: Uint8Array): number => b.reduce((s, x, i) => (s * 31 + x * (i + 1)) % 1021, 7) % 1024;
+export function formatSecretKey(b: Uint8Array): string {
+  let bits = "";
+  for (const x of b) bits += x.toString(2).padStart(8, "0");
+  bits = bits.padEnd(130, "0");
+  let s = "";
+  for (let i = 0; i < 130; i += 5) s += B32[parseInt(bits.slice(i, i + 5), 2)];
+  const c = check2(b);
+  s += B32[c >> 5]! + B32[c & 31]!;
+  return `A1-${s.slice(0, 6)}-${s.slice(6, 12)}-${s.slice(12, 18)}-${s.slice(18, 24)}-${s.slice(24)}`;
+}
+/** Reads a Secret Key as typed (any case, spaces or dashes, O for 0, I or L for 1); null if it isn't one. */
+export function parseSecretKey(t: string): Uint8Array<ArrayBuffer> | null {
+  let s = t.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  if (s.startsWith("A1")) s = s.slice(2);
+  if (s.length !== 28 || [...s].some((ch) => !B32.includes(ch))) return null;
+  let bits = "";
+  for (const ch of s.slice(0, 26)) bits += B32.indexOf(ch).toString(2).padStart(5, "0");
+  const b = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) b[i] = parseInt(bits.slice(i * 8, i * 8 + 8), 2);
+  const c = check2(b);
+  return s.slice(26) === B32[c >> 5]! + B32[c & 31]! ? b : null;
 }

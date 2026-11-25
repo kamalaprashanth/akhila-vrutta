@@ -13,7 +13,8 @@ service cloud.firestore {
 
     // The passphrase record: Argon2id (kdf, m, t, p) or the older PBKDF2 (iter), the check and the wrapped key.
     function passWrap(d) {
-      return d.keys().hasOnly(['salt', 'iter', 'kdf', 'm', 't', 'p', 'check', 'dek'])
+      return d.keys().hasOnly(['salt', 'iter', 'kdf', 'm', 't', 'p', 'sk', 'check', 'dek'])
+        && (!('sk' in d) || d.sk == 1)
         && d.salt is string && sealed(d.check) && sealed(d.dek)
         && (!('kdf' in d) || d.kdf in ['pbkdf2', 'argon2id'])
         && (!('kdf' in d) || d.kdf != 'argon2id' || (d.m is int && d.m >= 65536 && d.m <= 1048576 && d.t is int && d.t >= 1 && d.t <= 10 && d.p is int && d.p >= 1 && d.p <= 4))

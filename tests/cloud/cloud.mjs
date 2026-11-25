@@ -84,13 +84,18 @@ async function device(name, { user, bio } = {}) {
 const shot = (page, label) => page.screenshot({ path: `${SHOTS}/${String(++step).padStart(2, "0")}-${label}.png` });
 const lockText = (page) => page.locator("#lock").innerText({ timeout: 15000 });
 
-async function signInAndSetup(page, { create, pass, mode = "pass" }) {
+async function signInAndSetup(page, { create, pass, mode = "pass", sk }) {
   await page.goto(BASE);
   await page.click("#lk_g");
   await page.waitForSelector("#lk_p");
   await page.fill("#lk_p", pass);
   if (create) await page.fill("#lk_p2", pass);
   await page.click("#lock .btn.pri");
+  if (sk) {   // an account with a Secret Key: a new device asks for it
+    await page.waitForSelector("#lk_skw:not([hidden])", { timeout: 30000 });
+    await page.fill("#lk_sk", sk);
+    await page.click("#lock .btn.pri");
+  }
   await page.click(`#lock [data-m="${mode}"]`, { timeout: 20000 });
   await page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
 }
@@ -324,11 +329,43 @@ try {
   await B.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
   ok("device 2: old passphrase refused, new one works");
 
+  progress("secret key");
+  /* 6b. The Secret Key: turned on on device 1 (Emergency Kit downloaded), the key in the cloud needs it; device 2
+     is asked for it once, then remembers it */
+  await A.page.goto(`${BASE}/#/settings`);
+  await A.page.waitForSelector("#skCard #skOn", { timeout: 20000 });
+  await A.page.click("#skCard #skOn");
+  const SK = (await A.page.innerText("#skCard #skKey")).trim();
+  const [kit] = await Promise.all([A.page.waitForEvent("download", { timeout: 20000 }), A.page.click("#skCard #skDl")]);
+  const kitText = (await readFile(await kit.path())).toString("latin1");
+  check(/^A1-[0-9A-Z]{6}-[0-9A-Z]{6}-[0-9A-Z]{6}-[0-9A-Z]{6}-[0-9A-Z]{4}$/.test(SK) && kitText.startsWith("%PDF") && kitText.includes(SK), `a Secret Key is made, and its Emergency Kit downloads as a PDF with the key in it (${kit.suggestedFilename()})`);
+  await A.page.fill("#skCard #skLast", SK.slice(-4));
+  await A.page.fill("#skCard #skPass", PASS2);
+  await A.page.click("#skF .btn.pri");
+  await A.page.waitForFunction(() => /Secret Key is on/.test(document.querySelector("#toast")?.textContent ?? ""), null, { timeout: 30000 });
+  const keyDoc = (await api(`${FS}/homes/${home}/keys/${OWNER_UID}`, {}, owner)).body.fields ?? {};
+  check(keyDoc.sk?.integerValue === "1" && keyDoc.kdf?.stringValue === "argon2id", "the key in the cloud now needs the Secret Key too");
+  await B.page.reload();
+  await unlockWithPass(B.page, PASS2);
+  await B.page.waitForSelector("#lk_skw:not([hidden])", { timeout: 30000 });
+  check(/Secret Key/.test(await B.page.innerText("#lk_e")), "device 2: the passphrase alone isn't enough any more; it asks for the Secret Key");
+  await B.page.fill("#lk_sk", "A1-AAAAAA-AAAAAA-AAAAAA-AAAAAA-AAAA");
+  await B.page.click("#lock .btn.pri");
+  await B.page.waitForTimeout(1500);
+  check(/isn't right|doesn't match/.test(await B.page.innerText("#lk_e")), "…a wrong Secret Key is refused");
+  await B.page.fill("#lk_sk", SK.toLowerCase().replace(/-/g, " "));
+  await B.page.click("#lock .btn.pri");
+  await B.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
+  await B.page.reload();
+  await unlockWithPass(B.page, PASS2);
+  await B.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
+  ok("…the right one (typed in any case, with spaces) unlocks it, and next time the passphrase is enough there");
+
   progress("fingerprint");
   /* 7. Fingerprint unlock (virtual authenticator with PRF) */
   const C = await device("device 3", { bio: true });
   try {
-    await signInAndSetup(C.page, { create: false, pass: PASS2, mode: "bio" });
+    await signInAndSetup(C.page, { create: false, pass: PASS2, mode: "bio", sk: SK });
     await C.page.reload();
     await C.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
     ok("fingerprint: set up, and the app unlocks with it after a reload");

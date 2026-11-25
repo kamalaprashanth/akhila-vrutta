@@ -8,11 +8,12 @@
  * This device (IndexedDB):
  *   device   { uid, home, mode, credId?, prfSalt? }
  *   wrap     PassWrap (copy, so the passphrase works offline)
+ *   sk       the Secret Key, as written on the Emergency Kit (when it's turned on)
  *   bioDek   the data key wrapped by the fingerprint secret   (mode "bio")
  *   dek      the data key as a non-extractable CryptoKey     (mode "remember")
  */
 import { isNative, nativeCall } from "./native.ts";
-import { aesKey, fromB64, needsUpgrade, open, rnd, seal, toB64, unwrapWithPass, wrapWithPass, type PassWrap, type Sealed } from "./crypto.ts";
+import { aesKey, formatSecretKey, fromB64, needsUpgrade, open, parseSecretKey, rnd, seal, SecretKeyNeeded, toB64, unwrapWithPass, wrapWithPass, type PassWrap, type Sealed } from "./crypto.ts";
 import { IDB } from "./idb.ts";
 import { currentUser, initFirebase, signIn, type Fb } from "./firebase.ts";
 
@@ -93,14 +94,46 @@ export async function createHome(uid: string, pass: string): Promise<{ home: str
   return { home, dekRaw };
 }
 
-/** Re-wraps the data key under a new passphrase. Records stay as they are. */
-export async function changePassphrase(s: Session, oldPass: string, newPass: string): Promise<boolean> {
-  const w = (await passWrapOf(s.home, s.uid)) ?? (await IDB.get<PassWrap>("wrap"));
+/* ---------- the Secret Key on this device ---------- */
+/** This device's copy of the Secret Key (formatted), if it has one. */
+export const localSecretKey = (): Promise<string | undefined> => IDB.get<string>("sk");
+async function skBytes(typed?: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
+  if (typed) { const b = parseSecretKey(typed); if (!b) throw new Error("That Secret Key isn't right: check it against your Emergency Kit."); return b; }
+  const kept = await IDB.get<string>("sk");
+  return kept ? parseSecretKey(kept) ?? undefined : undefined;
+}
+/** Does the account's key need a Secret Key? */
+export async function secretKeyOn(s: { home: string; uid: string }): Promise<boolean> {
+  const w = (await passWrapOf(s.home, s.uid).catch(() => null)) ?? (await IDB.get<PassWrap>("wrap"));
+  return !!w?.sk;
+}
+async function currentWrap(s: { home: string; uid: string }): Promise<PassWrap> {
+  const w = (await passWrapOf(s.home, s.uid).catch(() => null)) ?? (await IDB.get<PassWrap>("wrap"));
   if (!w) throw new Error("Couldn't read your key. Check your connection.");
-  const raw = await unwrapWithPass(oldPass, w);
+  return w;
+}
+/**
+ * Turns the Secret Key on (sk given) or off (null): the data key is re-wrapped under the passphrase with or
+ * without it. False when the passphrase is wrong. Records stay as they are.
+ */
+export async function setSecretKey(s: Session, pass: string, sk: Uint8Array<ArrayBuffer> | null, typedOld?: string): Promise<boolean> {
+  const w = await currentWrap(s);
+  const raw = await unwrapWithPass(pass, w, await skBytes(typedOld));
   if (!raw) return false;
-  await savePassWrap(s.home, s.uid, await wrapWithPass(newPass, raw));
+  await savePassWrap(s.home, s.uid, await wrapWithPass(pass, raw, "argon2id", sk ?? undefined));
   raw.fill(0);
+  if (sk) await IDB.set("sk", formatSecretKey(sk)); else await IDB.del("sk");
+  return true;
+}
+
+/** Re-wraps the data key under a new passphrase (keeping the Secret Key, if it's on). Records stay as they are. */
+export async function changePassphrase(s: Session, oldPass: string, newPass: string, typedSk?: string): Promise<boolean> {
+  const w = await currentWrap(s), sk = await skBytes(typedSk);
+  const raw = await unwrapWithPass(oldPass, w, sk);
+  if (!raw) return false;
+  await savePassWrap(s.home, s.uid, await wrapWithPass(newPass, raw, "argon2id", w.sk ? sk : undefined));
+  raw.fill(0);
+  if (typedSk && sk) await IDB.set("sk", formatSecretKey(sk));
   return true;
 }
 
@@ -215,19 +248,22 @@ export async function unlockBio(dev: Device): Promise<CryptoKey> {
 export const unlockRemembered = () => IDB.get<CryptoKey>("dek");
 
 /** Unwraps the data key with the passphrase; uses the cloud copy, or this device's copy offline. */
-export async function unlockPass(dev: { uid: string; home: string }, pass: string): Promise<Uint8Array<ArrayBuffer> | null> {
+export async function unlockPass(dev: { uid: string; home: string }, pass: string, typedSk?: string): Promise<Uint8Array<ArrayBuffer> | null> {
   let w: PassWrap | null | undefined = null;
   try { w = await passWrapOf(dev.home, dev.uid); } catch { /* offline */ }
   if (w) await IDB.set("wrap", w);
   else w = await IDB.get<PassWrap>("wrap");
   if (!w) throw new Error("Couldn't read your key. Connect to the internet once and try again.");
-  const raw = await unwrapWithPass(pass, w);
+  // a Secret Key: the one typed now (from the Emergency Kit), or this device's copy; none → SecretKeyNeeded
+  const sk = await skBytes(typedSk);
+  const raw = await unwrapWithPass(pass, w, sk);
+  if (raw && typedSk && sk) await IDB.set("sk", formatSecretKey(sk));   // this device remembers it from now on
   // an older (PBKDF2) wrap: re-wrapped with Argon2id now, while the passphrase is at hand (best effort)
-  if (raw && needsUpgrade(w)) await savePassWrap(dev.home, dev.uid, await wrapWithPass(pass, raw)).catch((e) => console.warn("key upgrade", e));
+  if (raw && needsUpgrade(w)) await savePassWrap(dev.home, dev.uid, await wrapWithPass(pass, raw, "argon2id", w.sk ? sk : undefined)).catch((e) => console.warn("key upgrade", e));
   return raw;
 }
 
-export { currentUser, signIn };
+export { currentUser, signIn, SecretKeyNeeded };
 
 /** Removes everything this device knows (the cloud copy stays). */
 export async function forgetDevice(): Promise<void> {

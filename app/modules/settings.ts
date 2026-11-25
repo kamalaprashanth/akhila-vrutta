@@ -7,6 +7,8 @@ import { confirmPassphrase } from "../core/lock.ts";
 import { META } from "../core/store.ts";
 import { attachMeter, strength } from "../core/strength.ts";
 import { backupCard, wireBackup } from "./backupcard.ts";
+import { skCard, wireSk } from "./skcard.ts";
+import { SecretKeyNeeded } from "../core/crypto.ts";
 import { isEncryptedBackup, openOldBackup, parseOldExport, type Parsed } from "./money/import.ts";
 
 const ICON = "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .3-1.5-1.5L17 5l-3-1-1 2h-2l-1-2-3 1 .5 1.8L6 8.3 4 8l-1 3 2 1v0l-2 1 1 3 2-.3 1.5 1.5L7 19l3 1 1-2h2l1 2 3-1-.5-1.8 1.5-1.5 2 .3 1-3z";
@@ -140,6 +142,7 @@ async function wireSecurity(root: HTMLElement): Promise<void> {
       <label for="op">Current passphrase</label><input id="op" type="password" autocomplete="current-password" required>
       <label for="np">New passphrase (10+ characters; 5 or more words is best)</label><input id="np" type="password" autocomplete="new-password" required><div id="npm"></div>
       <label for="np2">New passphrase again</label><input id="np2" type="password" autocomplete="new-password" required>
+      <div id="npskw" hidden><label for="npsk">Secret Key (from your Emergency Kit)</label><input id="npsk" type="text" autocomplete="off" spellcheck="false" class="skin"></div>
       <p class="note">Only the key is re-locked, so this is quick. Your other devices keep their fingerprint unlock.</p>
       <div class="btns"><button class="btn pri" type="submit">Change</button><button class="btn ghost" type="button" id="px">Cancel</button></div></form>`;
     area.querySelector("#px")!.addEventListener("click", () => { area.innerHTML = ""; });
@@ -153,9 +156,13 @@ async function wireSecurity(root: HTMLElement): Promise<void> {
       const b = area.querySelector<HTMLButtonElement>(".btn.pri")!;
       b.disabled = true; b.textContent = "Changing…";
       try {
-        if (await changePassphrase(s, v("op"), v("np"))) { area.innerHTML = ""; toast("Passphrase changed"); }
+        const skw = area.querySelector<HTMLElement>("#npskw")!;
+        if (await changePassphrase(s, v("op"), v("np"), skw.hidden ? undefined : v("npsk"))) { area.innerHTML = ""; toast("Passphrase changed"); }
         else { toast("The current passphrase is wrong."); }
-      } catch (e) { toast(e instanceof Error ? e.message : String(e)); }
+      } catch (e) {
+        if (e instanceof SecretKeyNeeded) { area.querySelector<HTMLElement>("#npskw")!.hidden = false; toast("This device doesn't have your Secret Key yet: type it from your Emergency Kit."); }
+        else toast(e instanceof Error ? e.message : String(e));
+      }
       b.disabled = false; b.textContent = "Change";
     });
   });
@@ -167,7 +174,7 @@ export const settings: Module = {
   icon: ICON,
   render(root) {
     const cfg = config();
-    root.innerHTML = html`${raw(backupCard())}${raw(dataCard())}${raw(securityCard())}
+    root.innerHTML = html`${raw(backupCard())}${raw(dataCard())}${raw(securityCard())}${raw(skCard())}
       <section class="card">
         <h2>About this build</h2>
         <dl class="kv">
@@ -178,6 +185,7 @@ export const settings: Module = {
       </section>`;
     void wireImport(root);
     wireBackup(root);
+    wireSk(root);
     void wireSecurity(root);
   },
 };
