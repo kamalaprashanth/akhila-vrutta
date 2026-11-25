@@ -56,21 +56,24 @@ if (mode === "test") {
   ok(pend.every((n) => !/₹|\d{3}/.test(`${n.title} ${n.body}`)), `…naming the bill only, no amounts (e.g. "${pend[0]?.title}")`);
   ok(pend.every((n) => new Date(n.schedule?.at).getHours() === 9), "…at 9 AM");
 
-  // Back: closes a sheet, then goes back a page, then at Overview twice closes the app
-  await p.click("#moneyAdd"); await sleep(600);
-  ok(await p.evaluate(() => !!document.querySelector("#mvLayer #modal .sheet")), "+ opens the add form");
-  back(); await sleep(800);
-  ok(await p.evaluate(() => !document.querySelector("#mvLayer #modal .sheet")), "Back closes the form");
-  await p.evaluate(() => { location.hash = "#/money/activity"; }); await sleep(600);
-  await p.evaluate(() => { location.hash = "#/money/plan"; }); await sleep(600);
-  back(); await sleep(800);
-  ok(/activity/.test(await p.evaluate(() => location.hash)), `Back goes to the page before (${await p.evaluate(() => location.hash)})`);
-  back(); await sleep(800);
-  ok(/home/.test(await p.evaluate(() => location.hash)), "…and again, to Overview");
-  back(); await sleep(800);
+  // Back: closes a sheet, then goes back a page, then at Overview twice closes the app.
+  // (The emulator delivers Back a moment later, so each step waits for its result.)
+  const until = async (fn, ms = 10000) => { for (let t = 0; t < ms; t += 250) { if (await fn().catch(() => false)) return true; await sleep(250); } return false; };
+  const hash = () => p.evaluate(() => location.hash);
+  await p.click("#moneyAdd");
+  ok(await until(() => p.evaluate(() => !!document.querySelector("#mvLayer #modal .sheet"))), "+ opens the add form");
+  back();
+  ok(await until(() => p.evaluate(() => !document.querySelector("#mvLayer #modal .sheet"))), "Back closes the form");
+  await p.evaluate(() => { location.hash = "#/money/activity"; }); await sleep(800);
+  await p.evaluate(() => { location.hash = "#/money/plan"; }); await sleep(800);
+  back();
+  ok(await until(async () => /activity/.test(await hash())), `Back goes to the page before (${await hash()})`);
+  back();
+  ok(await until(async () => /home/.test(await hash())), `…and again, to Overview (${await hash()})`);
+  back(); await sleep(2500);
   ok(running(), "at Overview, one Back doesn't close the app");
-  back(); await sleep(1500);
-  ok(!running(), "…a second Back does");
+  back();
+  ok(await until(async () => !running(), 8000), "…a second Back does");
   await b.close().catch(() => {});
 
   // auto-lock: a few seconds away keeps the page; more than a minute away locks (reloads) it
