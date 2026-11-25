@@ -12,7 +12,7 @@
  *   dek      the data key as a non-extractable CryptoKey     (mode "remember")
  */
 import { isNative, nativeCall } from "./native.ts";
-import { aesKey, fromB64, open, rnd, seal, toB64, unwrapWithPass, wrapWithPass, type PassWrap, type Sealed } from "./crypto.ts";
+import { aesKey, fromB64, needsUpgrade, open, rnd, seal, toB64, unwrapWithPass, wrapWithPass, type PassWrap, type Sealed } from "./crypto.ts";
 import { IDB } from "./idb.ts";
 import { currentUser, initFirebase, signIn, type Fb } from "./firebase.ts";
 
@@ -221,7 +221,10 @@ export async function unlockPass(dev: { uid: string; home: string }, pass: strin
   if (w) await IDB.set("wrap", w);
   else w = await IDB.get<PassWrap>("wrap");
   if (!w) throw new Error("Couldn't read your key. Connect to the internet once and try again.");
-  return unwrapWithPass(pass, w);
+  const raw = await unwrapWithPass(pass, w);
+  // an older (PBKDF2) wrap: re-wrapped with Argon2id now, while the passphrase is at hand (best effort)
+  if (raw && needsUpgrade(w)) await savePassWrap(dev.home, dev.uid, await wrapWithPass(pass, raw)).catch((e) => console.warn("key upgrade", e));
+  return raw;
 }
 
 export { currentUser, signIn };

@@ -58,6 +58,9 @@ for (const [label, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { 
     await page.waitForTimeout(1500);
     check(true, `${label}: lock screen shows and Firebase loads`);
   } catch { check(false, `${label}: lock screen or Firebase didn't load`); }
+  // the passphrase lock (Argon2id) runs as WebAssembly: the site's CSP must allow it
+  const wasm = await page.evaluate(() => WebAssembly.compile(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])).then(() => "ok", (e) => String(e))).catch((e) => String(e));
+  check(wasm === "ok", `${label}: WebAssembly is allowed (for the Argon2id passphrase lock)${wasm === "ok" ? "" : ": " + wasm.slice(0, 120)}`);
   const origin = new URL(BASE).origin;
   check(sdk.length >= 3 && sdk.every((u) => u.startsWith(origin + "/firebase/")), `${label}: the Firebase SDK comes from the site itself, not Google's CDN (${sdk.map((u) => u.replace(origin, "")).join(", ") || "none seen"})`);
   // App Check (watch-only for now): reported, not required. A preview address isn't on the reCAPTCHA key's list,

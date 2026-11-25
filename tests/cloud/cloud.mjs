@@ -36,6 +36,7 @@ const ok = (m) => console.log(`✓ ${m}`);
 const bad = (m) => { failed++; console.error(`✗ ${m}`); };
 const check = (cond, m) => (cond ? ok(m) : bad(m));
 
+const denied0 = async (label, p) => { const r = await p; check(r.status === 403, `${label} (HTTP ${r.status})`); };
 async function api(url, opts = {}, token = "owner") {
   const auth = token ? { authorization: `Bearer ${token}` } : {};
   const r = await fetch(url, { signal: AbortSignal.timeout(30000), ...opts, headers: { "content-type": "application/json", ...auth, ...(opts.headers ?? {}) } });
@@ -207,6 +208,26 @@ try {
   const fA = await moneyFrame(A.page, "activity");
   const back = (await plannerTxns(fA)).find((t) => t.note === "cloud test 42");
   check(back?.amount === 777.77, `after reload the edit is back as ₹777.77 (got ${back?.amount})`);
+
+  /* 4a. The passphrase lock is Argon2id; an older (PBKDF2) one is upgraded at the next passphrase unlock */
+  const CRY = await import("../../app/core/crypto.ts");
+  const fromFs = (f) => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, "stringValue" in v ? v.stringValue : "integerValue" in v ? Number(v.integerValue) : "mapValue" in v ? fromFs(v.mapValue.fields ?? {}) : null]));
+  const toFs = (o) => ({ fields: Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "string" ? { stringValue: v } : typeof v === "number" ? { integerValue: String(v) } : { mapValue: toFs(v) }])) });
+  const keyUrl = `${FS}/homes/${home}/keys/${OWNER_UID}`;
+  let wrap = fromFs((await api(keyUrl, {}, owner)).body.fields ?? {});
+  check(wrap.kdf === "argon2id" && wrap.m === 131072 && wrap.t === 3 && wrap.p === 1 && !("iter" in wrap), `the passphrase lock in the cloud is Argon2id, 128 MB, 3 passes (${wrap.kdf} m=${wrap.m} t=${wrap.t})`);
+  const dekRaw = await CRY.unwrapWithPass(PASS1, wrap);
+  check(!!dekRaw, "…and opens with the passphrase");
+  const old = await CRY.wrapWithPass(PASS1, dekRaw, "pbkdf2");
+  const put = await api(keyUrl, { method: "PATCH", body: JSON.stringify(toFs(old)) }, owner);
+  check(put.status === 200, `rules: an older PBKDF2 lock is still accepted (HTTP ${put.status})`);
+  await denied0("rules: a lock with an unknown method is refused", api(keyUrl, { method: "PATCH", body: JSON.stringify(toFs({ ...old, kdf: "md5" })) }, owner));
+  await A.page.reload();
+  await unlockWithPass(A.page, PASS1);
+  await A.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
+  await A.page.waitForTimeout(3000);
+  wrap = fromFs((await api(keyUrl, {}, owner)).body.fields ?? {});
+  check(wrap.kdf === "argon2id" && !("iter" in wrap) && !!(await CRY.unwrapWithPass(PASS1, wrap)), `after a passphrase unlock, the older lock was upgraded to Argon2id (${wrap.kdf ?? "pbkdf2"})`);
 
   progress("household");
   /* 4b. Household: a home and a to-do are saved encrypted, survive a Money re-import, and come back after a reload */

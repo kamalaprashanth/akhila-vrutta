@@ -3,8 +3,13 @@
 What protects the data, and what was decided (25 Nov 2026, with the owner).
 
 ## In place
-- End-to-end encryption: AES-256-GCM with a data key; the key wrapped by the passphrase (PBKDF2-SHA256, 600,000
-  rounds). Firestore and Drive hold only ciphertext; the rules refuse anything else (`firestore.rules`).
+- End-to-end encryption: AES-256-GCM with a data key; the key wrapped by the passphrase, derived with Argon2id
+  (128 MB, 3 passes, 1 lane, 16-byte salt, 32-byte key; about a second on a phone). Older PBKDF2-SHA256 locks
+  (600,000 rounds) still open and are re-wrapped with Argon2id at the next passphrase unlock; backups carry their
+  lock, so old ones keep opening. Argon2id is hash-wasm 4.13.0 (MIT), vendored in `app/vendor/hash-wasm` and built
+  from its C source with clang 18 (`scripts/build-hash-wasm.sh`), checked against the published test vectors.
+  The CSP allows WebAssembly ('wasm-unsafe-eval') for it. Firestore and Drive hold only ciphertext; the rules
+  refuse anything else (`firestore.rules`, including the shape of the passphrase lock).
 - Only listed accounts may use the project (`allowed()` in the rules); the Claude function checks the owner.
 - Web headers: strict CSP, X-Frame-Options, HSTS, nosniff, Referrer-Policy, Permissions-Policy (`firebase.json`).
 - The site and the Android app carry their own copy of the Firebase SDK (`scripts/firebase-sdk.mjs`), so the page
