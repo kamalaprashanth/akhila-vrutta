@@ -141,21 +141,27 @@ jobs:
           rm "$RUNNER_TEMP/ks.json" "$RUNNER_TEMP/sa.json"
           echo "AV_KEYSTORE=$RUNNER_TEMP/ks.jks" >> "$GITHUB_ENV"
           echo "ok=1" >> "$GITHUB_OUTPUT"
-      - name: Signed APK, attached to a GitHub release
+      - name: Signed APK and Play bundle, attached to a GitHub release; the bundle to Google Play (internal testing)
         if: steps.key.outputs.ok == '1'
         env:
           GH_TOKEN: ${{ github.token }}
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
           AV_VERSION_CODE: ${{ github.run_number }}
           AV_VERSION_NAME: 1.${{ github.run_number }} (${{ github.sha }})
         run: |
-          (cd mobile/android && ./gradlew --no-daemon -q assembleRelease)
+          (cd mobile/android && ./gradlew --no-daemon -q assembleRelease bundleRelease)
           APK=mobile/android/app/build/outputs/apk/release/app-release.apk
+          AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
           "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --print-certs "$APK" | grep -i "SHA-256 digest" | head -1
-          cp "$APK" "akhila-vrutta-1.${{ github.run_number }}.apk"
-          gh release create "android-1.${{ github.run_number }}" "akhila-vrutta-1.${{ github.run_number }}.apk" \
-            --title "Akhila Vrutta for Android 1.${{ github.run_number }}" --target "${{ github.sha }}" \
-            --notes "Open this page on the phone and tap the .apk to install (it updates the installed app). Built from ${{ github.sha }}."
+          V="1.${{ github.run_number }}"
+          cp "$APK" "akhila-vrutta-$V.apk"; cp "$AAB" "akhila-vrutta-$V.aab"
+          gh release create "android-$V" "akhila-vrutta-$V.apk" "akhila-vrutta-$V.aab" \
+            --title "Akhila Vrutta for Android $V" --target "${{ github.sha }}" \
+            --notes "Phone: open this page and tap the .apk to install (it updates the installed app). Google Play: the .aab is the same app for Play Console. Built from ${{ github.sha }}."
           rm -f "$AV_KEYSTORE"
+          echo "$SA" > "$RUNNER_TEMP/sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" node scripts/play-upload.mjs "akhila-vrutta-$V.aab" "$V" || echo "::warning title=Google Play::Upload to Play failed; the GitHub release has the files."
+          rm -f "$RUNNER_TEMP/sa.json"
 
   functions:
     # Advisor (askClaude) and price updates. Separate from the site release, so a missing key never blocks it.

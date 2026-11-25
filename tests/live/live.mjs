@@ -17,7 +17,7 @@ const check = (cond, m) => { if (cond) console.log(`✓ ${m}`); else { failed++;
 const FILES = [
   ["/", "text/html", 500], ["/app.js", "javascript", 5000], ["/app.css", "text/css", 1000], ["/config.js", "javascript", 50],
   ["/manifest.webmanifest", "", 100], ["/icons/logo.svg", "image/svg", 100], ["/icons/icon-192.png", "image/png", 500],
-  ["/money/mv.css", "text/css", 10000],
+  ["/money/mv.css", "text/css", 10000], ["/privacy", "text/html", 2000],
   ["/money/vendor/pdfjs/pdf.min.mjs", "javascript", 10000], ["/money/vendor/pdfjs/pdf.worker.min.mjs", "javascript", 10000],
 ];
 for (const [path, type, min] of FILES) {

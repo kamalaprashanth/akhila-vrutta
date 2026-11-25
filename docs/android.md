@@ -31,3 +31,11 @@ only be reinstalled, not updated.
 
 ## Not tested by CI
 A real fingerprint, real Google sign-in, notifications actually appearing, and anything on the real phone.
+
+## Google Play (internal testing)
+Package `in.kp.akhilavrutta`. Each release on `main` also builds the Play bundle (`.aab`), attaches it to the
+GitHub release, and uploads it to the internal testing track (`scripts/play-upload.mjs`, as the deploy
+service account, which has "Release apps to testing tracks" in Play Console). The first release of the app
+had to be uploaded by hand. Play App Signing: Google holds the app signing key; ours is the upload key.
+Play doesn't allow exact alarms for this kind of app, so reminders use Android's normal timing (around 9 AM).
+Privacy policy: https://kp-akhila-vrutta.web.app/privacy
