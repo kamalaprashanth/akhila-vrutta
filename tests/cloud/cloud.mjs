@@ -116,17 +116,6 @@ try {
 
   progress("import");
   /* 2. Import the sample export */
-  /* Habits: a habit and today's tick are saved encrypted too (checked again after the re-import and reload) */
-  await A.page.goto(`${BASE}/#/habits`);
-  await A.page.waitForSelector("#hbView #hbStarters", { timeout: 20000 });
-  await A.page.click("#hbView #hbStarters");
-  await A.page.check("#mvLayer #hs0");
-  await A.page.click("#mvLayer #sv");
-  await A.page.click("#hbView .hbrow .hbtick");
-  await A.page.waitForTimeout(3000);
-  const hbDocs = [...((await api(`${FS}/homes/${home}/habits?pageSize=50`)).body.documents ?? []), ...((await api(`${FS}/homes/${home}/habitLog?pageSize=50`)).body.documents ?? [])];
-  const hbPlain = hbDocs.filter((d) => ["Walk 30 min", "habitLog"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
-  check(hbDocs.length >= 2 && hbPlain === 0 && hbDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a habit and its tick are in the cloud as ciphertext only (${hbDocs.length} records)`);
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.setInputFiles("#impFile", SAMPLE);
   await A.page.click("#impGo");
@@ -232,6 +221,17 @@ try {
   const hhDocs = [...((await api(`${FS}/homes/${home}/hhItems?pageSize=50`)).body.documents ?? []), ...((await api(`${FS}/homes/${home}/hhHomes?pageSize=50`)).body.documents ?? [])];
   const hhPlain = hhDocs.filter((d) => ["Cloud to-do", "Cloud home"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
   check(hhDocs.length >= 2 && hhPlain === 0 && hhDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `household records are in the cloud as ciphertext only (${hhDocs.length} records)`);
+  /* Habits: a habit and today's tick are saved encrypted too (checked again after the re-import and reload) */
+  await A.page.goto(`${BASE}/#/habits`);
+  await A.page.waitForSelector("#hbView #hbStarters", { timeout: 20000 });
+  await A.page.click("#hbView #hbStarters");
+  await A.page.check("#mvLayer #hs0");
+  await A.page.click("#mvLayer #sv");
+  await A.page.click("#hbView .hbrow .hbtick");
+  await A.page.waitForTimeout(3000);
+  const hbDocs = [...((await api(`${FS}/homes/${home}/habits?pageSize=50`)).body.documents ?? []), ...((await api(`${FS}/homes/${home}/habitLog?pageSize=50`)).body.documents ?? [])];
+  const hbPlain = hbDocs.filter((d) => ["Walk 30 min", "habitLog"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  check(hbDocs.length >= 2 && hbPlain === 0 && hbDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a habit and its tick are in the cloud as ciphertext only (${hbDocs.length} records)`);
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.setInputFiles("#impFile", SAMPLE);
   await A.page.click("#impGo");
