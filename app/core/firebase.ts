@@ -103,6 +103,8 @@ export function initFirebase(): Promise<Fb | null> {
  * this site or this app. Until enforcement is switched on, a missing token is only counted, so a failure here
  * never stops the app; it's logged.
  */
+/** Why this device couldn't get an App Check token, for Settings › Admin (null: no failure seen). */
+export let appCheckError: string | null = null;
 async function startAppCheck(app: unknown, cfg: FirebaseWebConfig): Promise<void> {
   const ac = config().appCheck;
   if (!ac || (isNative() ? !ac.android : !ac.siteKey)) return;
@@ -111,13 +113,16 @@ async function startAppCheck(app: unknown, cfg: FirebaseWebConfig): Promise<void
     const provider = isNative()
       ? new m.CustomProvider({
         getToken: async () => {
-          const r = await nativeCall<{ token: string; expires: number }>("AkhilaNative", "appCheckToken", { appId: ac.android!.appId, apiKey: ac.android!.apiKey, projectId: cfg.projectId });
-          return { token: r.token, expireTimeMillis: r.expires };
+          try {
+            const r = await nativeCall<{ token: string; expires: number }>("AkhilaNative", "appCheckToken", { appId: ac.android!.appId, apiKey: ac.android!.apiKey, projectId: cfg.projectId });
+            appCheckError = null;
+            return { token: r.token, expireTimeMillis: r.expires };
+          } catch (e) { appCheckError = String((e as { message?: string })?.message ?? e); throw e; }
         },
       })
       : new m.ReCaptchaEnterpriseProvider(ac.siteKey!);
     m.initializeAppCheck!(app, { provider, isTokenAutoRefreshEnabled: true });
-  } catch (e) { console.warn("App Check", e); }
+  } catch (e) { appCheckError = String((e as { message?: string })?.message ?? e); console.warn("App Check", e); }
 }
 
 /** Cloud Functions live in Mumbai, next to the database. */
