@@ -134,3 +134,34 @@
 .mv .hbicons button.on{border:2px solid var(--accent);background:var(--accent-soft)}
 .mv .hbopt{margin:0 0 8px}
 @container mv (min-width:900px){ .mv.hbv .wrap{max-width:720px} }
+
+/* Documents (drawn with Money's look) */
+.mv.dv .wrap{padding-top:10px}
+.mv .dsearch input{width:100%;box-sizing:border-box;min-height:46px;border-radius:14px;border:1px solid var(--line2);background:var(--surface);color:var(--ink);padding:0 14px;font:500 15px var(--body)}
+.mv .datt{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x mandatory}
+.mv .datt .card{flex:none;width:170px;padding:12px;text-align:left;border:1px solid var(--line);cursor:pointer;scroll-snap-align:start;font:inherit;color:var(--ink)}
+.mv .datt b{display:block;font:600 14px var(--body)}
+.mv .datt span{display:block;font:500 12.5px var(--body);margin-top:4px}
+.mv .datt .bad{color:var(--bad)}.mv .datt .warn{color:var(--t-amber-i,#9a5d0b)}
+.mv .dico{width:40px;height:40px;border-radius:12px;background:var(--sunk);display:grid;place-items:center;font-size:19px;flex:none;margin-right:12px}
+.mv .dico.big{width:52px;height:52px;font-size:26px;border-radius:16px}
+.mv .dsub{color:var(--muted);font-weight:500}
+.mv .dpill{font:700 11.5px var(--body);padding:4px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);flex:none;white-space:nowrap}
+.mv .dpill.w{background:color-mix(in srgb,#c98a1b 18%,transparent);color:var(--t-amber-i,#9a5d0b)}
+.mv .dbar{height:5px;border-radius:3px;background:var(--sunk);overflow:hidden;margin-top:6px;max-width:220px}
+.mv .dbar i{display:block;height:100%;background:var(--accent)}
+.mv .dadd{margin-top:16px;width:100%}
+.mv .dempty{font-size:13px}
+.mv .dhead{display:flex;gap:12px;align-items:center;margin:4px 0 12px}
+.mv .dhead h2{margin:0;font:700 22px var(--body);text-transform:none;letter-spacing:0}
+.mv .dhead .s{color:var(--muted);font:500 13px var(--body);margin-top:3px}
+.mv .ddot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:700 13px var(--body);flex:none;margin-right:12px}
+.mv .ddot.ok{background:var(--accent);color:var(--accent-ink)}
+.mv .ddot.no{border:2px dashed var(--line2);box-sizing:border-box}
+.mv .ddot.na{background:var(--sunk);color:var(--muted)}
+.mv .dchk .btn.sm{flex:none}
+.mv .dchk .btn.sm.ghost{background:transparent;border:0;box-shadow:none;color:var(--muted);font-weight:600;padding:6px 4px;min-height:0}
+.mv .dyears{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.mv .dyears button{font:600 11.5px var(--body);padding:4px 9px;border-radius:8px;border:0;background:var(--accent-soft);color:var(--accent);cursor:pointer}
+.mv .dyears button.no{background:var(--sunk);color:var(--muted)}
+.mv .dsugg{display:flex;gap:6px;flex-wrap:wrap}

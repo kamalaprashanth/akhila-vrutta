@@ -83,7 +83,8 @@ export function summary(counts: Record<string, number>): [string, number][] {
     ["Transactions", n(["txns"])],
     ["Accounts, cards, loans, holdings", n(["accounts", "loans", "holdings", "props"])],
     ["Plan items, goals, categories", n(["recurring", "goals", "categories", "propItems", "payers", "snaps", "trades", "views", "settings"])],
-    ["Household: homes, jobs, appliances, lists", n(["hhHomes", "hhJobs", "hhDone", "hhAppliances", "hhItems"])],
+    ["Household: homes, jobs, appliances, vehicles, lists", n(["hhHomes", "hhJobs", "hhDone", "hhAppliances", "hhItems", "hhVehicles", "hhFuel"])],
+    ["Documents", n(["docs", "docOwners"])],
     ["Habits and their days", n(["habits", "habitLog", "habitPrefs"])],
     ["Vault files (kept in your Drive)", n(["files"])],
   ] as [string, number][]).filter(([, v]) => v > 0);

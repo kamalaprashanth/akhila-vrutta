@@ -1,6 +1,7 @@
 /**
  * Household: for each home (Money's properties and homes added here), the maintenance that repeats, the
- * appliances with their warranties and files, and the To do and Groceries lists. Same look as Money.
+ * appliances with their warranties and files, vehicles (renewals, service, fuel), and the To do and Groceries
+ * lists. Same look as Money.
  */
 import type { Module } from "../types.ts";
 import { html, raw } from "../../core/dom.ts";
@@ -11,11 +12,13 @@ import { ensureLayer } from "../money/ui/kit.ts";
 import { startMoney } from "../money/index.ts";
 import { dueChip, dueGroups, dueRows, dayLabel, dayOf, homeName, homes, householdNotes, live, type Appliance, type Item, type Reader } from "./data.ts";
 import { applianceForm, doneForm, homeForm, itemForm, jobForm, starterSheet } from "./forms.ts";
+import { icon, mileage, fuelOf, odometer, vehicleDue, vehicleNotes, vehicles, RENEWALS } from "./vehicles.ts";
+import { vehicleForm, vehicleSheet } from "./vehforms.ts";
 
 export const ICON = "M4 20V9l8-5 8 5v11M9 20v-6h6v6";
 
 /** Which home, which part, which list: remembered on this device. */
-interface View { home: string; tab: "due" | "appl" | "lists"; list: "todo" | "grocery" }
+interface View { home: string; tab: "due" | "appl" | "veh" | "lists"; list: "todo" | "grocery" }
 const KEY = "av.household";
 const view: View = (() => {
   try { return { home: "", tab: "due", list: "todo", ...JSON.parse(localStorage.getItem(KEY) ?? "{}") } as View; } catch { return { home: "", tab: "due", list: "todo" }; }
@@ -43,10 +46,12 @@ const row = (attrs: string, t: string, s: string, side: string, cls = "tap"): st
 const chip = ([t, c]: [string, string]): string => html`<span class="due ${c}">${t}</span>`;
 
 function dueTab(r: Reader, t: string): string {
-  const rows = dueRows(r, t, view.home || undefined), groups = dueGroups(rows, t);
+  // vehicles belong to no home: their renewals and service show whichever home is picked
+  const veh = vehicleDue(r, t).map((x) => ({ kind: "vehicle" as const, id: x.id, title: x.title, sub: x.sub, date: x.date, late: x.late }));
+  const rows = [...dueRows(r, t, view.home || undefined), ...veh].sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)), groups = dueGroups(rows, t);
   const hs = view.home ? homes(r).filter((h) => h.id === view.home) : homes(r);
   const noJobs = hs.filter((h) => !live<{ home: string } & Rec>(r, "hhJobs").some((j) => j.home === h.id));
-  const attr = (x: (typeof rows)[number]): string => (x.kind === "job" ? `data-job="${x.id}"` : x.kind === "todo" ? `data-item="${x.id}"` : `data-appl="${x.id}"`);
+  const attr = (x: (typeof rows)[number]): string => (x.kind === "job" ? `data-job="${x.id}"` : x.kind === "todo" ? `data-item="${x.id}"` : x.kind === "vehicle" ? `data-veh="${x.id}"` : `data-appl="${x.id}"`);
   return html`${raw(groups.map(([g, l]) => html`<div class="sh"><h3>${g}</h3></div><div class="list">${l.map((x) => raw(row(attr(x), x.title, x.sub, chip(dueChip(x, t)))))}</div>`).join(""))}
     ${raw(!rows.length ? html`<div class="empty">Nothing due${view.home ? " for this home" : ""}. Add the jobs that repeat, like AC service or pest control.</div>` : "")}
     ${raw(noJobs.length ? html`<div class="card hhsuggest"><b>Usual jobs</b><p class="note" style="margin:4px 0 8px">${noJobs.length === 1 ? `${noJobs[0]!.name} has no jobs yet.` : `${noJobs.length} homes have no jobs yet.`} Pick the ones that apply.</p><div class="btns">${noJobs.slice(0, 4).map((h) => raw(html`<button class="btn sm" type="button" data-starter="${h.id}">${h.name}</button>`))}</div></div>` : "")}
@@ -70,6 +75,19 @@ function applTab(r: Reader, t: string): string {
     <div class="btns" style="margin-top:12px"><button class="btn pri" type="button" id="addAppl">+ Add appliance</button></div>`;
 }
 
+function vehTab(r: Reader, t: string): string {
+  const list = vehicles(r);
+  const side = (v: (typeof list)[number]): string => {
+    const next = RENEWALS.map(([k]) => v.renew?.[k]).filter((d): d is string => !!d).sort()[0];
+    if (!next) return "";
+    const n = Math.round((+new Date(next) - +new Date(t)) / 864e5);
+    return chip([n < 0 ? "renew" : n <= 60 ? `renew ${dayLabel(next, t)}` : `ok to ${dayLabel(next, t)}`, n < 0 ? "bad" : n <= 60 ? "warn" : ""]);
+  };
+  const sub = (v: (typeof list)[number]): string => { const odo = odometer(r, v), m = mileage(fuelOf(r, v.id)); return [v.reg, v.model, odo ? `${odo.toLocaleString("en-IN")} km` : "", m ? `${m} km/${v.fuel === "ev" ? "kWh" : "l"}` : ""].filter(Boolean).join(" · "); };
+  return html`${raw(list.length ? html`<div class="list">${list.map((v) => raw(row(`data-veh="${v.id}"`, `${icon(v)} ${v.name}`, sub(v), side(v))))}</div>` : html`<div class="empty">No vehicles yet. Add the car or bike with its insurance, PUC and service schedule; log fuel to see the mileage.</div>`)}
+    <div class="btns" style="margin-top:12px"><button class="btn pri" type="button" id="addVeh">+ Add vehicle</button></div>`;
+}
+
 function listsTab(r: Reader, t: string): string {
   const all = live<Item>(r, "hhItems").filter((i) => !view.home || !i.home || i.home === view.home);
   const n = (k: string): number => all.filter((i) => i.list === k && !i.doneOn).length;
@@ -87,14 +105,14 @@ function draw(root: HTMLElement): void {
   const r = reader(), t = today(), hs = homes(r);
   if (view.home && !hs.some((h) => h.id === view.home)) view.home = "";
   const chips = html`<div class="hhtop" role="group" aria-label="Which home">${[["", "All homes"], ...hs.map((h) => [h.id, h.name])].map(([k, l]) => raw(html`<button type="button" class="hchip ${k === view.home ? "on" : ""}" data-home="${k}" aria-pressed="${String(k === view.home)}">${l}</button>`))}<button type="button" class="hchip add" id="addHome" aria-label="Add a home">＋ Home</button></div>`;
-  const body = view.tab === "due" ? dueTab(r, t) : view.tab === "appl" ? applTab(r, t) : listsTab(r, t);
+  const body = view.tab === "due" ? dueTab(r, t) : view.tab === "appl" ? applTab(r, t) : view.tab === "veh" ? vehTab(r, t) : listsTab(r, t);
   const scroll = window.scrollY;
-  root.innerHTML = html`<div class="mv hhv"><div class="wrap" id="hhView">${raw(chips)}${raw(seg([["due", "Due"], ["appl", "Appliances"], ["lists", "Lists"]], view.tab, "tab"))}<div class="hhbody">${raw(body)}</div></div></div>`;
+  root.innerHTML = html`<div class="mv hhv"><div class="wrap" id="hhView">${raw(chips)}${raw(seg([["due", "Due"], ["appl", "Appliances"], ["veh", "Vehicles"], ["lists", "Lists"]], view.tab, "tab"))}<div class="hhbody">${raw(body)}</div></div></div>`;
   window.scrollTo(0, scroll);
 }
 
 function onTap(e: Event): void {
-  const el = (e.target as HTMLElement).closest<HTMLElement>("[data-home],[data-tab],[data-list],[data-job],[data-appl],[data-item],[data-tick],[data-starter],#addJob,#addAppl,#addHome,#clearDone");
+  const el = (e.target as HTMLElement).closest<HTMLElement>("[data-home],[data-tab],[data-list],[data-job],[data-appl],[data-veh],[data-item],[data-tick],[data-starter],#addJob,#addAppl,#addVeh,#addHome,#clearDone");
   if (!el || !rootEl?.contains(el) || document.body.dataset.mod !== "household") return;
   const d = el.dataset, r = reader();
   if (d.home !== undefined) { view.home = d.home; keep(); return redraw(); }
@@ -102,6 +120,7 @@ function onTap(e: Event): void {
   if (d.list) { view.list = d.list as View["list"]; keep(); return redraw(); }
   if (d.job) return doneForm(d.job);
   if (d.appl) return applianceForm(d.appl);
+  if (d.veh) return vehicleSheet(d.veh);
   if (d.item) return itemForm(d.item);
   if (d.starter) return starterSheet(d.starter);
   if (d.tick) {
@@ -111,6 +130,7 @@ function onTap(e: Event): void {
   }
   if (el.id === "addJob") return jobForm(undefined, view.home);
   if (el.id === "addAppl") return applianceForm(undefined, view.home);
+  if (el.id === "addVeh") return vehicleForm();
   if (el.id === "addHome") return homeForm();
   if (el.id === "clearDone") hhWrite(live<Item>(r, "hhItems").filter((i) => i.list === view.list && i.doneOn).map((i) => ({ c: "hhItems", id: i.id, r: null })));
 }
@@ -133,7 +153,7 @@ let started = false;
 export function startHousehold(): void {
   if (started || !ctx.store) return;
   started = true;
-  setReminderSource("household", () => householdNotes(reader(), new Date()).map((n) => ({ title: n.title, at: n.at })));
+  setReminderSource("household", () => [...householdNotes(reader(), new Date()), ...vehicleNotes(reader(), new Date())].map((n) => ({ title: n.title, at: n.at })));
   scheduleReminders();
 }
 

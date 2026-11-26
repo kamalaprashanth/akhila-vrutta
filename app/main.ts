@@ -9,6 +9,7 @@ import { Store } from "./core/store.ts";
 import { hideMoney, startMoney } from "./modules/money/index.ts";
 import { startHousehold } from "./modules/household/index.ts";
 import { startHabits } from "./modules/habits/index.ts";
+import { startDocs } from "./modules/documents/index.ts";
 import { startBackups } from "./core/backup-auto.ts";
 
 const AUTO_LOCK_MS = 2 * 60 * 1000;
@@ -65,10 +66,11 @@ async function boot(): Promise<void> {
   });
   render();
   closeLock();
-  // Phone reminders from Money, Household and Habits, whichever tab is open
+  // Phone reminders from Money, Household, Habits and Documents, whichever tab is open
   startMoney();
   startHousehold();
   startHabits();
+  startDocs();
   startBackups();
 
   // The Android app: Back, and locking after a minute away (choosing a file also leaves the app for a moment).

@@ -75,8 +75,8 @@ service cloud.firestore {
         allow create, update: if member(home) && coll != 'keys'
           && coll in ['accounts', 'categories', 'txns', 'recurring', 'loans', 'holdings', 'payers',
                       'snaps', 'goals', 'views', 'trades', 'props', 'propItems', 'settings', 'meta',
-                      'hhHomes', 'hhJobs', 'hhDone', 'hhAppliances', 'hhItems', 'files',
-                      'habits', 'habitLog', 'habitPrefs', 'backupLog']
+                      'hhHomes', 'hhJobs', 'hhDone', 'hhAppliances', 'hhItems', 'hhVehicles', 'hhFuel', 'files',
+                      'habits', 'habitLog', 'habitPrefs', 'backupLog', 'docs', 'docOwners']
           && request.resource.data.keys().hasOnly(['iv', 'ct', 'z', 'at', 'by', 'del'])
           && sealed(request.resource.data)
           && request.resource.data.at == request.time

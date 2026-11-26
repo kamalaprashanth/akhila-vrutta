@@ -33,7 +33,7 @@ test("a backup: everything but the log, sealed; opens with the passphrase it was
   const r2 = await openBackup(f, "five words make it strong", other);
   assert.equal(r2!.sameKey, false);
   assert.equal(restoreSet(r2!.contents, false).files, undefined);
-  assert.deepEqual(summary(r!.contents.counts).map(([l]) => l), ["Transactions", "Household: homes, jobs, appliances, lists", "Habits and their days", "Vault files (kept in your Drive)"]);
+  assert.deepEqual(summary(r!.contents.counts).map(([l]) => l), ["Transactions", "Household: homes, jobs, appliances, vehicles, lists", "Habits and their days", "Vault files (kept in your Drive)"]);
 });
 
 test("not a backup, or from a newer app: said plainly", () => {

@@ -259,6 +259,28 @@ try {
   const hbDocs = [...((await api(`${FS}/homes/${home}/habits?pageSize=50`)).body.documents ?? []), ...((await api(`${FS}/homes/${home}/habitLog?pageSize=50`)).body.documents ?? [])];
   const hbPlain = hbDocs.filter((d) => ["Walk 30 min", "habitLog"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
   check(hbDocs.length >= 2 && hbPlain === 0 && hbDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a habit and its tick are in the cloud as ciphertext only (${hbDocs.length} records)`);
+  /* Vehicles and Documents: a car, a person and their Aadhaar are saved encrypted (checked again after the reload) */
+  await A.page.goto(`${BASE}/#/household`);
+  await A.page.waitForSelector('#hhView [data-tab="veh"]', { timeout: 20000 });
+  await A.page.click('#hhView [data-tab="veh"]');
+  await A.page.click("#hhView #addVeh");
+  await A.page.fill("#mvLayer #f_vname", "Cloud car");
+  await A.page.click("#mvLayer #sv");
+  await A.page.click("#mvLayer #cx");
+  await A.page.goto(`${BASE}/#/docs`);
+  await A.page.waitForSelector('#dView [data-addowner="people"]', { timeout: 20000 });
+  await A.page.click('#dView [data-addowner="people"]');
+  await A.page.fill("#mvLayer #f_oname", "Cloud person");
+  await A.page.click("#mvLayer #sv");
+  await A.page.waitForSelector('#dView [data-add="aadhaar"]', { timeout: 20000 });
+  await A.page.click('#dView [data-add="aadhaar"]');
+  await A.page.fill("#mvLayer #f_dnum", "1234 5678 9012");
+  await A.page.click("#mvLayer #sv");
+  await A.page.waitForTimeout(3000);
+  const dcDocs = [];
+  for (const c of ["hhVehicles", "docs", "docOwners"]) dcDocs.push(...((await api(`${FS}/homes/${home}/${c}?pageSize=50`)).body.documents ?? []));
+  const dcPlain = dcDocs.filter((d) => ["Cloud car", "Cloud person", "aadhaar", "9012"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  check(dcDocs.length >= 3 && dcPlain === 0 && dcDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a vehicle, a person and their Aadhaar are in the cloud as ciphertext only (${dcDocs.length} records)`);
   /* Backup: a full backup downloads (made from the key the cloud keeps), and the weekly switch is saved encrypted */
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.waitForSelector("#bkCard #bkDown", { timeout: 20000 });
@@ -287,6 +309,10 @@ try {
   await A.page.goto(`${BASE}/#/habits`);
   await A.page.waitForSelector("#hbView .hbrow", { timeout: 20000 });
   check(/Walk 30 min/.test(await A.page.innerText("#hbView")) && (await A.page.$$("#hbView .hbtick.on")).length === 1, "…and so are the habit and today's tick");
+  await A.page.goto(`${BASE}/#/docs`);
+  await A.page.waitForSelector("#dView .row", { timeout: 20000 });
+  const dv = await A.page.innerText("#dView");
+  check(/Cloud car/.test(dv) && /Cloud person/.test(dv) && /Aadhaar/.test(dv), "…and so are the car, the person and the Aadhaar record");
   await moneyFrame(A.page, "activity");   // back to Transactions for the next steps
 
   progress("second device");

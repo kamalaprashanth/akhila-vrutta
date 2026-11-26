@@ -69,14 +69,7 @@ export const health: Module = {
   },
 };
 
-export const docs: Module = {
-  id: "docs",
-  label: "Documents",
-  tab: "Docs",
-  icon: ICONS.docs,
-  render(root) {
-    root.innerHTML = soon("Documents", 7, "Passport, licence and policies, encrypted in your Drive, with expiry reminders.");
-  },
-};
+import { documents as docs } from "./documents/index.ts";
+export { docs };
 
 export const MODULES: Module[] = [home, money, household, habits, health, docs, settings];

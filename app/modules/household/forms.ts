@@ -75,20 +75,21 @@ export function jobForm(id?: string, home0?: string): void {
   });
 }
 
-/** The default Money category for home costs: Maintenance, else Household / Housing / Home. */
-function homeCategory(): string {
+/** The Money category to suggest: the first whose name matches (home costs: Maintenance, else Household / Housing / Home). */
+export const HOME_CATS = [/maint/i, /repair/i, /household/i, /housing|home/i];
+function pickCategory(res: RegExp[]): string {
   const opts = catOpts(moneyNow(), "expense");
-  for (const re of [/maint/i, /repair/i, /household/i, /housing|home/i]) { const o = opts.find(([, l]) => re.test(l)); if (o) return o[0]; }
+  for (const re of res) { const o = opts.find(([, l]) => re.test(l)); if (o) return o[0]; }
   return opts[0]?.[0] ?? "";
 }
-/** Cost fields with "add it to Money", shared by a job done and an appliance serviced. */
-const costFields = (): string => {
+/** Cost fields with "add it to Money", shared by a job done, an appliance serviced and a vehicle's costs. */
+export const costFields = (cats: RegExp[] = HOME_CATS, label = "Cost (₹, optional)"): string => {
   const d = moneyNow();
-  return html`${raw(field(["dcost", "Cost (₹, optional)", "number", { step: "0.01" }]))}
+  return html`${raw(field(["dcost", label, "number", { step: "0.01" }]))}
     <label class="opt"><input type="checkbox" id="f_tomoney" checked><div><b>Add to Money as an expense</b><span>Only when there's a cost.</span></div></label>
-    <div id="w_money" class="grid2">${raw(field(["accountId", "Paid from", "select", { value: mainAcc(d)?.id ?? "", options: accOpts(d) }]))}${raw(field(["categoryId", "Category", "select", { value: homeCategory(), options: catOpts(d, "expense") }]))}</div>`;
+    <div id="w_money" class="grid2">${raw(field(["accountId", "Paid from", "select", { value: mainAcc(d)?.id ?? "", options: accOpts(d) }]))}${raw(field(["categoryId", "Category", "select", { value: pickCategory(cats), options: catOpts(d, "expense") }]))}</div>`;
 };
-function costOps(s: HTMLElement, what: string, date: string): { cost?: number; txnId?: string } {
+export function costOps(s: HTMLElement, what: string, date: string): { cost?: number; txnId?: string } {
   const cost = paise(val("dcost"));
   if (!cost || !$<HTMLInputElement>(s, "f_tomoney").checked) return cost ? { cost } : {};
   const txnId = uid();

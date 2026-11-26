@@ -50,7 +50,7 @@ export const dayLabel = (d: Day, today: Day): string => `${+d.slice(8, 10)} ${MN
 export const everyLabel = (n: number): string => (n === 12 ? "every year" : n === 1 ? "every month" : n % 12 === 0 ? `every ${n / 12} years` : `every ${n} months`);
 
 /* ---------- what's due ---------- */
-export interface DueRow { kind: "job" | "warranty" | "amc" | "todo"; id: string; home?: string; title: string; sub: string; date: Day; late: number }
+export interface DueRow { kind: "job" | "warranty" | "amc" | "todo" | "vehicle"; id: string; home?: string; title: string; sub: string; date: Day; late: number }
 
 /** Jobs, warranties and AMCs ending within 60 days, and dated to-dos, soonest first. */
 export function dueRows(r: Reader, today: Day, home?: string): DueRow[] {
@@ -78,7 +78,7 @@ export function dueChip(x: DueRow, today: Day): [string, string] {
   if (n === 0) return ["today", "warn"];
   if (n === 1) return ["tomorrow", "warn"];
   if (n <= 7) return [`in ${n} days`, "warn"];
-  return [dayLabel(x.date, today), x.kind === "warranty" || x.kind === "amc" ? "warn" : ""];
+  return [dayLabel(x.date, today), x.kind === "warranty" || x.kind === "amc" || x.kind === "vehicle" ? "warn" : ""];
 }
 
 /** Marking a job done on `date`: the next due date counts from that day. */

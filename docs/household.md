@@ -34,3 +34,5 @@ Jobs and dated to-dos at 9 AM the day before and on the day; warranty and AMC 30
 and a cloud step (records encrypted, kept through a Money re-import and a reload).
 The Android emulator test saves a file to Downloads/Akhila Vrutta and opens the share sheet.
 Not tested by CI: real Google Drive, the consent screens, the phone camera, actually sending a file to another app.
+
+Vehicles live in Household as a fourth tab (Due, Appliances, Vehicles, Lists): see docs/documents.md.
