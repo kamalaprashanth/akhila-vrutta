@@ -279,6 +279,7 @@ export async function leaveFamily(): Promise<void> {
   const { fs, db } = await fb();
   if (sp.role === "owner" && members().length > 1) throw new Error("You own the family space: hand it over to another member first.");
   await hooks.leaving?.().catch((e) => console.warn("family files", e));   // your copies in your Drive go
+  fam?.writeMany([{ c: "famMembers", id: me, r: null }]);                    // off the member list (the owner can leave once alone)
   if (sp.role === "member") await fs.updateDoc!(fs.doc!(db, "homes", sp.home), { [`members.${me}`]: fs.deleteField!() });
   else await (await callable("deleteFamilySpace"))({ home: sp.home }).catch((e) => console.warn("family delete", e));   // an owner alone: nothing left behind
   stopFamily();

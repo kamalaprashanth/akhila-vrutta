@@ -38,6 +38,7 @@ import { notePage, onBackClose } from "../../core/native.ts";
 import { prefGet, prefSet, setEnv, uid, type WriteOp as MoneyWrite } from "./ui/env.ts";
 import { txnForm } from "./ui/txform.ts";
 import { mainAcc } from "./calc/forecast.ts";
+import { freshPage } from "./fresh.ts";
 
 /** Every money page. */
 const PAGES = { home: homePage, activity: txPage, accounts: accountsPage, plan: planPage, insights: insightsPage, advisor: advisorPage, more: morePage, card: cardPage, loan: loanPage, epf: epfPage, ppf: ppfPage, nps: npsPage, prop: propPage };
@@ -228,7 +229,9 @@ export const money: Module = {
     let meta = s.get(META, "money");
     // One version behind: the new money fields are converted where they are (no import needed).
     if (meta && meta.amounts !== AMOUNTS_VERSION) { const up = upgradeWrites(meta, (c) => s.all(c)); if (up) { s.writeMany(up.ops); meta = up.meta; } }
-    if (!meta || meta.amounts !== AMOUNTS_VERSION) {
+    // a new user: set up Money (the main account and starting categories)
+    if (!meta) { freshPage(root, () => money.render(root)); return; }
+    if (meta.amounts !== AMOUNTS_VERSION) {
       root.innerHTML = html`<section class="card"><h2>Bring in your money data</h2>
         <p>${meta ? "This version stores a few more amounts in paise. Import your KP Money Planner export once more to open the planner." : "Import your KP Money Planner export to start."}</p>
         <div class="btns"><a class="btn pri" href="#/settings">Go to Settings › Import</a></div></section>`;

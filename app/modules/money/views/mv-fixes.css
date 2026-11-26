@@ -239,3 +239,13 @@
 .mv .fmcode{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:12px 0}
 .mv .fmcode span{border:1px solid var(--line);border-radius:12px;padding:10px 12px;font:700 17px var(--body)}
 .mv.fmv .acav{margin-right:12px}
+/* Money for a new user */
+.mv.frv .frstep{font:700 12px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:8px 0 0}
+.mv.frv .frh{font:600 24px var(--head,var(--body));text-transform:none;letter-spacing:0;margin:6px 0 12px}
+.mv.frv .dico{width:36px;height:36px;border-radius:12px;background:var(--accent-soft);display:grid;place-items:center;margin-right:12px;flex:none}
+.mv.frv .dico svg{width:19px;height:19px;fill:none;stroke:var(--accent);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.mv.frv .frgo{width:100%;min-height:50px;margin-top:12px}
+.mv.frv .frcats{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.mv.frv .frcats span{font:600 12.5px var(--body);border:1px solid var(--line);border-radius:9px;padding:5px 9px}
+.mv.frv .frerr{color:var(--warn,#a3321f);min-height:1em}
+.mv.frv input{width:100%;box-sizing:border-box}
