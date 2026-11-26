@@ -460,6 +460,7 @@ try {
   await X.page.click("#frDone");
   await X.page.waitForSelector("#moneyView", { timeout: 30000 });
   check(/45,000\.50|45,001/.test(await X.page.innerText("body")), "…Money opens on the new account's balance (₹45,000.50)");
+  const intr = await idToken("intruder");
 
   const xUser = await api(`${FS}/users/intruder-uid`, {}, intr), xHome = xUser.body?.fields?.home?.stringValue;
   check(xUser.status === 200 && !!xHome && xHome !== home, `…its own home, not the owner's (${xHome})`);
