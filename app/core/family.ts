@@ -17,6 +17,7 @@
 import { aesKey, argon2Raw, fromB64, open, rnd, seal, TD, TE, toB64 } from "./crypto.ts";
 import { initFirebase, type Fb } from "./firebase.ts";
 import { FAMILY, FAMILY_COLLECTIONS, Store, type Overlay, type Rec, type WriteOp } from "./store.ts";
+import { setFamFiles } from "./files.ts";
 
 export interface Space extends Rec { home: string; key: string; role: "owner" | "member" }
 export interface Member extends Rec { name: string }
@@ -34,7 +35,10 @@ export const space = (): Space | null => (fam ? current : null) ?? (mine?.own<Sp
 export const familyOpen = (): boolean => !!fam;
 export const members = (): Member[] => (fam?.own<Member>("famMembers").filter((m) => !m.deleted) ?? []);
 export const memberName = (uid: string): string => members().find((m) => m.id === uid)?.name || "Family";
-const rules = (): Rules => fam?.own<Rules>("famRules").find((r) => r.id === "rules") ?? { id: "rules", tags: ["Home"] };
+/** The rules just saved here (a record is sealed in the background, so the store has it a moment later). */
+let localRules: Rules | null = null;
+const rules = (): Rules => localRules ?? fam?.own<Rules>("famRules").find((r) => r.id === "rules") ?? { id: "rules", tags: ["Home"] };
+const saveRules = (next: Rules): void => { localRules = next; fam?.writeMany([{ c: "famRules", id: "rules", r: next }]); };
 export const sharedTags = (): string[] => rules().tags ?? ["Home"];
 /** Whole collections shared by a switch: family days, and the to-do and grocery lists. */
 const WHOLE: Record<string, keyof Rules> = { famDays: "days", hhItems: "lists" };
@@ -59,11 +63,31 @@ function view(t: Tx): Tx {
 }
 const isShared = (t: Tx): boolean => (t.type === "expense" || t.type === "income") && (t.tags ?? []).some((g) => sharedTags().includes(g));
 
+/** Items shared one by one (Documents' owners with their papers and files, appliances, vehicles): `sharer` is who shared it. */
+const ITEM = new Set(["docs", "docOwners", "hhVehicles", "hhAppliances", "files", "famOwners"]);
+type Owned = Rec & { owner?: { c: string; id: string }; sharer?: string };
+const famRec = (c: string, id: string): Owned | undefined => fam?.own<Owned>(c).find((x) => x.id === id && !x.deleted);
+/** Is this item (or the document a file belongs to) in the family space? */
+export function ownerShared(o: { c: string; id: string } | undefined): boolean {
+  if (!fam || !o) return false;
+  if (famRec(o.c, o.id) || famRec("famOwners", `${o.c}:${o.id}`)) return true;
+  if (o.c === "docs") { const d = famRec("docs", o.id); return !!d; }
+  return false;
+}
+/** Who shared it (undefined: not shared). */
+export const sharerOf = (o: { c: string; id: string }): string | undefined => (famRec(o.c, o.id) ?? famRec("famOwners", `${o.c}:${o.id}`))?.sharer;
+/* the raw family store, for moving items in and out (famshare.ts) */
+export const famOwn = <T extends Rec = Rec>(c: string): T[] => (fam?.own<T>(c).filter((x) => !(x as { deleted?: boolean }).deleted) ?? []);
+export const famWrite = (ops: WriteOp[]): void => { fam?.writeMany(ops); };
+export const famStore = (): Store | null => fam;
+export const myStore = (): Store | null => mine;
+
 const overlay: Overlay = {
-  colls: new Set(["txns", "accounts", ...Object.keys(WHOLE)]),
+  colls: new Set(["txns", "accounts", ...Object.keys(WHOLE), ...ITEM]),
   all(c) {
     if (!fam) return [];
     if (WHOLE[c]) return wholeOn(c) ? fam.own(c).filter((x) => !x.deleted) : [];
+    if (ITEM.has(c)) return fam.own(c).filter((x) => !x.deleted);
     if (c === "txns") return fam.own<Tx>("txns").filter((t) => !t.deleted).map(view);
     // the other members' accounts: hidden, outside totals, never a balance here
     const others = new Set(fam.own<Tx>("txns").map((t) => t.owner).filter((u): u is string => !!u && u !== me));
@@ -74,11 +98,23 @@ const overlay: Overlay = {
     if (!fam) return undefined;
     if (c === "txns") { const t = fam.own<Tx>("txns").find((x) => x.id === id && !x.deleted); return t ? view(t) : undefined; }
     if (WHOLE[c]) return wholeOn(c) ? fam.own(c).find((x) => x.id === id && !x.deleted) : undefined;
+    if (ITEM.has(c)) return famRec(c, id);
     return id.startsWith("fam:") ? this.all(c).find((a) => a.id === id) : undefined;
   },
   route(op, here) {
     if (!fam) return [op];
     if (op.c === "accounts") return op.id.startsWith("fam:") ? [] : [op];
+    if (ITEM.has(op.c)) {
+      // a shared item stays shared; a new paper or file for a shared item joins it there
+      const old = famRec(op.c, op.id);
+      if (!op.r) { if (old) fam.writeMany([{ c: op.c, id: op.id, r: null }]); return here(op.c, op.id) ? [op] : []; }
+      const r = op.r as Owned;
+      if (old || ((op.c === "docs" || op.c === "files") && ownerShared(r.owner))) {
+        fam.writeMany([{ c: op.c, id: op.id, r: { ...r, sharer: old?.sharer ?? me } }]);
+        return here(op.c, op.id) ? [{ c: op.c, id: op.id, r: null }] : [];
+      }
+      return [op];
+    }
     if (WHOLE[op.c]) {
       const old = fam.own(op.c).find((x) => x.id === op.id && !x.deleted);
       if (!op.r) { if (old) fam.writeMany([{ c: op.c, id: op.id, r: null }]); return here(op.c, op.id) ? [op] : []; }
@@ -118,13 +154,15 @@ export async function startFamily(store: Store, name: string, given?: Space): Pr
     const key = await aesKey(fromB64(sp.key));
     fam = await Store.open(sp.home, me, key, undefined, FAMILY_COLLECTIONS);
   } catch (e) { console.warn("family", e); fam = null; return; }
-  fam.subscribe((ch) => { mine?.overlayChanged(ch.keys); changed(); });
+  fam.subscribe((ch) => { if (!ch.local && ch.keys.some((k) => k.c === "famRules")) localRules = null; mine?.overlayChanged(ch.keys); changed(); });
   store.attach(overlay);
+  const f = fam;
+  setFamFiles({ owns: ownerShared, seal: (p, a) => f.sealWith(p, a), open: (x, a) => f.openWith(x, a), put: (id, x) => f.putPiece("famBlobs", id, x), get: (id) => f.getPiece("famBlobs", id), drop: (id) => f.dropPiece("famBlobs", id) });
   if (myName && members().find((m) => m.id === me)?.name !== myName) fam.writeMany([{ c: "famMembers", id: me, r: { id: me, name: myName } }]);
   await moveForTags();   // a switch the other member changed: your own records follow it
   changed();
 }
-function stopFamily(): void { fam?.close(); fam = null; current = null; mine?.attach(null); changed(); }
+function stopFamily(): void { setFamFiles(null); fam?.close(); fam = null; current = null; localRules = null; mine?.attach(null); changed(); }
 export const setMyName = (n: string): void => { myName = n; };
 
 /** Starts a family space with you as its owner. */
@@ -137,7 +175,7 @@ export async function createFamily(): Promise<void> {
   const sp: Space = { id: "space", home, key: toB64(rnd(32)), role: "owner" };
   mine.writeMany([{ c: FAMILY, id: "space", r: sp }]);
   await startFamily(mine, myName, sp);
-  fam?.writeMany([{ c: "famRules", id: "rules", r: { id: "rules", tags: ["Home"] } }]);
+  saveRules({ id: "rules", tags: ["Home"] });
   await moveForTags();
 }
 
@@ -201,13 +239,13 @@ export async function removeMember(uid: string): Promise<void> {
 /** Which tags are shared; your transactions move in or out to match. */
 export async function setSharedTags(tags: string[]): Promise<void> {
   if (!fam) return;
-  fam.writeMany([{ c: "famRules", id: "rules", r: { ...rules(), tags } }]);
+  saveRules({ ...rules(), tags });
   await moveForTags();
 }
 /** Shares (or stops sharing) family days or the lists; your own move to match. */
 export async function setShared(what: "days" | "lists", on: boolean): Promise<void> {
   if (!fam) return;
-  fam.writeMany([{ c: "famRules", id: "rules", r: { ...rules(), [what]: on } }]);
+  saveRules({ ...rules(), [what]: on });
   await moveForTags();
 }
 /** Your own records go where the rules say (each write is routed): transactions by tag, family days and lists by their switch. */

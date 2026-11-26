@@ -7,9 +7,11 @@ import type { Module } from "../types.ts";
 import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
 import type { Rec } from "../../core/store.ts";
-import { filesOf } from "../../core/files.ts";
+import { connectDrive, filesOf, needsDriveTap } from "../../core/files.ts";
+import { familyOpen, memberName, myUid, sharerOf } from "../../core/family.ts";
+import { shareItem, unshareItem } from "../../core/famshare.ts";
 import { setReminderSource, scheduleReminders } from "../../core/reminders.ts";
-import { ensureLayer } from "../money/ui/kit.ts";
+import { ensureLayer, toast } from "../money/ui/kit.ts";
 import { startMoney } from "../money/index.ts";
 import { setVehicleDocs } from "../household/vehforms.ts";
 import { attention, checklist, docNotes, docsOf, fyLabel, groups, keyScore, ownerInfo, prefId, recentFys, search, taxRemind, typeOf, TYPES, type Doc, type DocOwner, type DocPref, type Owner, type OwnerInfo, type Reader } from "./data.ts";
@@ -92,7 +94,12 @@ function ownerPage(r: Reader, o: Owner, t: string): string {
     <label class="row dchk"><div class="main"><div class="t">Remind me each April</div><div class="s">${remind ? "On: reminded on 10 and 25 April until this year's receipt is added" : "Off: no warnings, no reminders"}</div></div><input type="checkbox" id="dTaxRemind" ${remind ? "checked" : ""} aria-label="Remind me each April"></label></div>` : "";
   const applFiles = info.kind === "appliance" ? filesOf(o) : [];
   const suggest = TYPES[info.kind].filter((x) => !x.key && x.k !== "other" && !(info.kind === "property" && x.k === "tax") && !ds.some((d) => d.type === x.k)).slice(0, 6);
+  // the family space: share this item (and its papers and files), or who shared it
+  const by = familyOpen() ? sharerOf(o) : undefined;
+  const share = !familyOpen() ? "" : by && by !== myUid() ? html`<div class="list"><div class="row"><div class="main"><div class="t">Shared by ${memberName(by)}</div><div class="s">You can see it and add papers; only they can stop sharing it.</div></div></div></div>`
+    : html`<div class="list"><label class="row dchk"><div class="main"><div class="t">Share with family</div><div class="s" id="dShareSt">${by ? "Shared: your family sees it and its papers and files, and can add to them. Turn off to take it back." : "Your family will see it, its papers and their files, and can add to them."}</div></div><input type="checkbox" id="dShare" ${by ? "checked" : ""} aria-label="Share with family"></label></div>`;
   return html`<div class="dhead"><span class="dico big">${info.icon}</span><div><h2>${info.name}</h2><div class="s">${[info.sub, info.kind === "property" ? `${k.have} of ${k.of} key documents` : `${ds.length} document${ds.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}</div></div></div>
+    ${raw(share)}
     ${raw(check ? html`<div class="sh"><h3>${info.kind === "property" ? "Key documents" : "Main documents"}</h3></div>${raw(check)}` : "")}
     ${raw(id.length ? html`<div class="sh"><h3>${info.kind === "person" ? "ID and certificates" : rows.length ? "Other documents" : "Documents"}</h3></div>${raw(list(id))}` : "")}
     ${raw(yearly)}
@@ -129,8 +136,25 @@ function onTap(e: Event): void {
   if (el.id === "dBack") { location.hash = "#/docs"; return; }
   if (el.id === "dEditOwner" && o) { const x = reader().get<DocOwner>("docOwners", o.id); if (x) ownerForm(x.group, x.id); }
 }
+let sharing = false;
 function onChange(e: Event): void {
   const i = e.target as HTMLInputElement, o = pageOwner();
+  if (i.id === "dShare" && o && document.body.dataset.mod === "docs") {
+    if (sharing) { i.checked = !i.checked; return; }
+    const info = ownerInfo(reader(), o), st = rootEl?.querySelector<HTMLElement>("#dShareSt"), on = i.checked;
+    if (!info) return;
+    sharing = true; i.disabled = true;
+    const say = (m: string): void => { if (st) st.textContent = m; };
+    void (async () => {
+      // files move through your Drive: on the website Google asks for it from this tap
+      const docIds = new Set(docsOf(reader(), o).map((d) => d.id));
+      const hasFiles = (ctx.store?.all<{ id: string; deleted?: boolean; owner?: { c: string; id: string } }>("files") ?? []).some((f) => !f.deleted && ((f.owner?.c === o.c && f.owner.id === o.id) || (f.owner?.c === "docs" && docIds.has(f.owner.id))));
+      if (hasFiles && needsDriveTap()) await connectDrive();
+      if (on) await shareItem(o, { name: info.name, kind: info.kind, ...(info.sub ? { sub: info.sub } : {}) }, say);
+      else await unshareItem(o, say);
+    })().then(() => toast(on ? `${info.name} is shared with the family` : `${info.name} is only yours again`), (x) => { toast(`Couldn't finish: ${x instanceof Error ? x.message : String(x)}`); }).finally(() => { sharing = false; redraw(); });
+    return;
+  }
   if (i.id !== "dTaxRemind" || !o || document.body.dataset.mod !== "docs") return;
   const p: DocPref = { ...(reader().get<DocPref>("docPrefs", prefId(o)) ?? { id: prefId(o) }), taxRemind: i.checked };
   delete p.deleted;

@@ -13,7 +13,7 @@ export async function backupNow(): Promise<Uint8Array<ArrayBuffer>> {
   if (!s || !st) throw new Error("The app is locked.");
   const wrap = (window as unknown as { AV_TEST_WRAP?: PassWrap }).AV_TEST_WRAP ?? await passWrapOf(s.home, s.uid);
   if (!wrap) throw new Error("Couldn't read your key from the cloud. Check the connection and try again.");
-  return makeBackup(wrap, s.dek, (c) => st.all(c), config().build);
+  return makeBackup(wrap, s.dek, (c) => st.own?.(c) ?? st.all(c), config().build);
 }
 
 let running = false;

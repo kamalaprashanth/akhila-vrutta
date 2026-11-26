@@ -541,6 +541,30 @@ try {
   let cal = "";
   for (let i = 0; i < 20 && !/Cloud Amma/.test(cal); i++) { await X.page.goto(`${BASE}/#/calendar`); await X.page.waitForTimeout(1000); cal = await X.page.innerText("main").catch(() => ""); }
   check(/Cloud Amma/.test(cal), "…and the member sees the owner's family day in their Calendar");
+  // one item shared: the owner shares a person (with their Aadhaar); the member sees it and adds a file to it,
+  // which goes into the family space in pieces sealed with the family key (no Drive needed)
+  await A.page.goto(`${BASE}/#/docs`);
+  await A.page.click('#dView [data-owner^="docOwners/"]');
+  await A.page.waitForSelector("#dShare", { timeout: 20000 });
+  await A.page.check("#dShare");
+  let famO = [];
+  for (let i = 0; i < 30 && !famO.length; i++) { await A.page.waitForTimeout(500); famO = (await api(`${FS}/homes/${famHome}/docOwners?pageSize=20`)).body.documents ?? []; }
+  const famDocs = (await api(`${FS}/homes/${famHome}/docs?pageSize=20`)).body.documents ?? [];
+  const oPlain = [...famO, ...famDocs].filter((d) => ["Cloud person", "aadhaar", "9012"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  check(famO.length >= 1 && famDocs.length >= 1 && oPlain === 0, `sharing a person moves them and their papers to the family space, as ciphertext only (${famO.length} + ${famDocs.length})`);
+  let xdocs = "";
+  for (let i = 0; i < 20 && !/Cloud person/.test(xdocs); i++) { await X.page.goto(`${BASE}/#/docs`); await X.page.waitForTimeout(1000); xdocs = await X.page.innerText("main").catch(() => ""); }
+  check(/Cloud person/.test(xdocs), "…the member sees the shared person in Documents");
+  await X.page.click('#dView [data-owner^="docOwners/"]');
+  await X.page.waitForSelector('#dView [data-add="pan"]', { timeout: 20000 });
+  await X.page.click('#dView [data-add="pan"]');
+  await X.page.setInputFiles("#mvLayer #dPick", { name: "pan.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64") });
+  await X.page.waitForSelector("#mvLayer [data-file]", { timeout: 30000 });
+  await X.page.click("#mvLayer #sv");
+  let blobs = [];
+  for (let i = 0; i < 30 && !blobs.length; i++) { await X.page.waitForTimeout(500); blobs = (await api(`${FS}/homes/${famHome}/famBlobs?pageSize=20`)).body.documents ?? []; }
+  const fFiles = (await api(`${FS}/homes/${famHome}/files?pageSize=20`)).body.documents ?? [];
+  check(blobs.length >= 1 && fFiles.length >= 1 && blobs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))) && !blobs.some((d) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes("PNG")), `…and adds a file to it: kept in the family space, encrypted (${blobs.length} piece, ${fFiles.length} record)`);
   await X.page.goto(`${BASE}/#/family`); await X.page.waitForSelector("#fmLeave", { timeout: 20000 });
   await X.page.click("#fmLeave"); await X.page.click("#mvLayer #cy");
   let left = false;

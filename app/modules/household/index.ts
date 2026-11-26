@@ -69,7 +69,7 @@ function dueTab(r: Reader, t: string): string {
 }
 
 function applTab(r: Reader, t: string): string {
-  const list = live<Appliance>(r, "hhAppliances").filter((a) => !view.home || a.home === view.home);
+  const list = live<Appliance>(r, "hhAppliances").filter((a) => !view.home || a.home === view.home || !!(a as { sharer?: string }).sharer);
   const cover = (a: Appliance): string | undefined => [a.warrantyTo, a.amcTo].filter((d): d is string => !!d && d >= t).sort().pop();
   const under = list.filter((a) => cover(a)).sort((a, b) => cover(a)!.localeCompare(cover(b)!)), out = list.filter((a) => !cover(a)).sort((a, b) => a.name.localeCompare(b.name));
   const nFiles = (a: Appliance): number => (ctx.store?.all<{ owner?: { id: string }; deleted?: boolean } & Rec>("files") ?? []).filter((f) => f.owner?.id === a.id && !f.deleted).length;

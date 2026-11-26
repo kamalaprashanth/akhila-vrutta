@@ -12,7 +12,33 @@ import { isNative, nativeCall } from "./native.ts";
 import { FILES, type Rec } from "./store.ts";
 import type { BackupDrive } from "./backup.ts";
 
-export interface FileRec extends Rec { drive: string; name: string; mime: string; size: number; iv: string; z?: 0 | 1; owner: { c: string; id: string }; added: number; deleted?: boolean }
+export interface FileRec extends Rec { drive: string; name: string; mime: string; size: number; iv: string; z?: 0 | 1; owner: { c: string; id: string }; added: number; deleted?: boolean; fam?: number }
+
+/**
+ * Files of items shared with the family: sealed with the family key and kept in the family space itself, in
+ * pieces (famBlobs/<id>-<n>) beside its records, so both members can open them. `fam` is how many pieces.
+ */
+export interface FamFiles {
+  owns(owner: { c: string; id: string } | undefined): boolean;
+  seal(plain: Uint8Array<ArrayBuffer>, aad: string): Promise<{ iv: string; ct: string; z?: 0 | 1 }>;
+  open(s: { iv: string; ct: string; z?: 0 | 1 }, aad: string): Promise<Uint8Array<ArrayBuffer>>;
+  put(id: string, s: { iv: string; ct: string }): Promise<void>;
+  get(id: string): Promise<{ iv: string; ct: string } | null>;
+  drop(id: string): Promise<void>;
+}
+let famFiles: FamFiles | null = null;
+export const setFamFiles = (f: FamFiles | null): void => { famFiles = f; };
+const PIECE = 600_000;   // characters of base64 per piece (a record holds under 900,000)
+async function famPut(id: string, s: { iv: string; ct: string }): Promise<number> {
+  const n = Math.max(1, Math.ceil(s.ct.length / PIECE));
+  for (let i = 0; i < n; i++) await famFiles!.put(`${id}-${i}`, { iv: s.iv, ct: s.ct.slice(i * PIECE, (i + 1) * PIECE) });
+  return n;
+}
+async function famGet(r: FileRec): Promise<string> {
+  let ct = "";
+  for (let i = 0; i < (r.fam ?? 0); i++) { const p = await famFiles!.get(`${r.id}-${i}`); if (!p) throw new Error("A piece of this file is missing."); ct += p.ct; }
+  return ct;
+}
 
 /** Where the ciphertext is kept. Google Drive normally; tests swap in a stand-in. */
 export interface Backend {
@@ -101,7 +127,7 @@ export const setFileBackend = (b: Backend): void => { backend = b; };
  * encrypted it is too late and the browser blocks it. So the form asks for access from the tap itself
  * when it isn't there yet (needsDriveTap), and offers a button if it was blocked anyway.
  */
-export const needsDriveTap = (): boolean => backend === drive && !isNative() && !(token && Date.now() < token.until);
+export const needsDriveTap = (item?: { c: string; id: string }): boolean => backend === drive && !isNative() && !(token && Date.now() < token.until) && !famFiles?.owns(item);
 export const connectDrive = async (): Promise<void> => { if (backend === drive) await auth(); };
 export const isPopupBlocked = (e: unknown): boolean => /popup-blocked|popup_blocked/i.test(String((e as { code?: string })?.code ?? "") + String((e as Error)?.message ?? ""));
 
@@ -116,9 +142,16 @@ const uid = (): string => Date.now().toString(36) + Math.random().toString(36).s
 export const MAX_FILE = 25 * 1024 * 1024;
 
 /** Encrypts a file here, keeps the ciphertext in Drive and the record in the store; returns the record. */
-export async function addFile(owner: { c: string; id: string }, f: File): Promise<FileRec> {
+export async function addFile(owner: { c: string; id: string }, f: File, item?: { c: string; id: string }): Promise<FileRec> {
   if (f.size > MAX_FILE) throw new Error(`${f.name} is over 25 MB`);
   const id = uid(), plain = new Uint8Array(await f.arrayBuffer());
+  // an item shared with the family: the file goes to the family space, sealed with the family key
+  if (famFiles && (famFiles.owns(owner) || famFiles.owns(item))) {
+    const s = await famFiles.seal(plain, `file/${id}`), n = await famPut(id, s);
+    const r: FileRec = { id, drive: "", fam: n, name: f.name || "file", mime: f.type || "application/octet-stream", size: f.size, iv: s.iv, ...(s.z ? { z: s.z } : {}), owner, added: Date.now(), updatedAt: Date.now() };
+    ctx.store!.writeMany([{ c: FILES, id, r }]);
+    return r;
+  }
   const s = await seal(dek(), plain, `file/${id}`);
   const driveId = await backend.upload(`${id}.avf`, fromB64(s.ct));
   const r: FileRec = { id, drive: driveId, name: f.name || "file", mime: f.type || "application/octet-stream", size: f.size, iv: s.iv, ...(s.z ? { z: s.z } : {}), owner, added: Date.now(), updatedAt: Date.now() };
@@ -127,18 +160,44 @@ export async function addFile(owner: { c: string; id: string }, f: File): Promis
 }
 /** Fetches a file from Drive and decrypts it here. */
 export async function readFile(r: FileRec): Promise<Blob> {
+  if (r.fam) {
+    if (!famFiles) throw new Error("This file is in the family space, which isn't open.");
+    const plain = await famFiles.open({ iv: r.iv, ct: await famGet(r), ...(r.z ? { z: r.z } : {}) }, `file/${r.id}`);
+    return new Blob([plain], { type: r.mime });
+  }
   const ct = await backend.download(r.drive);
   const plain = await open(dek(), { iv: r.iv, ct: toB64(ct), ...(r.z ? { z: r.z } : {}) }, `file/${r.id}`);
   return new Blob([plain], { type: r.mime });
 }
 /** Removes it from Drive and from the store. */
 export async function removeFile(r: FileRec): Promise<void> {
-  await backend.remove(r.drive);
+  if (r.fam) { for (let i = 0; i < r.fam; i++) await famFiles?.drop(`${r.id}-${i}`); }
+  else await backend.remove(r.drive);
   ctx.store!.writeMany([{ c: FILES, id: r.id, r: null }]);
 }
 export const filesOf = (owner: { c: string; id: string }): FileRec[] =>
   (ctx.store?.all<FileRec>(FILES) ?? []).filter((f) => !f.deleted && f.owner?.c === owner.c && f.owner?.id === owner.id).sort((a, b) => a.added - b.added);
 export const fileSize = (n: number): string => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+/** Moves a file into the family space (bytes resealed with the family key) or back to your Drive. Returns the new record. */
+export async function moveFile(r: FileRec, toFamily: boolean): Promise<FileRec> {
+  if (!famFiles) throw new Error("The family space isn't open.");
+  const plain = new Uint8Array(await (await readFile(r)).arrayBuffer());
+  let next: FileRec;
+  if (toFamily) {
+    const s = await famFiles.seal(plain, `file/${r.id}`), n = await famPut(r.id, s);
+    next = { ...r, drive: "", fam: n, iv: s.iv, updatedAt: Date.now() }; if (s.z) next.z = s.z; else delete next.z;
+  } else {
+    const s = await seal(dek(), plain, `file/${r.id}`), driveId = await backend.upload(`${r.id}.avf`, fromB64(s.ct));
+    next = { ...r, drive: driveId, iv: s.iv, updatedAt: Date.now() }; delete next.fam; if (s.z) next.z = s.z; else delete next.z;
+  }
+  plain.fill(0);
+  return next;
+}
+/** After a move: the old copy's bytes go (Drive, or the family pieces). */
+export async function dropBytes(r: FileRec): Promise<void> {
+  if (r.fam) { for (let i = 0; i < r.fam; i++) await famFiles?.drop(`${r.id}-${i}`); } else await backend.remove(r.drive).catch(() => {});
+}
 
 /* ---------- a decrypted copy out of the app: saved, or shared to another app ---------- */
 

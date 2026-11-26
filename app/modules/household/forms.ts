@@ -152,7 +152,7 @@ export function applianceForm(id?: string, home0?: string, again?: { draft: Appl
         ${raw(busy ? html`<span class="hhfile busy"><span class="nm">${busy}</span></span>` : "")}${raw(waiting.length ? html`<button type="button" class="hhfile add hhallow" id="hhAllow"><span class="ic">🔑</span><span class="nm">Allow Drive</span><span class="sz">then ${waiting.length} file${waiting.length === 1 ? "" : "s"} save</span></button>` : "")}<button type="button" class="hhfile add" id="hhAddF"><span class="ic">＋</span><span class="nm">Add file</span></button><button type="button" class="hhfile add" id="hhAddC"><span class="ic">📷</span><span class="nm">Camera</span></button>`;
       // the first file of a visit asks Google for Drive access straight from the tap, then opens the picker
       const pick = (id: string) => async (): Promise<void> => {
-        if (needsDriveTap()) {
+        if (needsDriveTap(owner)) {
           try { await connectDrive(); } catch (e) { toast(isPopupBlocked(e) ? "Your browser blocked Google's window. Allow pop-ups for this site, then tap again." : `Google Drive access wasn't given (${e instanceof Error ? e.message : "error"}).`); return; }
           toast("Google Drive is connected. If the file chooser didn't open, tap again.");
         }

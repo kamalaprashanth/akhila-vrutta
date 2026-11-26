@@ -5,7 +5,7 @@
  * Sync is incremental: on open, decrypt what this device has cached, then listen for
  * anything newer than the latest change it has seen ("at" is the server time of each write).
  */
-import { openJSON, sealJSON, type Sealed } from "./crypto.ts";
+import { open, openJSON, seal, sealJSON, type Sealed } from "./crypto.ts";
 import { initFirebase, type Fb } from "./firebase.ts";
 
 /** Collections the money planner uses (names match the old app's data). */
@@ -32,7 +32,7 @@ export const BACKUP_LOG = "backupLog";
 export const META = "meta";
 export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, ...HABIT_COLLECTIONS, ...DOC_COLLECTIONS, ...CAL_COLLECTIONS, ...HEALTH_COLLECTIONS, FILES, BACKUP_LOG, META, FAMILY];
 /** What a family space holds: shared transactions, its members' names and what is shared. */
-export const FAMILY_COLLECTIONS: readonly string[] = ["txns", "famMembers", "famRules", "famDays", "hhItems"];
+export const FAMILY_COLLECTIONS: readonly string[] = ["txns", "famMembers", "famRules", "famDays", "hhItems", "docs", "docOwners", "hhVehicles", "hhAppliances", "files", "famOwners"];
 /** What a KP Money Planner import replaces (never Household or files). */
 export const IMPORT_SCOPE: readonly string[] = [...MONEY_COLLECTIONS, META];
 
@@ -251,6 +251,20 @@ export class Store {
   }
 
   /** Saves a set of changes in the background (batched); returns once they are on this device. */
+  /** Writes here only, never through the attached store (moving records between the two). */
+  writeOwn(ops: WriteOp[]): void {
+    for (const op of ops) if (!this.data.has(op.c)) throw new Error(`Unknown collection ${op.c}`);
+    const keep = ops.filter((op) => op.r || this.data.get(op.c)!.has(op.id));
+    if (keep.length) this.track(this.commit(keep));
+  }
+  /** Seals with this store's key (for big files kept in pieces beside the records). */
+  sealWith = (plain: Uint8Array<ArrayBuffer>, aad: string) => seal(this.dek, plain, aad);
+  openWith = (s: Sealed, aad: string) => open(this.dek, s, aad);
+  /** Raw pieces in a collection the store doesn't keep in memory (famBlobs: files in the family space). */
+  async putPiece(c: string, id: string, s: Sealed): Promise<void> { const { fs, db } = this.fb; await fs.setDoc!(fs.doc!(db, "homes", this.home, c, id), { ...s, at: fs.serverTimestamp!(), by: this.uid }); }
+  async getPiece(c: string, id: string): Promise<Sealed | null> { const { fs, db } = this.fb; const d = await fs.getDoc!(fs.doc!(db, "homes", this.home, c, id)); return d.exists() ? (d.data() as Sealed) : null; }
+  async dropPiece(c: string, id: string): Promise<void> { const { fs, db } = this.fb; await fs.updateDoc!(fs.doc!(db, "homes", this.home, c, id), { del: true, at: fs.serverTimestamp!(), by: this.uid }).catch(() => {}); }
+
   writeMany(ops0: WriteOp[]): void {
     for (const op of ops0) if (!this.data.has(op.c)) throw new Error(`Unknown collection ${op.c}`);
     // a trashed record that is only in the attached store has nothing to trash here

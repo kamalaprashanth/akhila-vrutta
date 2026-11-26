@@ -46,7 +46,7 @@ export function wireAccount(root: HTMLElement): void {
       go.disabled = true;
       try {
         // 1. the encrypted files and backups in their Google Drive (the app made them, so it can delete them)
-        const files = (ctx.store?.all<FileRec>(FILES) ?? []).filter((f) => !f.deleted);
+        const files = (ctx.store?.own<FileRec>(FILES) ?? []).filter((f) => !f.deleted);   // your own only, never the family's
         if (files.length) { st.textContent = `Deleting ${files.length} files from your Google Drive…`; await connectDrive(); for (const f of files) await removeFile(f).catch(() => {}); }
         try { st.textContent = "Deleting your backups…"; for (const b of await driveBackups.list()) await driveBackups.remove(b.id).catch(() => {}); } catch { /* no backups folder */ }
         // 2. everything in the cloud, and the sign-in

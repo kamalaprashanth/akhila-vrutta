@@ -110,7 +110,7 @@ service cloud.firestore {
                       'snaps', 'goals', 'views', 'trades', 'props', 'propItems', 'settings', 'meta',
                       'hhHomes', 'hhJobs', 'hhDone', 'hhAppliances', 'hhItems', 'hhVehicles', 'hhFuel', 'files',
                       'habits', 'habitLog', 'habitPrefs', 'backupLog', 'docs', 'docOwners', 'docPrefs', 'famDays',
-                      'family', 'famMembers', 'famRules',
+                      'family', 'famMembers', 'famRules', 'famOwners', 'famBlobs',
                       'hlProfiles', 'hlReadings', 'hlLabs', 'hlMeds', 'hlMedLog', 'hlVisits', 'hlCheckups']
           && request.resource.data.keys().hasOnly(['iv', 'ct', 'z', 'at', 'by', 'del'])
           && sealed(request.resource.data)

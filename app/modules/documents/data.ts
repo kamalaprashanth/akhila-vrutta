@@ -109,10 +109,12 @@ export function ownerKind(r: Reader, o: Owner): Kind {
   return OWNER_KIND[o.c] ?? "other";
 }
 export function ownerInfo(r: Reader, o: Owner): OwnerInfo | null {
-  const x = r.get<Rec & { name?: string; deleted?: boolean; kind?: string; reg?: string; type?: string; lender?: string; group?: string; rel?: string; insurer?: string }>(o.c, o.id);
+  // a property, account or loan someone shared with the family: only its name card is here
+  const x = r.get<Rec & { name?: string; deleted?: boolean; kind?: string; reg?: string; type?: string; lender?: string; group?: string; rel?: string; insurer?: string; sub?: string }>(o.c, o.id) ?? r.get(o.c === "famOwners" ? "" : "famOwners", `${o.c}:${o.id}`);
   if (!x || x.deleted) return null;
   const kind = ownerKind(r, o);
   const icon = kind === "property" ? "🏠" : kind === "vehicle" ? (VEH_ICON[x.kind ?? "car"] ?? "🚗") : kind === "person" ? "🧑" : kind === "appliance" ? "🔌" : kind === "insurance" ? "🛡️" : kind === "account" ? (o.c === "loans" ? "🏦" : "💳") : "📁";
+  if (x.oid) return { owner: o, kind, name: String(x.name || "Untitled"), icon, sub: x.sub || undefined };
   const sub = kind === "vehicle" ? x.reg : kind === "person" ? x.rel : kind === "insurance" ? [x.kind, x.insurer].filter(Boolean).join(" · ") : kind === "account" ? (o.c === "loans" ? ["loan", x.lender].filter(Boolean).join(" · ") : x.type) : undefined;
   return { owner: o, kind, name: String(x.name || (kind === "vehicle" ? "Vehicle" : "Untitled")), icon, sub: sub || undefined };
 }
@@ -120,7 +122,9 @@ export const sameOwner = (a: Owner, b: Owner): boolean => a.c === b.c && a.id ==
 
 /** Every owner, grouped for the Documents page. */
 export function groups(r: Reader): [string, OwnerInfo[]][] {
-  const of = (c: string, pred: (x: Rec) => boolean = () => true): OwnerInfo[] => live(r, c).filter(pred).map((x) => ownerInfo(r, { c, id: x.id })).filter((x): x is OwnerInfo => !!x).sort((a, b) => a.name.localeCompare(b.name));
+  // the ones shared with the family that only have a name card here (someone else's property, account or loan)
+  const cards = (c: string): Rec[] => live<Rec & { c?: string; oid?: string }>(r, "famOwners").filter((x) => x.c === c && !r.get(c, x.oid!)).map((x) => ({ id: x.oid! }));
+  const of = (c: string, pred: (x: Rec) => boolean = () => true): OwnerInfo[] => [...live(r, c).filter(pred), ...cards(c)].map((x) => ownerInfo(r, { c, id: x.id })).filter((x): x is OwnerInfo => !!x).sort((a, b) => a.name.localeCompare(b.name));
   const grp = (g: string) => (x: Rec): boolean => (x as DocOwner).group === g;
   const people = of("docOwners", grp("people"));
   const eduPeople = people.filter((p) => docsOf(r, p.owner).some((d) => typeOf("person", d.type).edu));

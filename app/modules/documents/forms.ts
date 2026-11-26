@@ -66,7 +66,7 @@ export function docForm(id?: string, preset?: Partial<Doc>, again?: DocDraft): v
       $(s, "dFiles").innerHTML = html`${raw(fs.map((f) => html`<button type="button" class="hhfile" data-file="${f.id}"><span class="ic">${f.mime.startsWith("image/") ? "🖼" : "📄"}</span><span class="nm">${f.name}</span><span class="sz">${fileSize(f.size)}</span></button>`).join(""))}
         ${raw(busy ? html`<span class="hhfile busy"><span class="nm">${busy}</span></span>` : "")}${raw(waiting.length ? html`<button type="button" class="hhfile add hhallow" id="dAllow"><span class="ic">🔑</span><span class="nm">Allow Drive</span><span class="sz">then ${String(waiting.length)} file${waiting.length === 1 ? "" : "s"} save</span></button>` : "")}<button type="button" class="hhfile add" id="dAddF"><span class="ic">＋</span><span class="nm">Add file</span></button><button type="button" class="hhfile add" id="dAddC"><span class="ic">📷</span><span class="nm">Camera</span></button>`;
       const pick = (inp: string) => async (): Promise<void> => {
-        if (needsDriveTap()) {
+        if (needsDriveTap(parseKey(ownSel.value))) {
           try { await connectDrive(); } catch (e) { toast(isPopupBlocked(e) ? "Your browser blocked Google's window. Allow pop-ups for this site, then tap again." : `Google Drive access wasn't given (${e instanceof Error ? e.message : "error"}).`); return; }
           toast("Google Drive is connected. If the file chooser didn't open, tap again.");
         }
@@ -84,7 +84,7 @@ export function docForm(id?: string, preset?: Partial<Doc>, again?: DocDraft): v
       const fl = [...(list ?? [])]; if (!fl.length) return;
       for (const [i, f] of fl.entries()) {
         $(s, "dFiles").dataset.busy = `Encrypting and saving ${fl.length > 1 ? `${i + 1} of ${fl.length}` : f.name}…`; tiles();
-        try { added.push(await addFile(fileOwner, f)); } catch (e) {
+        try { added.push(await addFile(fileOwner, f, parseKey(ownSel.value))); } catch (e) {
           if (isPopupBlocked(e)) { waiting.push(...fl.slice(i)); toast("Google needs your OK to use Drive: tap Allow Drive."); break; }
           toast(`Couldn't save ${f.name}: ${e instanceof Error ? e.message : "error"}`);
         }
