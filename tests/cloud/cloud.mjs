@@ -282,6 +282,20 @@ try {
   for (const c of ["hhVehicles", "docs", "docOwners"]) dcDocs.push(...((await api(`${FS}/homes/${home}/${c}?pageSize=50`)).body.documents ?? []));
   const dcPlain = dcDocs.filter((d) => ["Cloud car", "Cloud person", "aadhaar", "9012"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
   check(dcDocs.length >= 3 && dcPlain === 0 && dcDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a vehicle, a person and their Aadhaar are in the cloud as ciphertext only (${dcDocs.length} records)`);
+  /* Health: a reading and a medicine for the person added above, saved encrypted */
+  await A.page.goto(`${BASE}/#/health`);
+  await A.page.waitForSelector("#hlView #hlRead", { timeout: 20000 });
+  await tap("#hlView #hlRead");
+  await A.page.fill("#mvLayer #f_rv", "70.5");
+  await tap("#mvLayer #sv");
+  await tap("#hlView #hlMed");
+  await A.page.fill("#mvLayer #f_mname", "Cloud vitamin");
+  await tap("#mvLayer #sv");
+  await A.page.waitForTimeout(3000);
+  const hlDocs = [];
+  for (const c of ["hlReadings", "hlMeds"]) hlDocs.push(...((await api(`${FS}/homes/${home}/${c}?pageSize=50`)).body.documents ?? []));
+  const hlPlain = hlDocs.filter((d) => ["Cloud vitamin", "70.5", "weight"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  check(hlDocs.length >= 2 && hlPlain === 0 && hlDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a reading and a medicine are in the cloud as ciphertext only (${hlDocs.length} records)`);
   /* Backup: a full backup downloads (made from the key the cloud keeps), and the weekly switch is saved encrypted */
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.waitForSelector("#bkCard #bkDown", { timeout: 20000 });
@@ -314,6 +328,9 @@ try {
   await A.page.waitForSelector("#dView .row", { timeout: 20000 });
   const dv = await A.page.innerText("#dView");
   check(/Cloud car/.test(dv) && /Cloud person/.test(dv) && /Aadhaar/.test(dv), "…and so are the car, the person and the Aadhaar record");
+  await A.page.goto(`${BASE}/#/health`);
+  await A.page.waitForSelector("#hlView .hltile", { timeout: 20000 });
+  check(/70\.5/.test(await A.page.innerText("#hlView")) && /Cloud vitamin/.test(await A.page.innerText("#hlView")), "…and so are the reading and the medicine");
   await moneyFrame(A.page, "activity");   // back to Transactions for the next steps
 
   progress("second device");

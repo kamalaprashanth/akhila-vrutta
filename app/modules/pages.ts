@@ -60,14 +60,8 @@ export const home: Module = {
   },
 };
 
-export const health: Module = {
-  id: "health",
-  label: "Health",
-  icon: ICONS.health,
-  render(root) {
-    root.innerHTML = soon("Health", 6, "Readings, lab reports with their values read out, and check-up reminders, for each person.");
-  },
-};
+import { health } from "./health/index.ts";
+export { health };
 
 import { documents as docs } from "./documents/index.ts";
 export { docs };
