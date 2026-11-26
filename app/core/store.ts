@@ -232,17 +232,18 @@ export class Store {
     const inFlight: Promise<unknown>[] = [];
     for (let i = 0; i < ops.length; i += 400) {
       const slice = ops.slice(i, i + 400);
+      // in memory first (what the app shows at once), then sealed and sent
+      for (const op of slice) {
+        if (op.r) this.data.get(op.c)!.set(op.id, structuredClone(op.r));
+        else this.data.get(op.c)!.delete(op.id);
+      }
+      this.emit({ keys: slice.map(({ c, id }) => ({ c, id })), local: true });
       const b = fs.writeBatch!(db);
       for (const op of slice) {
         const ref = fs.doc!(db, "homes", this.home, op.c, op.id);
         if (op.r) b.set(ref, await this.docFor(op.c, op.r));
         else b.update(ref, { del: true, at: fs.serverTimestamp!(), by: this.uid });
       }
-      for (const op of slice) {
-        if (op.r) this.data.get(op.c)!.set(op.id, structuredClone(op.r));
-        else this.data.get(op.c)!.delete(op.id);
-      }
-      this.emit({ keys: slice.map(({ c, id }) => ({ c, id })), local: true });
       // With progress (imports) wait for each batch; otherwise queue them all (works offline too).
       if (onProgress) { await b.commit(); onProgress(Math.min(ops.length, i + 400), ops.length); }
       else inFlight.push(b.commit());

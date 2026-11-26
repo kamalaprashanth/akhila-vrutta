@@ -111,7 +111,12 @@ const overlay: Overlay = {
       const r = op.r as Owned;
       if (old || ((op.c === "docs" || op.c === "files") && ownerShared(r.owner))) {
         fam.writeMany([{ c: op.c, id: op.id, r: { ...r, sharer: old?.sharer ?? me } }]);
-        return here(op.c, op.id) ? [{ c: op.c, id: op.id, r: null }] : [];
+        const out: WriteOp[] = here(op.c, op.id) ? [{ c: op.c, id: op.id, r: null }] : [];
+        // a new paper for a shared item: the files added in its form (already in the family space) join it
+        if (op.c === "docs" && mine) for (const f of mine.own<Owned & { fam?: number }>("files")) if (!f.deleted && f.fam && f.owner?.c === "docs" && f.owner.id === op.id) {
+          fam.writeMany([{ c: "files", id: f.id, r: { ...f, sharer: me } }]); out.push({ c: "files", id: f.id, r: null });
+        }
+        return out;
       }
       return [op];
     }
