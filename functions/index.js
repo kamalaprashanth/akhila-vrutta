@@ -58,15 +58,19 @@ exports.aiStatus = onCall({ region: "asia-south1", memory: "256MiB", maxInstance
   if (!req.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   const uid = req.auth.uid;
   await getFirestore().doc(`seen/${uid}`).set({ at: FieldValue.serverTimestamp() }).catch(() => {});
-  return { on: await aiAllowed(uid), owner: uid === OWNER_UID.value() };
+  return { on: await aiAllowed(uid), owner: uid === OWNER_UID.value(), appCheck: !!req.app };
 });
 
+/* App Check: with APP_CHECK=enforce, calls from anything but the genuine app (no valid App Check token) are
+   refused. "watch" lets them through (the emulator tests, and before enforcing). */
+const APP_CHECK = defineString("APP_CHECK", { default: "watch", description: "enforce or watch" });
+const genuine = (req) => { if (APP_CHECK.value() === "enforce" && !req.app) throw new HttpsError("failed-precondition", "This app couldn't prove it's the genuine Akhila Vrutta. Update it from Google Play, or reload the website."); };
 const isOwner = (req) => { if (!req.auth || req.auth.uid !== OWNER_UID.value()) throw new HttpsError("permission-denied", "Only the app's owner can do that."); };
 const UID_RE = /^[A-Za-z0-9_-]{6,128}$/;
 
 /* Admin (owner only): how many accounts, how many used it this week, Claude questions today; counts only. */
 exports.adminStats = onCall({ region: "asia-south1", memory: "256MiB", maxInstances: 1 }, async (req) => {
-  isOwner(req);
+  isOwner(req); genuine(req);
   const db = getFirestore(), week = Timestamp.fromMillis(Date.now() - 7 * 864e5), day = istDay();
   const [users, active, usage] = await Promise.all([
     db.collection("users").count().get(),
@@ -78,7 +82,7 @@ exports.adminStats = onCall({ region: "asia-south1", memory: "256MiB", maxInstan
 
 /* Admin: who has Claude (a name only the owner sees, on/off, questions today). */
 exports.adminAiList = onCall({ region: "asia-south1", memory: "256MiB", maxInstances: 1 }, async (req) => {
-  isOwner(req);
+  isOwner(req); genuine(req);
   const db = getFirestore(), day = istDay(), snap = await db.collection("aiAccess").get();
   const out = [];
   for (const d of snap.docs) {
@@ -88,7 +92,7 @@ exports.adminAiList = onCall({ region: "asia-south1", memory: "256MiB", maxInsta
   return { people: out.sort((a, b) => a.name.localeCompare(b.name)) };
 });
 exports.adminAiSet = onCall({ region: "asia-south1", memory: "256MiB", maxInstances: 1 }, async (req) => {
-  isOwner(req);
+  isOwner(req); genuine(req);
   const { uid, name, on, remove } = req.data || {};
   if (typeof uid !== "string" || !UID_RE.test(uid)) throw new HttpsError("invalid-argument", "That isn't a user ID.");
   if (uid === OWNER_UID.value()) throw new HttpsError("invalid-argument", "Claude is always on for you.");
@@ -117,6 +121,7 @@ exports.deleteAccount = onCall({ region: "asia-south1", memory: "512MiB", timeou
 exports.askClaude = onCall(
   { region: "asia-south1", secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 300, memory: "256MiB", maxInstances: 2, concurrency: 4 },
   async (req) => {
+    genuine(req);
     if (!req.auth || !(await aiAllowed(req.auth.uid))) throw new HttpsError("permission-denied", "This Google account isn't allowed to ask Claude.");
     const messages = req.data && req.data.messages;
     const bad = checkMessages(messages);

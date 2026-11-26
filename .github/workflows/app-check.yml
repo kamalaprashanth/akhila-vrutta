@@ -1,0 +1,31 @@
+name: App Check
+# Turns App Check enforcement for Cloud Firestore on or off (the functions follow APP_CHECK in
+# functions/.env.akhila-vrutta). Run from the Actions tab: "App Check" › Run workflow › enforced / unenforced.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "ENFORCED or UNENFORCED"
+        required: true
+        default: "UNENFORCED"
+        type: choice
+        options: [ENFORCED, UNENFORCED]
+
+permissions:
+  contents: read
+
+jobs:
+  firestore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Cloud Firestore to ${{ inputs.mode }}
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          echo "$SA" > "$RUNNER_TEMP/sa.json"
+          gcloud auth activate-service-account --key-file "$RUNNER_TEMP/sa.json" -q; rm "$RUNNER_TEMP/sa.json"
+          T=$(gcloud auth print-access-token)
+          U="https://firebaseappcheck.googleapis.com/v1/projects/akhila-vrutta/services/firestore.googleapis.com"
+          curl -sS -X PATCH -H "Authorization: Bearer $T" -H "Content-Type: application/json" "$U?updateMask=enforcementMode" -d "{\"enforcementMode\":\"$MODE\"}"
+          echo; echo "Now:"; curl -sS -H "Authorization: Bearer $T" "$U"

@@ -1,15 +1,17 @@
 /** The lock screen: first-time setup on a device, and unlocking every time the app opens. */
 import { lotus } from "./logo.ts";
 import { html, raw, toast } from "./dom.ts";
-import { formatSecretKey, parseSecretKey, SecretKeyNeeded } from "./crypto.ts";
+import { formatSecretKey, newSecretKey, parseSecretKey, SecretKeyNeeded } from "./crypto.ts";
+import { saveBlob } from "./files.ts";
+import { kitPdf } from "./kit.ts";
 import { attachMeter, strength } from "./strength.ts";
 import { failsSoFar, noteRight, noteWrong, waitLabel, waitLeft } from "./attempts.ts";
 import { aesKey } from "./crypto.ts";
 import {
-  bioCapable, createHome, currentUser, deviceInfo, forgetDevice, homeOf, setMode, signIn,
+  bioCapable, createHome, currentUser, deviceInfo, forgetDevice, homeOf, setMode, setSecretKey, signIn,
   unlockBio, unlockPass, unlockRemembered, type Device, type Session, type UnlockMode,
 } from "./vault.ts";
-import { signOutNow, type SignedInUser } from "./firebase.ts";
+import { config, signOutNow, type SignedInUser } from "./firebase.ts";
 import { isNative } from "./native.ts";
 
 let el: HTMLElement | null = null;
@@ -219,11 +221,15 @@ async function setup(): Promise<Session> {
     const h = home;
     dekRaw = await askPassphrase("Passphrase", "Welcome back. Enter your Akhila Vrutta passphrase to set up this device.", { check: (p, sk) => unlockPass({ uid, home: h }, p, sk) });
   } else {
+    let pass = "";
     const r = await askPassphrase("Create a passphrase",
-      "<b>Step 1 of 2 · Choose a passphrase.</b> It encrypts everything. Nobody, not Google and not us, can recover or reset it, so <b>save it in your password manager</b>.",
-      { create: true, btn: "Create and continue", check: (p) => createHome(uid, p) });
+      "<b>Step 1 of 3 · Choose a passphrase.</b> It encrypts everything. Nobody, not Google and not us, can recover or reset it, so <b>save it in your password manager</b>.",
+      { create: true, btn: "Create and continue", check: (p) => { pass = p; return createHome(uid, p); } });
     home = r.home;
     dekRaw = r.dekRaw;
+    // Step 2: every new account gets a Secret Key, saved in its Emergency Kit before going on
+    if (!config().emulators || window.AV_FORCE_SK) await secretKeyStep(uid, home, pass);
+    pass = "";
   }
   const mode = await chooseMode(await bioCapable());
   const dev = await applyMode({ uid, home }, mode, dekRaw);
@@ -231,6 +237,39 @@ async function setup(): Promise<Session> {
   dekRaw.fill(0);
   toast("This device is set up");
   return { uid, home, dek, mode: dev.mode };
+}
+
+/** Setup step 2: the Secret Key and its Emergency Kit. Can't be skipped: the kit is how a new phone gets in. */
+function secretKeyStep(uid: string, home: string, pass: string): Promise<void> {
+  const bytes = newSecretKey(), key = formatSecretKey(bytes);
+  return new Promise((resolve) => {
+    const e = show(html`${raw(msg("<b>Step 2 of 3 · Save your Emergency Kit.</b> Your Secret Key is mixed into your passphrase: a stolen passphrase alone opens nothing. It's kept only on your devices and in this kit, so print the kit and keep it at home; it's how you get in on a new phone."))}
+      <div class="skkey" id="lk_key">${key}</div>
+      <div class="lockopts"><button class="btn pri" type="button" id="lk_kit">Download Emergency Kit (PDF)</button></div>
+      <form class="lockf" autocomplete="off" id="lk_skf"><label class="lockl" for="lk_last">Then type its last 4 characters</label>
+        <input id="lk_last" type="text" class="skin" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" required>
+        <p class="lockm err" id="lk_e" hidden></p>
+        <button class="btn" type="submit" id="lk_skgo" data-lbl="Continue" disabled>Continue</button></form>`);
+    const fail = (t: string) => { const x = e.querySelector<HTMLElement>("#lk_e")!; x.hidden = false; x.textContent = t; };
+    const go = e.querySelector<HTMLButtonElement>("#lk_skgo")!;
+    e.querySelector("#lk_kit")!.addEventListener("click", () => void (async () => {
+      try {
+        const where = await saveBlob("Akhila Vrutta Emergency Kit.pdf", "application/pdf", new Blob([kitPdf({ key, account: `UID ...${uid.slice(-7)}`, made: new Date() })], { type: "application/pdf" }));
+        toast(`${where}. Print it and keep it at home.`);
+        go.disabled = false; go.classList.add("pri");
+      } catch (x) { fail(`Couldn't make the kit: ${x instanceof Error ? x.message : "error"}`); }
+    })());
+    e.querySelector("form")!.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (e.querySelector<HTMLInputElement>("#lk_last")!.value.trim().toUpperCase() !== key.slice(-4)) return fail("Those aren't the last 4 characters of your Secret Key.");
+      go.disabled = true; go.textContent = "Saving…";
+      try {
+        if (await setSecretKey({ uid, home } as Session, pass, bytes)) { bytes.fill(0); resolve(); return; }
+        fail("Couldn't turn the Secret Key on. Try again.");
+      } catch (x) { fail(x instanceof Error ? x.message : "Couldn't save. Check your connection and try again."); }
+      go.disabled = false; go.textContent = "Continue";
+    });
+  });
 }
 
 /** Re-asks for the passphrase in the lock screen and returns the raw data key (for turning on fingerprint). */

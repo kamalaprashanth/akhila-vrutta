@@ -9,7 +9,7 @@ import { callable, signOutNow, userName } from "../core/firebase.ts";
 import { forgetDevice } from "../core/vault.ts";
 import { connectDrive, driveBackups, removeFile, type FileRec } from "../core/files.ts";
 import { FILES } from "../core/store.ts";
-import { isOwner } from "../core/ai.ts";
+import { appCheckSeen, isOwner } from "../core/ai.ts";
 import { toast } from "./money/ui/kit.ts";
 
 const short = (uid: string): string => (uid.length > 10 ? `${uid.slice(0, 4)}…${uid.slice(-4)}` : uid);
@@ -69,6 +69,7 @@ export function adminCard(): string {
   return html`<section class="card" id="adCard">
     <h2>Admin <span class="chip">Only you</span></h2>
     <div class="adstats" id="adStats"><span><span class="note">Accounts</span><b>…</b></span><span><span class="note">Active this week</span><b>…</b></span><span><span class="note">Claude today</span><b>…</b></span></div>
+    <p class="note" id="adAc">${appCheckSeen === null ? "App Check on this device: not checked yet (reopen the app)" : appCheckSeen ? "App Check on this device: verified ✓ (this device would keep working when it's enforced)" : "App Check on this device: NOT verified ✗ (this device would be blocked if it were enforced)"}</p>
     <h3>Claude access</h3>
     <div id="adList"><p class="note">Loading…</p></div>
     <div class="adadd"><input class="skin" id="adUid" placeholder="Paste a user ID" aria-label="User ID" autocomplete="off"><input class="skin" id="adName" placeholder="Name" aria-label="A name only you see" autocomplete="off"><button class="btn pri" type="button" id="adAdd">Add</button></div>

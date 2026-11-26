@@ -64,11 +64,12 @@ const pageErrors = [];
 const consoleLines = [];
 const openPages = [];
 
-async function device(name, { user, bio } = {}) {
+async function device(name, { user, bio, forceSk } = {}) {
   // The emulator ports aren't in the production CSP; the real CSP is checked on the preview deploy.
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, bypassCSP: true });
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   if (user) await ctx.addInitScript((u) => { window.AV_TEST_USER = u; }, user);
+  if (forceSk) await ctx.addInitScript(() => { window.AV_FORCE_SK = true; });
   const page = await ctx.newPage();
   openPages.push([name, page]);
   page.on("console", (m) => { if (!/ERR_FAILED/.test(m.text())) consoleLines.push(`${name} [${m.type()}] ${m.text().slice(0, 300)}`); });
@@ -84,13 +85,23 @@ async function device(name, { user, bio } = {}) {
 const shot = (page, label) => page.screenshot({ path: `${SHOTS}/${String(++step).padStart(2, "0")}-${label}.png` });
 const lockText = (page) => page.locator("#lock").innerText({ timeout: 15000 });
 
-async function signInAndSetup(page, { create, pass, mode = "pass", sk }) {
+async function signInAndSetup(page, { create, pass, mode = "pass", sk, newSk }) {
   await page.goto(BASE);
   await page.click("#lk_g");
   await page.waitForSelector("#lk_p");
   await page.fill("#lk_p", pass);
   if (create) await page.fill("#lk_p2", pass);
   await page.click("#lock .btn.pri");
+  if (newSk) {   // a new account: the Secret Key step (Emergency Kit first, then its last 4 characters)
+    await page.waitForSelector("#lk_kit", { timeout: 30000 });
+    check(await page.isDisabled("#lk_skgo"), "a new account can't go on before downloading its Emergency Kit");
+    await page.click("#lk_kit");
+    await page.waitForSelector("#lk_skgo:not([disabled])", { timeout: 15000 });
+    const key = (await page.innerText("#lk_key")).trim();
+    await page.fill("#lk_last", "ZZZZ"); await page.click("#lk_skgo");
+    check(/last 4/.test(await page.innerText("#lk_e")), "…and must type its key's last 4 characters correctly");
+    await page.fill("#lk_last", key.slice(-4)); await page.click("#lk_skgo");
+  }
   if (sk) {   // an account with a Secret Key: a new device asks for it
     await page.waitForSelector("#lk_skw:not([hidden])", { timeout: 30000 });
     await page.fill("#lk_sk", sk);
@@ -422,10 +433,10 @@ try {
 
   progress("intruder and rules");
   /* 8. Open to everyone: another Google account sets up its own home, and still can't touch the owner's */
-  const X = await device("intruder", { user: "intruder" });
+  const X = await device("intruder", { user: "intruder", forceSk: true });
   await X.page.goto(BASE);
   check(/Only you can read it/.test(await lockText(X.page)) && /Terms/.test(await lockText(X.page)), "a new account sees the welcome: what the app is, privacy, Terms and Privacy policy");
-  await signInAndSetup(X.page, { create: true, pass: "lantern ochre walrus fifteen quilt" });
+  await signInAndSetup(X.page, { create: true, pass: "lantern ochre walrus fifteen quilt", newSk: true });
   await X.page.waitForSelector(".tdy", { timeout: 30000 });
   ok("another Google account sets up its own home and opens Today");
   await shot(X.page, "second-account");
@@ -433,6 +444,7 @@ try {
   const xUser = await api(`${FS}/users/intruder-uid`, {}, intr), xHome = xUser.body?.fields?.home?.stringValue;
   check(xUser.status === 200 && !!xHome && xHome !== home, `…its own home, not the owner's (${xHome})`);
   check((await api(`${FS}/homes/${xHome}`, {}, intr)).status === 200 && (await api(`${FS}/homes/${xHome}`, {}, owner)).status === 403, "…which it can read, and the owner can't");
+  check((await api(`${FS}/homes/${xHome}/keys/intruder-uid`)).body?.fields?.sk?.integerValue === "1", "…and its key needs the Secret Key from the start");
   check(typeof intr === "string" && intr.length > 20 && typeof owner === "string" && owner.length > 20, "test sign-in tokens obtained");
   const denied = async (label, p) => { const r = await p; check(r.status === 403, `rules: ${label} (HTTP ${r.status}${r.status === 403 ? "" : " " + JSON.stringify(r.body).slice(0, 160)})`); };
   await denied("another account can't read the home", api(`${FS}/homes/${home}`, {}, intr));

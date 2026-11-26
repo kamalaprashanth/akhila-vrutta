@@ -38,6 +38,8 @@ declare global {
     AV_CONFIG?: AppConfig;
     /** Test builds only: which test account signs in ("owner" by default). */
     AV_TEST_USER?: string;
+    /** Cloud tests: a new account also goes through the Secret Key step (as in the real app). */
+    AV_FORCE_SK?: boolean;
   }
 }
 

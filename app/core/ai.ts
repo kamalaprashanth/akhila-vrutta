@@ -12,6 +12,8 @@ export function aiOn(): boolean {
   if (!uid) return true;
   try { return localStorage.getItem(key(uid)) === "1"; } catch { return false; }
 }
+/** Did this device's last call carry a valid App Check token (shown to the owner before enforcing)? */
+export let appCheckSeen: boolean | null = null;
 /** The app's owner sees Admin (the functions check it again for every admin call). */
 export function isOwner(): boolean {
   const uid = ctx.session?.uid;
@@ -24,7 +26,8 @@ export async function refreshAi(): Promise<boolean> {
   if (!uid) return false;
   try {
     const fn = await callable("aiStatus", 20000);
-    const d = ((await fn({})).data ?? {}) as { on?: boolean; owner?: boolean };
+    const d = ((await fn({})).data ?? {}) as { on?: boolean; owner?: boolean; appCheck?: boolean };
+    appCheckSeen = d.appCheck === true;
     const was = `${aiOn()}${isOwner()}`;
     try { localStorage.setItem(key(uid), d.on ? "1" : "0"); localStorage.setItem(`av.own.${uid}`, d.owner ? "1" : "0"); } catch { /* private mode */ }
     return was !== `${!!d.on}${!!d.owner}`;
