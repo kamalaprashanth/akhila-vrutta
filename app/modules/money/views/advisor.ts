@@ -183,7 +183,7 @@ export function advisorHtml(d: MoneyData, st: AdvState, on: boolean): string {
   const stale = P.updated && d.today.slice(5) >= "04-01" && P.updated < d.today.slice(0, 4) + "-04-01";
   const thread = chat.map((m, i) => (m.role === "user" ? `<div class="advu">${esc(m.q || m.content)}</div>` : `<div class="adva">${chat[i - 1] && !chat[i - 1]!.kind ? '<div class="advtag">Quick answer</div>' : ""}${advFmt(m.content)}</div>`)).join("");
   return `<p class="note" style="margin:6px 0 12px">Looks at your last 24 months of transactions, holdings, loans, property plans, insurance and your profile. Not a SEBI-registered adviser; check before acting.</p>
-  ${!P.updated ? `<div class="rdyal" style="cursor:default;background:var(--warn-soft)"><span class="ra1" style="color:var(--warn)">Fill in your profile for better advice</span><span class="ra2">Age, tax regime, insurance and goals change most answers. <a href="#" data-go="more">Open Settings › My profile</a></span></div>` : stale ? `<div class="rdyal" style="cursor:default;background:var(--warn-soft)"><span class="ra1" style="color:var(--warn)">Time for the yearly profile review</span><span class="ra2">Last updated ${dFull(P.updated!)}. <a href="#" data-go="more">Review it</a></span></div>` : ""}
+  ${!P.updated ? `<div class="rdyal" style="cursor:default;background:var(--warn-soft)"><span class="ra1" style="color:var(--warn)">Fill in your profile for better advice</span><span class="ra2">Age, tax regime, insurance and goals change most answers. <a href="#/profile">Open your Profile</a></span></div>` : stale ? `<div class="rdyal" style="cursor:default;background:var(--warn-soft)"><span class="ra1" style="color:var(--warn)">Time for the yearly profile review</span><span class="ra2">Last updated ${dFull(P.updated!)}. <a href="#/profile">Review it</a></span></div>` : ""}
   ${advCheckCard(d, on)}
   <div class="sh"><h3>Ask about</h3></div><div class="pills advpills">${ADV_Q.map(([l], i) => `<button type="button" data-advq="${i}" ${busy || !on ? "disabled" : ""}>${l}</button>`).join("")}</div>
   ${chat.length || busy ? `<div class="card advchat">${thread}${busy ? `<div class="adva" id="advLive">${busy.text ? advFmt(busy.text) : '<span class="note">Looking through everything…</span>'}</div>` : ""}
@@ -192,7 +192,7 @@ export function advisorHtml(d: MoneyData, st: AdvState, on: boolean): string {
   ${on ? `<div class="txsearch" style="margin-top:12px"><input type="text" id="advIn" placeholder="${chat.length ? "Ask a follow-up" : "Or ask anything about your money"}" autocomplete="off" aria-label="Ask your advisor"><button class="btn sm pri" type="button" id="advGo" ${busy ? "disabled" : ""}>Ask</button></div>
     ${chat.length && !busy ? '<div class="btns" style="margin-top:6px"><button class="btn sm" type="button" id="advNew">New chat</button></div>' : ""}`
     : `<p class="cnote">The advisor needs the Claude version of the planner, or Ask Claude set up in the hosted app (README › Ask Claude).</p>`}
-  <p class="note">${P.updated ? `Profile updated ${dFull(P.updated)} · ` : ""}<a href="#" data-go="more">Edit profile</a>. This chat is cleared when you close the app.</p>`;
+  <p class="note">${P.updated ? `Profile updated ${dFull(P.updated)} · ` : ""}<a href="#/profile">Edit profile</a>. This chat is cleared when you close the app.</p>`;
 }
 
 /** As the planner: the first time Overview or the Advisor is shown, this month's check-up is written in the background (once a day at most). */

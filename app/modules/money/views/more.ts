@@ -35,11 +35,12 @@ function profSub(d: MoneyData, k: string, P: Profile): string {
   if (k === "estate") return j([P.nominees && `nominees ${P.nominees.toLowerCase()}`, P.will && `will: ${P.will.toLowerCase()}`]);
   return "";
 }
-function profileSection(d: MoneyData): string {
+/** Profile › About you (moved out of Money settings, 26 Nov 2026). */
+export function profileSection(d: MoneyData): string {
   const P = prof(d);
-  return `<h2>My profile for the advisor<span class="sp"></span>${P.updated ? `<span class="chip">Updated ${dLabel(P.updated)}</span>` : ""}</h2>
+  return `<h2>About you<span class="sp"></span>${P.updated ? `<span class="chip">Updated ${dLabel(P.updated)}</span>` : ""}</h2>
   <div class="list">${PROF_SECS.map(([k, l]) => { const s = profSub(d, k, P); return `<div class="row tap" data-prof="${k}" role="button" tabindex="0"><div class="main"><div class="t">${l}</div><div class="s">${esc(s) || '<span class="mut">Not filled in</span>'}</div></div><div class="amt mut">›</div></div>`; }).join("")}</div>
-  <p class="note">Used only for advisor answers, never for account numbers, PAN or PRAN. A reminder to review it shows every April.</p>`;
+  <p class="note">Used for your goals in Money › Plan and for the Advisor's answers; never account numbers, PAN or PRAN. A reminder to review it shows every April.</p>`;
 }
 function setupChecks(d: MoneyData): { t: string; s: string; at: string }[] {
   const out: { t: string; s: string; at: string }[] = [], td = d.today, R = d.live<Recurring & { shift?: string }>("recurring").filter((r) => !r.end || r.end >= ymOf(td));
@@ -101,7 +102,6 @@ export function moreHtml(d: MoneyData, nOn: boolean): string {
   return `
   <h2>Setup checklist<span class="sp"></span>${CK.length ? `<span class="chip warn">${CK.length} to do</span>` : '<span class="chip">All set ✓</span>'}</h2>
   ${CK.length ? `<div class="list">${CK.map((x) => `<div class="row tap" ${x.at} role="button" tabindex="0"><div class="main"><div class="t">${esc(x.t)}</div><div class="s">${esc(x.s)}</div></div><span class="mut" aria-hidden="true" style="font-size:18px">›</span></div>`).join("")}</div>` : '<p class="note">Everything the planner needs is set up.</p>'}
-  ${profileSection(d)}
   <h2>People &amp; other payers<span class="sp"></span><button class="btn sm" type="button" id="addPayer">Add</button></h2>
   <p class="note">For money you don't track a balance for, like cash, a meal card or your spouse paying. Entries never change a balance and stay out of your totals, but show in Transactions and under their tags.</p>
   <div class="list">${payers(d).map((p) => { const n = d.live<Rec & { paidBy?: string }>("txns").filter((t) => t.paidBy === p.id).length; return `<div class="row tap" data-payer="${esc(p.id)}" role="button" tabindex="0"><div class="main"><div class="t">${esc(p.name)}</div><div class="s">${p.own ? "Your money" : "Someone else's money"}${p.tag ? ` · tagged ${esc(p.tag)}` : ""}</div></div><div class="amt mut" style="font-size:13px">${n} entr${n === 1 ? "y" : "ies"}</div></div>`; }).join("") || '<div class="empty">None yet.</div>'}</div>

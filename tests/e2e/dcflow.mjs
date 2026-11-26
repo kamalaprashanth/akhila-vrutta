@@ -85,10 +85,11 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.evaluate(() => { location.hash = "#/docs"; }); await settle();
   let v = await p.innerText("#dView");
   ok(/PROPERTIES/i.test(v) && /Test Flat/.test(v) && /VEHICLES/i.test(v) && /Car/.test(v), "Documents lists the properties (from Money) and the car (from Household)");
-  ok(/Property tax 2026–27 · Test Flat/.test(v), "needs attention: this year's property tax receipt isn't added");
+  ok(!/Property tax/.test(v), "the property tax receipt is optional: not asked for in needs attention");
+  ok(!/LOANS AND ACCOUNTS/i.test(v), "accounts and loans without a document aren't listed");
   await p.click('#dView [data-owner="props/prB"]'); await settle();
   v = await p.innerText("#dView");
-  ok(/0 of 13 key documents/.test(v) && (await p.$$("#dView .dchk")).length === 13, "Test Flat's page: the full checklist of 13 key documents, none yet");
+  ok(/0 of 12 key documents/.test(v) && /YEARLY, OPTIONAL/i.test(v) && /Remind me each April/.test(v), "Test Flat's page: 12 key documents, none yet; the tax receipt under Yearly, optional");
   // sale deed with a file and a number
   await p.click('#dView .dchk[data-add="sale_deed"]'); await settle();
   ok(await p.inputValue(`${L} #f_dtype`) === "sale_deed", "tapping Sale deed opens Add document for it");
@@ -98,7 +99,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${L} #sv`); await settle();
   const sale = (await recs("docs")).find((d) => d.type === "sale_deed");
   ok(sale?.num4 === "5678", "only the last 4 of the number are kept (…5678)");
-  ok(/1 of 13 key documents/.test(await p.innerText("#dView")) && /1 file/.test(await p.innerText("#dView")), "…sale deed ticked, with its file");
+  ok(/1 of 12 key documents/.test(await p.innerText("#dView")) && /1 file/.test(await p.innerText("#dView")), "…sale deed ticked, with its file");
   // this year's tax
   await p.click('#dView .dyears [data-year="2026-27"]'); await settle();
   ok(await p.inputValue(`${L} #f_dyear`) === "2026-27" && await p.isVisible(`${L} #f_dyear`), "the 2026–27 tax chip opens Add document for that year");
@@ -106,9 +107,11 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   // not needed
   await p.click('#dView [data-na="rtc"]'); await settle();
   v = await p.innerText("#dView");
-  ok(/2 of 12 key documents/.test(v) && /Not needed/.test(v), "RTC marked not needed: 2 of 12");
+  ok(/1 of 11 key documents/.test(v) && /Not needed/.test(v), "RTC marked not needed: 1 of 11 (the tax receipt doesn't count)");
   await p.click('#dView [data-need="rtc"]'); await settle();
-  ok(/2 of 13/.test(await p.innerText("#dView")), "…and needed again");
+  ok(/1 of 12/.test(await p.innerText("#dView")), "…and needed again");
+  await p.click("#dView #dTaxRemind"); await settle();
+  ok((await recs("docPrefs")).some((x) => x.id === "props:prB" && x.taxRemind === true) && /On: reminded on 10 and 25 April/.test(await p.innerText("#dView")), "the April reminder for the tax receipt can be switched on");
   await p.click("#dView #dBack"); await settle();
   ok(!/Property tax 2026–27 · Test Flat/.test(await p.innerText("#dView")), "needs attention no longer asks for Test Flat's tax");
   // a person and their passport
@@ -119,6 +122,14 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.fill(`${L} #f_dvalid`, "2027-03-01"); await p.click(`${L} #sv`); await settle();
   await p.click("#dView #dBack"); await settle();
   ok(/Passport · KP[\s\S]*Expires in 95 days/.test(await p.innerText("#dView")), "needs attention: KP's passport expires in 95 days");
+  // + : what it's for, whose, then the document form with the right type
+  await p.click("#addDoc"); await settle();
+  ok((await p.$$(`${L} [data-cat]`)).length === 12, "+ asks what the document is for (12 choices)");
+  await p.click(`${L} [data-cat="tax"]`); await settle();
+  const kp = (await recs("docOwners")).find((o) => o.name === "KP");
+  await p.click(`${L} [data-key="docOwners/${kp.id}"]`); await p.waitForTimeout(400);
+  ok(await p.inputValue(`${L} #f_dtype`) === "itr" && await p.inputValue(`${L} #f_downer`) === `docOwners/${kp.id}`, "…Tax › KP opens Add document as KP's ITR acknowledgement");
+  await p.click(`${L} #cx`); await settle();
   // the car's insurance paper moves the car's renewal on
   await p.click(`#dView [data-owner="hhVehicles/${car.id}"]`); await settle();
   await p.click('#dView .dchk[data-add="insurance"]'); await settle();

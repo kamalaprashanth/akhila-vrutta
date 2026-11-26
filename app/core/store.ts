@@ -18,7 +18,9 @@ export const HOUSEHOLD_COLLECTIONS = ["hhHomes", "hhJobs", "hhDone", "hhApplianc
 /** Files kept encrypted in Google Drive: what they are and where (the vault). */
 export const HABIT_COLLECTIONS = ["habits", "habitLog", "habitPrefs"] as const;
 /** Documents: each document (type, year, valid till, last 4 of its number) and the people/policies they belong to. */
-export const DOC_COLLECTIONS = ["docs", "docOwners"] as const;
+export const DOC_COLLECTIONS = ["docs", "docOwners", "docPrefs"] as const;
+/** Calendar: family days (birthdays, anniversaries, shraddha), each by its English date and its tithi. */
+export const CAL_COLLECTIONS = ["famDays"] as const;
 /** Health: profiles (height), readings, lab reports, medicines and doses taken, doctor visits, check-ups. */
 export const HEALTH_COLLECTIONS = ["hlProfiles", "hlReadings", "hlLabs", "hlMeds", "hlMedLog", "hlVisits", "hlCheckups"] as const;
 export const FILES = "files";
@@ -26,7 +28,7 @@ export const FILES = "files";
 export const BACKUP_LOG = "backupLog";
 /** Housekeeping: schema versions and where the data came from. */
 export const META = "meta";
-export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, ...HABIT_COLLECTIONS, ...DOC_COLLECTIONS, ...HEALTH_COLLECTIONS, FILES, BACKUP_LOG, META];
+export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, ...HABIT_COLLECTIONS, ...DOC_COLLECTIONS, ...CAL_COLLECTIONS, ...HEALTH_COLLECTIONS, FILES, BACKUP_LOG, META];
 /** What a KP Money Planner import replaces (never Household or files). */
 export const IMPORT_SCOPE: readonly string[] = [...MONEY_COLLECTIONS, META];
 

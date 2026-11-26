@@ -47,13 +47,12 @@ test("financial years and last 4", () => {
 const prop = { id: "p1", name: "Lakeview flat" };
 const doc = (id: string, type: string, extra: Partial<Doc> = {}): Doc => ({ id, owner: { c: "props", id: "p1" }, type, added: T, ...extra });
 
-test("a property's checklist: present, not needed, and tax by year", () => {
+test("a property's checklist: present and not needed; the tax receipt is optional (not in it)", () => {
   const r = store({ props: [prop], docs: [doc("1", "sale_deed"), doc("2", "khata"), doc("3", "tax", { year: "2025-26" }), doc("4", "rtc", { na: true }), doc("5", "mutation", { na: true })] });
   const rows = checklist(r, { c: "props", id: "p1" }, T);
-  assert.equal(rows.length, 13);
-  assert.equal(rows.find((x) => x.type.k === "tax")!.years![0]!.have, false);
-  assert.equal(rows.find((x) => x.type.k === "tax")!.years![1]!.have, true);
-  assert.deepEqual(keyScore(rows), { have: 2, of: 11 });   // sale deed, khata; this year's tax missing; 2 not needed
+  assert.equal(rows.length, 12);
+  assert.equal(rows.some((x) => x.type.k === "tax"), false);
+  assert.deepEqual(keyScore(rows), { have: 2, of: 10 });   // sale deed, khata; 2 not needed
 });
 
 test("needs attention: expiring papers, and this year's tax from April; a renewed one hides the old", () => {
@@ -64,9 +63,13 @@ test("needs attention: expiring papers, and this year's tax from April; a renewe
   });
   const a = attention(r, T);
   assert.deepEqual(a.map((x) => x.title), ["Passport · KP"]);   // licence renewed; tax for 2026-27 is there
-  const r2 = store({ props: [prop], docs: [] });
+  // the tax receipt only shows as missing, and is only reminded, where its April reminder is switched on
+  assert.deepEqual(attention(store({ props: [prop], docs: [] }), T).map((x) => x.title), []);
+  assert.deepEqual(docNotes(store({ props: [prop], docs: [] }), new Date(2027, 2, 20, 8)), []);
+  const on = { docPrefs: [{ id: "props:p1", taxRemind: true }] };
+  const r2 = store({ props: [prop], docs: [], ...on });
   assert.deepEqual(attention(r2, T).map((x) => x.title), ["Property tax 2026–27 · Lakeview flat"]);
-  const notes = docNotes(store({ props: [prop], docs: [] }), new Date(2027, 2, 20, 8));
+  const notes = docNotes(store({ props: [prop], docs: [], ...on }), new Date(2027, 2, 20, 8));
   assert.deepEqual(notes.map((n) => [n.title, n.at.getDate()]), [["Property tax 2027–28 for Lakeview flat: receipt not added", 10], ["Property tax 2027–28 for Lakeview flat: receipt not added", 25]]);
 });
 

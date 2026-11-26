@@ -175,7 +175,7 @@ const TABS: [View["tab"], string, string][] = [
 ];
 export const household: Module = {
   id: "household",
-  label: "Home",
+  label: "Household",
   icon: ICON,
   subs: () => TABS.map(([id, label, icon]) => ({ id, label, icon, href: `#/household/${id}` })),
   sub: () => view.tab,

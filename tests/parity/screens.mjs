@@ -140,12 +140,16 @@ const report = await f.evaluate(() => {
     ["paid by Amma", blank({ acc: "@sp2", period: "all" }), nowM], ["paid by removed payer", blank({ acc: "@old", period: "all" }), nowM], ["uncategorised", blank({ uncat: true }), nowM],
     ["search dinner", blank({ q: "dinner" }), nowM], ["search 400.5", blank({ q: "400.5", period: "all" }), nowM], ["investments", blank({ type: "investment" }), nowM]]) run2(l, f, m);
   run2("selecting", blank(), nowM, { selOn: true, sel: ["x1", "x5"] });
+  // Moved on purpose (26 Nov 2026): the profile is its own page (Profile, in the side menu), so the links to it changed
+  const moved = (h) => typeof h !== "string" ? h : h.replaceAll('<a href="#" data-go="more">Open Settings › My profile</a>', '<a href="#/profile">Open your Profile</a>')
+    .replaceAll('<a href="#" data-go="more">', '<a href="#/profile">').replaceAll("Settings › My profile › About me", "Profile › About you").replaceAll("(Settings › My profile)", "(Profile)").replaceAll("Retirement age comes from Settings › My profile (now", "Retirement age comes from your Profile (now")
+    .replace(/\n  <h2>My profile for the advisor[\s\S]*?A reminder to review it shows every April\.<\/p>/, "");
   // Sheets: the new ones against the planner's, as drawn (markup, values, pickers, balances).
   const sheetHtml = (sel) => document.querySelector(sel)?.innerHTML ?? "(none)";
   const cmpSheet = (label, openOld, openNew) => {
     n++;
     const kid = (h) => h.replace(/data-kidid="([^"]+)"/g, (m, v) => (knownIds.has(v) ? m : 'data-kidid="NEW"'));
-    openOld(); const a = kid(sheetHtml("#modal")); closeModal();
+    openOld(); const a = moved(kid(sheetHtml("#modal"))); closeModal();
     openNew(); const b = kid(sheetHtml("#mvLayer #modal")); N.kit.closeModal();
     if (a !== b) {
       let i = 0; while (i < a.length && a[i] === b[i]) i++;
@@ -179,7 +183,7 @@ const report = await f.evaluate(() => {
     S.cwFixed = 640; N.charts.setChartWidth(640);
     for (const k in CH) delete CH[k]; chSeq = 0; N.charts.resetCharts(); MEMO = new Map();
     let a, b;
-    try { a = oldFn(); } catch (e) { a = "old threw: " + e.message; }
+    try { a = moved(oldFn()); } catch (e) { a = "old threw: " + e.message; }
     try { b = newFn(); } catch (e) { b = "new threw: " + e.message; }
     if (a !== b && sameButEstimates(a, b)) { estRounding++; return; }
     if (a.startsWith("old threw") && !b.includes("threw")) { fixedCrash.push(label); return; }
@@ -268,7 +272,7 @@ const report = await f.evaluate(() => {
     const keep = S.advChat;
     // What Claude is sent: the whole picture, as text.
     n++;
-    const a = ADV_RULES(advContext()) + "\n\nQUESTION: " + ADV_CHECK, b = N.advisor.ADV_RULES(N.advisor.advContext(dx)) + "\n\nQUESTION: " + ADV_CHECK;
+    const a = moved(ADV_RULES(advContext())) + "\n\nQUESTION: " + ADV_CHECK, b = N.advisor.ADV_RULES(N.advisor.advContext(dx)) + "\n\nQUESTION: " + ADV_CHECK;
     const la = a.split("\n"), lb = b.split("\n");
     const near = la.length === lb.length && la.every((x, k) => { const y = lb[k]; if (x === y) return true; const nx = x.match(/\d+/g) || [], ny = y.match(/\d+/g) || []; return x.replace(/\d+/g, "#") === y.replace(/\d+/g, "#") && nx.every((v, j) => Math.abs(+v - +ny[j]) <= 1); });
     if (a !== b && near) estRounding++;

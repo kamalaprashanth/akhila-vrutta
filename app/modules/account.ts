@@ -22,7 +22,6 @@ export function accountCard(): string {
   return html`<section class="card" id="acCard">
     <h2>Account</h2>
     <div class="acwho"><span class="acav" id="acAv">·</span><span><b id="acName">Signed in with Google</b><span class="note">Signed in with Google</span></span></div>
-    <div class="acrow"><span><b>Your user ID</b><span class="note"><code>${short(s.uid)}</code> · share it with the app's owner to switch Claude on for you</span></span><button class="btn" type="button" id="acCopy">Copy</button></div>
     <div class="acdel">
       <h3>Delete account</h3>
       <p class="note">Deletes everything: your records in the cloud, your encrypted files and backups in your Google Drive, and your sign-in. It can't be undone. Make a backup first if you might want it later.</p>
@@ -36,7 +35,6 @@ export function wireAccount(root: HTMLElement): void {
   const s = ctx.session;
   if (!s || !root.querySelector("#acCard")) return;
   void userName().then((n) => { if (!n) return; const a = root.querySelector("#acName"), v = root.querySelector("#acAv"); if (a) a.textContent = n; if (v) v.textContent = n[0]!.toUpperCase(); });
-  root.querySelector("#acCopy")?.addEventListener("click", () => { void navigator.clipboard?.writeText(s.uid).then(() => toast("User ID copied"), () => toast(s.uid)); });
   root.querySelector("#acDel")?.addEventListener("click", () => {
     const area = root.querySelector<HTMLElement>("#acDelArea")!;
     area.innerHTML = html`<div class="confirm"><p><b>This deletes all your data for good.</b> Type <b>DELETE</b> to confirm.</p>
@@ -74,7 +72,7 @@ export function adminCard(): string {
     <h3>Claude access</h3>
     <div id="adList"><p class="note">Loading…</p></div>
     <div class="adadd"><input class="skin" id="adUid" placeholder="Paste a user ID" aria-label="User ID" autocomplete="off"><input class="skin" id="adName" placeholder="Name" aria-label="A name only you see" autocomplete="off"><button class="btn pri" type="button" id="adAdd">Add</button></div>
-    <p class="note">People find their user ID in Settings › Account. Claude costs you per question, so it's off for everyone you don't add. You see counts only, never anyone's data.</p>
+    <p class="note">People find their user ID in Profile. Claude costs you per question, so it's off for everyone you don't add. You see counts only, never anyone's data.</p>
   </section>`;
 }
 

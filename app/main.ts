@@ -1,7 +1,7 @@
 /** The shell: unlock, then header, tab bar and routing between modules. */
 import { refreshAi } from "./core/ai.ts";
 import { MODULES } from "./modules/pages.ts";
-import type { Module } from "./modules/types.ts";
+import type { Module, Sub } from "./modules/types.ts";
 import { todayCount } from "./modules/today/index.ts";
 import { lotus } from "./core/logo.ts";
 import { html, raw, $, toast } from "./core/dom.ts";
@@ -15,6 +15,7 @@ import { startHousehold } from "./modules/household/index.ts";
 import { startHabits } from "./modules/habits/index.ts";
 import { startDocs } from "./modules/documents/index.ts";
 import { startHealth } from "./modules/health/index.ts";
+import { startCalendar } from "./modules/calendar/index.ts";
 import { startBackups } from "./core/backup-auto.ts";
 
 const AUTO_LOCK_MS = 2 * 60 * 1000;
@@ -39,12 +40,24 @@ function renderDrawer(mod: Module): string {
     <div class="dfoot">${raw(set ? item(set) : "")}${raw(locks ? html`<button type="button" class="dit" id="lockNow">${raw(svg(LOCK))}<span>Lock now</span></button>` : "")}</div>`;
 }
 
+const MENU: Sub = { id: "menu", label: "Menu", icon: "M4 7h16M4 12h16M4 17h10", href: "#menu" };
+/** The bottom bar: the section's own tabs, then Menu; a page without tabs gets Today's bar with itself in
+ * the fourth place (Today, Money, Household, <this page>, Menu). */
+function barOf(mod: Module): { subs: Sub[]; cur: string } {
+  if (mod.subs) { const s = mod.subs(); return { subs: s.some((x) => x.href === "#menu") ? s : [...s, MENU], cur: mod.sub?.() ?? "" }; }
+  const main = MODULES.find((m) => m.id === "today")?.subs?.() ?? [];
+  const me: Sub = { id: mod.id, label: mod.tab ?? mod.label, icon: mod.icon, href: `#/${mod.id}` };
+  const subs = main.some((x) => x.id === mod.id) ? main : main.map((x, i) => (i === 3 ? me : x));
+  return { subs, cur: mod.id };
+}
+
 /** The open section's own tabs, at the bottom of a phone. */
 function renderNav(mod: Module): string {
-  const subs = mod.subs?.() ?? [], cur = mod.sub?.() ?? "";
+  const { subs, cur } = barOf(mod);
+  const key = mod.subs ? mod.id : "main";
   return subs.map((x) => x.href === "#menu"
     ? html`<button type="button" class="tab" id="navMenu" aria-controls="drawer"><span class="ti">${raw(svg(x.icon))}</span><span>${x.label}</span></button>`
-    : html`<a href="${x.href}" data-sub="${mod.id}:${x.id}" class="tab${x.id === cur ? " on" : ""}" ${raw(x.id === cur ? 'aria-current="page"' : "")}><span class="ti">${raw(svg(x.icon))}</span><span>${x.label}</span></a>`).join("");
+    : html`<a href="${x.href}" data-sub="${key}:${x.id}" class="tab${x.id === cur ? " on" : ""}" ${raw(x.id === cur ? 'aria-current="page"' : "")}><span class="ti">${raw(svg(x.icon))}</span><span>${x.label}</span></a>`).join("");
 }
 
 function setDrawer(open: boolean): void {
@@ -71,8 +84,7 @@ function render(): void {
     main.focus({ preventScroll: true });
   }
   // after the page: a section may pick its tab while rendering (Money, Home)
-  const subs = mod.subs?.() ?? [];
-  document.body.classList.toggle("hassubs", subs.length > 0);
+  document.body.classList.toggle("hassubs", barOf(mod).subs.length > 0);
   if (nav) nav.innerHTML = renderNav(mod);
   if (drawer) drawer.innerHTML = renderDrawer(mod);
   document.title = mod.id === "today" ? "Akhila Vrutta" : `${mod.label} · Akhila Vrutta`;
@@ -137,6 +149,7 @@ async function boot(): Promise<void> {
   startHabits();
   startDocs();
   startHealth();
+  startCalendar();
   startBackups();
 
   // The Android app: Back, and locking after a minute away (choosing a file also leaves the app for a moment).

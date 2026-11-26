@@ -245,7 +245,7 @@ export function smartGoal(d: MoneyData, g: Goal): { pct: number; sub: string; ro
   }
   if (g.kind === "edu") {
     const c = (g.kidId ? (P.kids ?? []).find((k) => k.id === g.kidId) : (P.kids ?? [])[g.kid || 0]) || {}, a = ageOf(d, c.dob), name = c.name || "Child";
-    if (a == null) return { pct: 0, sub: `${name} · add the date of birth in Settings › My profile › About me`, rows: [], ok: false, msg: "Needs the child's date of birth." };
+    if (a == null) return { pct: 0, sub: `${name} · add the date of birth in Profile › About you`, rows: [], ok: false, msg: "Needs the child's date of birth." };
     const inf = (num(g.inf) || EDU_DEF.inf) / 100, r = (num(g.ret) || EDU_DEF.ret) / 100, school = num(g.school) || EDU_DEF.school, ug = num(g.ug) || EDU_DEF.ug, pg = num(g.pg) || EDU_DEF.pg;
     const yUG = Math.max(0, 18 - a), yPG = Math.max(0, 22 - a), fUG = a < 18 ? fv(ug, inf, yUG) : 0, fPG = a < 22 ? fv(pg, inf, yPG) : 0;
     const linked = (g.holdings ?? []).map((id) => d.byId<Holding>("holdings", id)).filter((h): h is Holding => !!h && !h.deleted), have = linked.reduce((s, h) => s + holdingSum(d, h).value, 0);
@@ -262,7 +262,7 @@ export function smartGoal(d: MoneyData, g: Goal): { pct: number; sub: string; ro
   }
   if (g.kind === "retire") {
     const a = myAge(d), ra = +(P.retire ?? 0) || 60, life = num(g.life) || RET_DEF.life, inf = (num(g.inf) || RET_DEF.inf) / 100, pre = (num(g.pre) || RET_DEF.pre) / 100, post = (num(g.post) || RET_DEF.post) / 100;
-    if (a == null) return { pct: 0, sub: "Add your date of birth and retirement age in Settings › My profile › About me", rows: [], ok: false, msg: "Needs your date of birth." };
+    if (a == null) return { pct: 0, sub: "Add your date of birth and retirement age in Profile › About you", rows: [], ok: false, msg: "Needs your date of birth." };
     const yrs = Math.max(0, ra - a), base = num(g.spend) || retireBase(d), atR = fv(base, inf, yrs), rr = (1 + post) / (1 + inf) - 1, n = Math.max(1, life - ra);
     const corpus = atR * 12 * (rr ? (1 - Math.pow(1 + rr, -n)) / rr * (1 + rr) : n);
     const H = d.live<Holding>("holdings").filter((h) => !h.closed && (["EPF", "PPF", "NPS"].includes(String(h.type)) || (g.holdings ?? []).includes(h.id))), have = H.reduce((s, h) => s + holdingSum(d, h).value, 0), fvHave = fv(have, pre, yrs);
@@ -287,7 +287,7 @@ function goalsTab(d: MoneyData): string {
     <div class="pbar" style="margin-top:10px"><i style="width:${Math.max(0, Math.min(100, x.pct)).toFixed(1)}%"></i></div><div class="gst ${x.ok ? "ok" : "no"}">${esc(x.msg)}</div></div>`;
   };
   return `<div class="btns" style="margin-top:12px"><button class="btn pri" type="button" id="addGoal">+ Add goal</button></div>
-  <p class="note">Worked out from your profile (Settings › My profile) and your spending. Tap a goal to change its assumptions. Goals don't move money; add the monthly amount as a SIP or regular item.</p>
+  <p class="note">Worked out from your profile (Profile) and your spending. Tap a goal to change its assumptions. Goals don't move money; add the monthly amount as a SIP or regular item.</p>
   ${G.map(card).join("") || '<div class="list" style="margin-top:12px"><div class="empty">No goals yet.</div></div>'}`;
 }
 /** Whether the planner would create goals now (from the profile, once): it does the writing. */

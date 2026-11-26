@@ -13,6 +13,8 @@ import { extname, join, normalize } from "node:path";
 const SEED = process.env.AV_SEED ?? "test-results/seed";
 const seed = {};
 if (SEED) for (const f of await readdir(SEED)) for (const [c, l] of Object.entries(JSON.parse(await readFile(join(SEED, f), "utf8")))) if (!["txns", "accounts", "categories", "recurring", "goals", "loans", "holdings", "settings", "payers", "snaps", "trades", "views", "propItems"].includes(c)) (seed[c] ??= []).push(...l);
+// family days for the Calendar page (made up)
+seed.famDays = [{ id: "fd1", kind: "birthday", name: "Amma", date: "1958-08-14", tithi: { m: 4, t: 6 }, byDate: true, byTithi: true, before: 2 }, { id: "fd2", kind: "anniversary", name: "Wedding", date: "2014-12-02", tithi: { m: 8, t: 10 }, byDate: true, byTithi: true }, { id: "fd3", kind: "shraddha", name: "Thatha", tithi: { m: 6, t: 24 }, byDate: false, byTithi: true }];
 const harness = (await build({ entryPoints: ["tests/e2e/layout-harness.ts"], bundle: true, format: "esm", write: false, target: "es2022" })).outputFiles[0].text;
 const shell = (await readFile("dist/index.html", "utf8")).replace(/<script src="config.js"><\/script>/, "").replace(/<script type="module" src="app.js"><\/script>/, '<script type="module" src="/harness.js"></script>').replace(/<link[^>]*fonts\.g[^>]*>/g, "");
 const T = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".wasm": "application/wasm", ".json": "application/json" };
@@ -32,7 +34,7 @@ await mkdir("test-results/layout", { recursive: true });
 const WIDTHS = [["small phone", 320, 640, true], ["phone", 390, 844, true], ["big phone", 430, 932, true], ["phone landscape", 844, 390, true], ["tablet", 768, 1024, true], ["laptop", 1280, 800, false], ["desktop", 1920, 1080, false]];
 const PAGES = [["today", "#/today"], ["money home", "#/money/home"], ["money activity", "#/money/activity"], ["money accounts", "#/money/accounts"], ["money plan", "#/money/plan"], ["money insights", "#/money/insights"], ["money advisor", "#/money/advisor"], ["money more", "#/money/more"],
   ["household due", "#/household/due"], ["household appliances", "#/household/appl"], ["household vehicles", "#/household/veh"], ["household lists", "#/household/lists"],
-  ["habits", "#/habits"], ["habit page", "#/habits", null, "[data-habit]"], ["health", "#/health"], ["health lab", `#/health/lab/${seed.hlLabs?.[0]?.id}`], ["documents", "#/docs"], ["documents owner", "#/docs", null, "[data-owner]"], ["settings", "#/settings"], ["search", "#/search"]];
+  ["habits", "#/habits"], ["habit page", "#/habits", null, "[data-habit]"], ["health", "#/health"], ["health lab", `#/health/lab/${seed.hlLabs?.[0]?.id}`], ["documents", "#/docs"], ["documents owner", "#/docs", null, "[data-owner]"], ["settings", "#/settings"], ["search", "#/search"], ["calendar", "#/calendar"], ["profile", "#/profile"]];
 
 const audit = (touch) => {
   const W = innerWidth, H = innerHeight, out = { sideways: document.documentElement.scrollWidth > W + 1 ? document.documentElement.scrollWidth : 0, cut: [], under: [], small: [], tiny: [] };

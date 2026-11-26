@@ -18,13 +18,13 @@ export interface Reader { all<T extends Rec = Rec>(c: string): T[]; get<T extend
 const live = <T extends Rec>(r: Reader, c: string): T[] => r.all<T>(c).filter((x) => !(x as { deleted?: boolean }).deleted);
 
 /* ---------- document types ---------- */
-export interface DocType { k: string; label: string; key?: boolean; yearly?: boolean; expires?: number; edu?: boolean }
+export interface DocType { k: string; label: string; key?: boolean; yearly?: boolean; expires?: number; edu?: boolean; tax?: boolean; med?: boolean }
 const OTHER: DocType = { k: "other", label: "Other document" };
 export const TYPES: Record<Kind, DocType[]> = {
   property: [
     { k: "sale_deed", label: "Sale deed", key: true },
     { k: "khata", label: "Khata certificate & extract", key: true },
-    { k: "tax", label: "Property tax receipt", key: true, yearly: true },
+    { k: "tax", label: "Property tax receipt", yearly: true },
     { k: "ec", label: "Encumbrance certificate (EC)", key: true },
     { k: "oc", label: "Occupancy / completion certificate", key: true },
     { k: "plan", label: "Approved building plan", key: true },
@@ -61,8 +61,17 @@ export const TYPES: Record<Kind, DocType[]> = {
     { k: "marks", label: "Mark sheets", edu: true },
     { k: "offer", label: "Offer / appointment letter", edu: true },
     { k: "relieving", label: "Relieving / experience letter", edu: true },
-    { k: "form16", label: "Form 16", edu: true, yearly: true },
     { k: "payslip", label: "Payslips", edu: true },
+    { k: "itr", label: "ITR acknowledgement", tax: true, yearly: true },
+    { k: "form16", label: "Form 16", tax: true, yearly: true },
+    { k: "ais", label: "Form 26AS / AIS", tax: true, yearly: true },
+    { k: "taxproof", label: "Tax-saving proofs", tax: true, yearly: true },
+    { k: "challan", label: "Tax payment challan", tax: true, yearly: true },
+    { k: "rx", label: "Prescription", med: true },
+    { k: "discharge", label: "Discharge summary", med: true },
+    { k: "medcert", label: "Medical certificate", med: true },
+    { k: "vaccine", label: "Vaccination record", med: true },
+    { k: "medbill", label: "Medical bills", med: true },
     OTHER,
   ],
   appliance: [
@@ -84,6 +93,7 @@ export const TYPES: Record<Kind, DocType[]> = {
     { k: "statement", label: "Statement", yearly: true },
     { k: "interest", label: "Interest certificate", yearly: true },
     { k: "noc", label: "NOC / closure letter" },
+    { k: "card", label: "Card agreement / welcome letter" },
     OTHER,
   ],
   other: [OTHER],
@@ -121,10 +131,16 @@ export function groups(r: Reader): [string, OwnerInfo[]][] {
     ["Education & work", eduPeople],
     ["Appliances", of("hhAppliances")],
     ["Insurance", of("docOwners", grp("insurance"))],
-    ["Loans and accounts", [...of("loans"), ...of("accounts", (x) => (x as { type?: string }).type !== "cash")]],
+    // only the ones with a document (Documents › + adds the first)
+    ["Loans and accounts", [...of("loans"), ...of("accounts", (x) => (x as { type?: string }).type !== "cash" && !(x as { hidden?: boolean }).hidden)].filter((o) => docsOf(r, o.owner).some((d) => !d.na))],
     ["Other", of("docOwners", grp("other"))],
   ];
 }
+
+/** Per-owner choices: docPrefs { id: "<c>:<id>", taxRemind? } (the property tax receipt's April reminder). */
+export interface DocPref extends Rec { taxRemind?: boolean; deleted?: boolean }
+export const prefId = (o: Owner): string => `${o.c}:${o.id}`;
+export const taxRemind = (r: Reader, o: Owner): boolean => !!r.get<DocPref>("docPrefs", prefId(o))?.taxRemind && !r.get<DocPref>("docPrefs", prefId(o))?.deleted;
 
 export const docsOf = (r: Reader, o: Owner): Doc[] => live<Doc>(r, "docs").filter((d) => sameOwner(d.owner, o));
 
@@ -163,10 +179,11 @@ export function attention(r: Reader, today: Day): Attention[] {
     if (left > warnFrom || left < -90) continue;
     out.push({ title: `${t.label} · ${info.name}`, sub: left < 0 ? `Expired ${-left} days ago` : left === 0 ? "Expires today" : `Expires in ${left} days`, date: d.validTo, owner: d.owner, docId: d.id, level: left <= 15 ? "bad" : "warn" });
   }
-  // this year's property tax receipt, from April
+  // this year's property tax receipt, from April (only where its April reminder is on)
   const fy = fyOf(today);
   for (const p of live(r, "props")) {
     const o = { c: "props", id: p.id }, ds = docsOf(r, o);
+    if (!taxRemind(r, o)) continue;
     if (ds.some((d) => d.type === "tax" && (d.na || d.year === fy))) continue;
     const info = ownerInfo(r, o); if (!info) continue;
     out.push({ title: `Property tax ${fyLabel(fy)} · ${info.name}`, sub: "Receipt not added", date: `${fy.slice(0, 4)}-04-30`, owner: o, level: today > `${fy.slice(0, 4)}-04-30` ? "bad" : "warn" });
@@ -194,6 +211,7 @@ export function docNotes(r: Reader, now: Date, horizon = 45): { title: string; a
   for (const fy of new Set([fyOf(`${y}-04-15`), fyOf(`${y + 1}-04-15`)])) {
     for (const p of live(r, "props")) {
       const o = { c: "props", id: p.id };
+      if (!taxRemind(r, o)) continue;
       if (docsOf(r, o).some((d) => d.type === "tax" && (d.na || d.year === fy))) continue;
       const name = ownerInfo(r, o)?.name ?? "Property";
       for (const day of ["10", "25"]) add(`Property tax ${fyLabel(fy)} for ${name}: receipt not added`, nine(`${fy.slice(0, 4)}-04-${day}`));

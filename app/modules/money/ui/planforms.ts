@@ -239,7 +239,7 @@ export function goalForm(g: Partial<G> = {}): void {
     ${field(["rs", "Monthly spending in today's money (₹)", "number", { value: rs(g.spend || ""), hint: `Leave empty to use your usual spending without EMIs: ${money(retireBase(d))} a month (last 12 months)` }])}
     <div class="grid2">${field(["ri", "Inflation (%)", "number", { value: g.inf || RET_DEF.inf, step: "0.5" }])}${field(["rl", "Money should last to age", "number", { value: g.life || RET_DEF.life }])}</div>
     <div class="grid2">${field(["rp", "Return before retiring (%)", "number", { value: g.pre || RET_DEF.pre, step: "0.5" }])}${field(["ro", "Return after retiring (%)", "number", { value: g.post || RET_DEF.post, step: "0.5" }])}</div>
-    <p class="note">Retirement age comes from Settings › My profile (now ${prof.retire || "not set"}). EPF, PPF and NPS count automatically.</p>${hpick("Other investments for retirement")}${pri}`;
+    <p class="note">Retirement age comes from your Profile (now ${prof.retire || "not set"}). EPF, PPF and NPS count automatically.</p>${hpick("Other investments for retirement")}${pri}`;
   else body += `${field(["name", "Goal", "text", { value: g.name, ph: "e.g. New car" }])}<div class="grid2">${field(["target", "Target (₹)", "number", { value: rs(g.target), step: "1000" }])}${field(["by", "By", "month", { value: g.by || addM(ymOf(d.today), 12) }])}</div>
     ${field(["saved", "Already saved outside investments (₹)", "number", { value: rs(g.saved), step: "0.01" }])}${hpick("Count these investments towards it")}${pri}`;
   openSheet(isNew ? "Add goal" : String(g.name), body + btnRow(isNew, "Add goal"), (s) => {

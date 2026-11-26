@@ -238,13 +238,16 @@ export const money: Module = {
     root.innerHTML = html`    <button class="fab" id="moneyAdd" type="button" aria-label="Add transaction">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`;
     // + : the add form, into the main account, from every money page.
-    root.querySelector("#moneyAdd")!.addEventListener("click", () => {
-      txnForm({}, { accountId: mainAcc(currentData())?.id || currentData().live("accounts")[0]?.id });
-    });
+    root.querySelector("#moneyAdd")!.addEventListener("click", addTxn);
     start();
     go(want && want !== S.view ? want : S.view);
   },
 };
+
+/** The Add transaction form, into the main account (Money's + and Today's +). */
+export function addTxn(): void {
+  txnForm({}, { accountId: mainAcc(currentData())?.id || currentData().live("accounts")[0]?.id });
+}
 
 /** Called by the shell when another tab is shown. */
 export function hideMoney(): void {

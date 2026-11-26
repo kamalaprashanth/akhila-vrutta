@@ -8,7 +8,8 @@ import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
 import type { Rec } from "../../core/store.ts";
 import { formatINR } from "../../core/money.ts";
-import { moneyNow } from "../money/index.ts";
+import { addTxn, moneyNow, startMoney } from "../money/index.ts";
+import { ensureLayer } from "../money/ui/kit.ts";
 import { obligations } from "../money/calc/reserve.ts";
 import { dueRows } from "../household/data.ts";
 import { vehicleDue } from "../household/vehicles.ts";
@@ -18,6 +19,7 @@ import { checkupsOf, dueOn as medDue, medsOf, people, taken, timeLabel, type Med
 import { takeMed } from "../health/index.ts";
 import { doneOn, dueOn as habitDue, HABITS, habitsOf, logsOf, streak, valueOn, type Habit } from "../habits/data.ts";
 import { setValue } from "../habits/index.ts";
+import { famItems } from "../calendar/index.ts";
 
 type Day = string;
 interface Reader { all<T extends Rec = Rec>(c: string): T[]; get<T extends Rec = Rec>(c: string, id: string): T | undefined }
@@ -30,7 +32,7 @@ const MN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const short = (d: Day): string => `${+d.slice(8, 10)} ${MN[+d.slice(5, 7) - 1]}`;
 
-export type Area = "Money" | "Health" | "Habit" | "Home" | "Papers";
+export type Area = "Money" | "Health" | "Habit" | "Home" | "Papers" | "Family";
 export interface Item {
   key: string; area: Area; date: Day; time?: string; title: string; sub: string; amount?: number; href: string;
   /** ticked right here */
@@ -44,6 +46,7 @@ const ICON: Record<Area, string> = {
   Habit: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM8.5 12.5l2.5 2.5 4.5-5",
   Home: "M4 11l8-7 8 7v9H4zM10 20v-5h4v5",
   Papers: "M7 3h7l4 4v14H7zM14 3v4h4",
+  Family: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4M12 13.5l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z",
 };
 
 /** Everything due from today to 7 days ahead (and anything overdue), from every section. */
@@ -74,8 +77,10 @@ export function items(r: Reader, t: Day): Item[] {
     else out.push({ key: `b:${h.id}`, area: "Habit", date: t, title: h.name, sub: s > 1 ? `${s} days in a row` : h.goal ? `${h.goal}-day practice` : "Habit", href: `#/habits/${encodeURIComponent(h.id)}`, tick: { kind: "habit", id: h.id, on } });
   }
   // Home: jobs, warranties, to-dos, vehicle renewals and service
-  for (const x of dueRows(r, t)) if (x.date <= end) out.push({ key: `j:${x.kind}:${x.id}`, area: "Home", date: x.date < t ? t : x.date, late: x.date < t, title: x.title, sub: `Home · ${when(x.date)}`, href: "#/household/due" });
+  for (const x of dueRows(r, t)) if (x.date <= end) out.push({ key: `j:${x.kind}:${x.id}`, area: "Home", date: x.date < t ? t : x.date, late: x.date < t, title: x.title, sub: `Household · ${when(x.date)}`, href: "#/household/due" });
   for (const x of vehicleDue(r, t)) if (x.date <= end) out.push({ key: `v:${x.id}:${x.key}`, area: "Home", date: x.date < t ? t : x.date, late: x.date < t, title: x.title, sub: `${x.sub} · ${when(x.date)}`, href: "#/household/veh" });
+  // Family days: birthdays, anniversaries, shraddha, on their date and their tithi
+  for (const o of famItems(t, 7)) out.push({ key: `f:${o.id}:${o.by}:${o.date}`, area: "Family", date: o.date, title: o.title, sub: `${o.sub}${o.date === t ? "" : ` · ${when(o.date)}`}`, href: "#/calendar" });
   // Papers: expiring or expired
   for (const a of attention(r, t)) if (a.date <= end) out.push({ key: `d:${a.docId ?? a.title}`, area: "Papers", date: a.date < t ? t : a.date, late: a.date < t, title: a.title, sub: `${a.sub}`, href: ownerHash(a.owner) });
   return out.sort((a, b) => a.date.localeCompare(b.date) || Number(!!b.late) - Number(!!a.late) || (a.time ?? "99").localeCompare(b.time ?? "99") || a.title.localeCompare(b.title));
@@ -89,6 +94,8 @@ export function todayCount(): number {
 }
 
 let showAll = false;
+/** Money is set up (its + only makes sense then). */
+const moneyReady = (): boolean => { try { return !!moneyNow().live("accounts").length; } catch { return false; } };
 const row = (x: Item): string => {
   const right = x.tick
     ? html`<button type="button" class="tdtick ${x.tick.on ? "on" : ""}" data-tk="${x.tick.kind}" data-id="${x.tick.id}" data-time="${x.tick.time ?? ""}" aria-pressed="${String(x.tick.on)}" aria-label="${x.tick.on ? "Done" : "Mark done"}: ${x.title}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></button>`
@@ -113,14 +120,15 @@ function draw(root: HTMLElement): void {
     <section class="tdcard" aria-labelledby="tdW"><h2 id="tdW">Next 7 days</h2>
       ${raw(week.length ? wk.map(row).join("") : html`<p class="tdnone">Nothing in the next 7 days.</p>`)}</section>
     ${raw(week.length > 5 ? html`<button type="button" class="tdmore" id="tdAll">${showAll ? "Show fewer" : `See all ${week.length} coming up`}</button>` : "")}
-  </div>`;
+  </div>${raw(moneyReady() ? html`<button class="fab" id="tdAdd" type="button" aria-label="Add transaction"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>` : "")}`;
 }
 
 let rootEl: HTMLElement | null = null;
 function onTap(e: Event): void {
-  const el = (e.target as HTMLElement).closest<HTMLElement>("[data-tk],#tdAll");
+  const el = (e.target as HTMLElement).closest<HTMLElement>("[data-tk],#tdAll,#tdAdd");
   if (!el || !rootEl?.contains(el) || document.body.dataset.mod !== "today") return;
   if (el.id === "tdAll") { showAll = !showAll; draw(rootEl); return; }
+  if (el.id === "tdAdd") { addTxn(); return; }
   const t = dayOf(new Date());
   if (el.dataset.tk === "med") takeMed(el.dataset.id!, el.dataset.time!);
   if (el.dataset.tk === "habit") { const h = reader().get<Habit>(HABITS, el.dataset.id!); if (h) setValue(h, t, el.getAttribute("aria-pressed") === "true" ? 0 : 1); }
@@ -134,12 +142,13 @@ export const today: Module = {
   subs: () => [
     { id: "today", label: "Today", icon: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4", href: "#/today" },
     { id: "money", label: "Money", icon: "M3 6h18v14H3zM3 10h18M16 15h2", href: "#/money" },
-    { id: "household", label: "Home", icon: "M4 11l8-7 8 7v9H4zM10 20v-5h4v5", href: "#/household" },
+    { id: "household", label: "Household", icon: "M4 11l8-7 8 7v9H4zM10 20v-5h4v5", href: "#/household" },
     { id: "health", label: "Health", icon: "M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z", href: "#/health" },
     { id: "menu", label: "Menu", icon: "M4 7h16M4 12h16M4 17h10", href: "#menu" },
   ],
   sub: () => "today",
   render(root) {
+    if (ctx.store) { ensureLayer(); startMoney(); }
     if (rootEl !== root) { rootEl = root; root.addEventListener("click", onTap); }
     draw(root);
   },

@@ -307,6 +307,17 @@ try {
   for (const c of ["hlReadings", "hlMeds"]) hlDocs.push(...((await api(`${FS}/homes/${home}/${c}?pageSize=50`)).body.documents ?? []));
   const hlPlain = hlDocs.filter((d) => ["Cloud vitamin", "70.5", "weight"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
   check(hlDocs.length >= 2 && hlPlain === 0 && hlDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a reading and a medicine are in the cloud as ciphertext only (${hlDocs.length} records)`);
+  /* Calendar: a family day (birthday by date and by tithi), saved encrypted */
+  await A.page.goto(`${BASE}/#/calendar`);
+  await A.page.waitForSelector("#calAdd", { timeout: 20000 });
+  await tap("#calAdd");
+  await A.page.fill("#mvLayer #f_fname", "Cloud Amma");
+  await A.page.fill("#mvLayer #f_fdate", "1958-08-14");
+  await tap("#mvLayer #sv");
+  await A.page.waitForTimeout(3000);
+  const calDocs = (await api(`${FS}/homes/${home}/famDays?pageSize=50`)).body.documents ?? [];
+  const calPlain = calDocs.filter((d) => ["Cloud Amma", "1958", "birthday"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  check(calDocs.length >= 1 && calPlain === 0 && calDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a family day is in the cloud as ciphertext only (${calDocs.length} records)`);
   /* Backup: a full backup downloads (made from the key the cloud keeps), and the weekly switch is saved encrypted */
   await A.page.goto(`${BASE}/#/settings`);
   await A.page.waitForSelector("#bkCard #bkDown", { timeout: 20000 });

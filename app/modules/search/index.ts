@@ -20,7 +20,7 @@ let q = "", area: Area | "All" = "All";
 const recent: string[] = [];
 const TRY = ["rent", "insurance", "passport", "warranty", "₹5,000", "LDL"];
 const ICON: Record<Area, string> = {
-  Money: "M3 6h18v14H3zM3 10h18", Home: "M4 11l8-7 8 7v9H4z", Health: "M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z",
+  Money: "M3 6h18v14H3zM3 10h18", Household: "M4 11l8-7 8 7v9H4z", Health: "M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z",
   Papers: "M7 3h7l4 4v14H7zM14 3v4h4", Habits: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM8.5 12.5l2.5 2.5 4.5-5",
 };
 

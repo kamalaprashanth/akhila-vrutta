@@ -40,7 +40,7 @@ const typeQ = async (q) => { await p.fill("#srIn", q); await p.waitForTimeout(40
 let t = await typeQ("sample");
 ok(/results? in Money/.test(t) && await p.locator("#srRes mark").count() > 0, `"sample" finds Money entries, the words marked (${t.split("\n")[0]})`);
 t = await typeQ("car");
-ok(/HOME/i.test(t) && /Car/.test(t), "\"car\" finds the vehicle under Home");
+ok(/HOUSEHOLD/i.test(t) && /Car/.test(t), "\"car\" finds the vehicle under Household");
 t = await typeQ("passport");
 ok(/PAPERS/i.test(t) && /Passport/i.test(t), "\"passport\" finds the document under Papers");
 t = await typeQ("multivitamin");
@@ -52,8 +52,8 @@ ok(/₹18,000/.test(t) && /MONEY/i.test(t), "an amount typed with ₹ and commas
 t = await typeQ("zzzzqq");
 ok(/Nothing found/.test(t), "nothing found says so");
 await typeQ("sample"); await p.keyboard.press("Enter");
-await p.click('[data-area="Home"]'); await p.waitForTimeout(300);
-ok(/Nothing found for “sample” in Home/.test(await p.innerText("#srRes")), "a chip narrows the results to one section");
+await p.click('[data-area="Household"]'); await p.waitForTimeout(300);
+ok(/Nothing found for “sample” in Household/.test(await p.innerText("#srRes")), "a chip narrows the results to one section");
 await p.click('[data-area="All"]'); await p.waitForTimeout(300);
 await p.fill("#srIn", ""); await p.waitForTimeout(300);
 ok(/RECENT/i.test(await p.innerText("#srRes")) && /sample/.test(await p.innerText("#srRes")), "searches you made come back under Recent (this session only)");

@@ -39,8 +39,8 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok(!(await frameShown()), "the Advisor is drawn by the app");
   ok((await p.$$(`${V} [data-advq]`)).length === 8, "eight quick questions");
   ok(await p.$eval(`${V} [data-advq]`, (b) => b.disabled), "…off without a sign-in (this test has none; the cloud test asks for real)");
-  await p.click(`${V} a[data-go="more"]`); await p.waitForTimeout(700);
-  ok(!(await frameShown()) && (await p.textContent(`${V} h2`)).startsWith("Setup checklist"), "Edit profile opens Money settings (drawn by the app)");
+  await p.click(`${V} a[href="#/profile"]`); await p.waitForTimeout(700);
+  ok(!(await frameShown()) && (await p.evaluate(() => location.hash)) === "#/profile", "Edit profile opens the Profile page");
   ok(errors.length === 0, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   await ctx.close();
 }

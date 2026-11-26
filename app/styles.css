@@ -191,6 +191,8 @@ body[data-mod="money"] main{padding:0}
 
 /* Today */
 .tdy{display:flex;flex-direction:column;gap:16px;padding:4px 0 8px}
+/* room under the last row for the + button */
+.tdy:has(~ .fab){padding-bottom:84px}
 .tddate{margin:0;font-size:13px;font-weight:700;color:var(--muted)}
 .tdh{margin:-10px 0 0;font:600 30px/1.15 var(--serif)}
 .tdcard{background:var(--surface);border-radius:18px;padding:6px 16px;border:1px solid var(--line)}

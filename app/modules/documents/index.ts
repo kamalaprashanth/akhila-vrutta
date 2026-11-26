@@ -12,8 +12,8 @@ import { setReminderSource, scheduleReminders } from "../../core/reminders.ts";
 import { ensureLayer } from "../money/ui/kit.ts";
 import { startMoney } from "../money/index.ts";
 import { setVehicleDocs } from "../household/vehforms.ts";
-import { attention, checklist, docNotes, docsOf, fyLabel, groups, keyScore, ownerInfo, search, typeOf, TYPES, type Doc, type DocOwner, type Owner, type OwnerInfo, type Reader } from "./data.ts";
-import { docForm, ownerForm, setNotNeeded } from "./forms.ts";
+import { attention, checklist, docNotes, docsOf, fyLabel, groups, keyScore, ownerInfo, prefId, recentFys, search, taxRemind, typeOf, TYPES, type Doc, type DocOwner, type DocPref, type Owner, type OwnerInfo, type Reader } from "./data.ts";
+import { addPicker, docForm, ownerForm, setNotNeeded } from "./forms.ts";
 
 export const ICON = "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6";
 export const reader = (): Reader => ({ all: (c) => ctx.store?.all(c) ?? [], get: (c, id) => ctx.store?.get(c, id) });
@@ -63,8 +63,7 @@ function mainPage(r: Reader, t: string): string {
   return html`<div class="dsearch"><input id="dq" type="search" placeholder="Search: khata, passport, RC, 2025…" value="${query}" aria-label="Search documents" autocomplete="off"></div>
     ${raw(query ? html`<div class="sh"><h3>${hits.length ? `${hits.length} found` : "Nothing found"}</h3></div>${raw(hits.length ? html`<div class="list">${raw(hits.map((h) => html`<div class="row tap" data-doc="${h.doc.id}" role="button" tabindex="0"><span class="dico">${h.info.icon}</span><div class="main"><div class="t">${h.label}</div><div class="s">${h.info.name} · ${docLine(h.doc, h.info.kind)}</div></div></div>`).join(""))}</div>` : "")}` : html`
     ${raw(att.length ? html`<div class="sh"><h3>Needs attention</h3></div><div class="datt">${raw(att.map((a) => html`<button type="button" class="card" ${raw(a.docId ? `data-doc="${a.docId}"` : `data-owner="${a.owner.c}/${a.owner.id}"`)}><b>${a.title}</b><span class="${a.level}">${a.sub}</span></button>`).join(""))}</div>` : "")}
-    ${raw(groupHtml)}`)}
-    <button class="btn pri dadd" type="button" id="addDoc">＋ Add document</button>`;
+    ${raw(groupHtml)}`)}`;
 }
 
 /* ---------- an owner's page ---------- */
@@ -83,12 +82,22 @@ function ownerPage(r: Reader, o: Owner, t: string): string {
   const keyTypes = new Set(rows.map((x) => x.type.k));
   const rest = ds.filter((d) => !keyTypes.has(d.type)).sort((a, b) => (b.year ?? b.validTo ?? b.added).localeCompare(a.year ?? a.validTo ?? a.added));
   const list = (l: Doc[]): string => html`<div class="list">${raw(l.map((d) => html`<div class="row tap" data-doc="${d.id}" role="button" tabindex="0"><div class="main"><div class="t">${typeOf(info.kind, d.type).label}</div><div class="s">${docLine(d, info.kind)}</div></div></div>`).join(""))}</div>`;
-  const id = rest.filter((d) => !(info.kind === "person" && typeOf("person", d.type).edu)), edu = rest.filter((d) => info.kind === "person" && typeOf("person", d.type).edu);
+  const pt = (d: Doc) => (info.kind === "person" ? typeOf("person", d.type) : null);
+  const edu = rest.filter((d) => pt(d)?.edu), tax = rest.filter((d) => pt(d)?.tax), med = rest.filter((d) => pt(d)?.med);
+  const id = rest.filter((d) => !pt(d)?.edu && !pt(d)?.tax && !pt(d)?.med && !(info.kind === "property" && d.type === "tax"));
+  // a property's tax receipt: by year, optional, with its April reminder only if switched on
+  const taxT = info.kind === "property" ? typeOf("property", "tax") : null;
+  const taxDocs = taxT ? ds.filter((d) => d.type === "tax") : [], remind = taxT ? taxRemind(r, o) : false;
+  const yearly = taxT ? html`<div class="sh"><h3>Yearly, optional</h3></div><div class="list"><div class="row dchk"><div class="main"><div class="t">${taxT.label}</div><div class="dyears">${raw(recentFys(t).map((fy) => { const d = taxDocs.find((z) => z.year === fy); return html`<button type="button" class="${d ? "" : "no"}" ${raw(d ? `data-doc="${d.id}"` : `data-add="tax" data-year="${fy}"`)}>${fyLabel(fy)}${d ? "" : " ＋"}</button>`; }).join(""))}</div></div></div>
+    <label class="row dchk"><div class="main"><div class="t">Remind me each April</div><div class="s">${remind ? "On: reminded on 10 and 25 April until this year's receipt is added" : "Off: no warnings, no reminders"}</div></div><input type="checkbox" id="dTaxRemind" ${remind ? "checked" : ""} aria-label="Remind me each April"></label></div>` : "";
   const applFiles = info.kind === "appliance" ? filesOf(o) : [];
-  const suggest = TYPES[info.kind].filter((x) => !x.key && x.k !== "other" && !ds.some((d) => d.type === x.k)).slice(0, 6);
+  const suggest = TYPES[info.kind].filter((x) => !x.key && x.k !== "other" && !(info.kind === "property" && x.k === "tax") && !ds.some((d) => d.type === x.k)).slice(0, 6);
   return html`<div class="dhead"><span class="dico big">${info.icon}</span><div><h2>${info.name}</h2><div class="s">${[info.sub, info.kind === "property" ? `${k.have} of ${k.of} key documents` : `${ds.length} document${ds.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}</div></div></div>
     ${raw(check ? html`<div class="sh"><h3>${info.kind === "property" ? "Key documents" : "Main documents"}</h3></div>${raw(check)}` : "")}
     ${raw(id.length ? html`<div class="sh"><h3>${info.kind === "person" ? "ID and certificates" : rows.length ? "Other documents" : "Documents"}</h3></div>${raw(list(id))}` : "")}
+    ${raw(yearly)}
+    ${raw(tax.length ? html`<div class="sh"><h3>Tax</h3></div>${raw(list(tax))}` : "")}
+    ${raw(med.length ? html`<div class="sh"><h3>Medical</h3></div>${raw(list(med))}` : "")}
     ${raw(edu.length ? html`<div class="sh"><h3>Education & work</h3></div>${raw(list(edu))}` : "")}
     ${raw(applFiles.length ? html`<div class="sh"><h3>Files from Household</h3></div><div class="list"><div class="row tap" data-appl="${o.id}" role="button" tabindex="0"><div class="main"><div class="t">${applFiles.map((f) => f.name).join(", ")}</div><div class="s">open the appliance in Household</div></div></div></div>` : "")}
     ${raw(suggest.length ? html`<div class="sh"><h3>Add</h3></div><div class="dsugg">${raw(suggest.map((x) => html`<button type="button" class="btn sm" data-add="${x.k}">＋ ${x.label}</button>`).join(""))}</div>` : "")}
@@ -99,7 +108,8 @@ function draw(root: HTMLElement): void {
   if (!ctx.store) { root.innerHTML = html`<section class="card"><h2>Documents</h2><p>Property papers, ID documents, vehicle, insurance and loan papers, encrypted in your Drive, with expiry reminders. Sign in to open it.</p></section>`; return; }
   const r = reader(), t = today(), o = pageOwner();
   const focused = document.activeElement?.id === "dq", caret = (document.activeElement as HTMLInputElement | null)?.selectionStart ?? null;
-  root.innerHTML = html`<div class="mv dv"><div class="wrap" id="dView">${raw(o ? ownerPage(r, o, t) : mainPage(r, t))}</div></div>`;
+  // the + sits outside .mv (Money's styles hide a .fab inside it)
+  root.innerHTML = html`<div class="mv dv"><div class="wrap" id="dView">${raw(o ? ownerPage(r, o, t) : mainPage(r, t))}</div></div>${raw(o ? "" : html`<button class="fab" type="button" id="addDoc" aria-label="Add a document"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`)}`;
   if (focused) { const q = root.querySelector<HTMLInputElement>("#dq"); q?.focus(); if (q && caret != null) q.setSelectionRange(caret, caret); }
 }
 
@@ -114,10 +124,17 @@ function onTap(e: Event): void {
   if (d.add && o) return docForm(undefined, { owner: o, type: d.add, ...(d.year ? { year: d.year } : {}) });
   if (d.addowner) return ownerForm(d.addowner as DocOwner["group"], undefined, (ow) => { location.hash = ownerHash(ow); });
   if (d.appl) { location.hash = "#/household"; return; }
-  if (el.id === "addDoc") return docForm();
+  if (el.id === "addDoc") return addPicker();
   if (el.id === "dAddHere" && o) return docForm(undefined, { owner: o, type: "other" });
   if (el.id === "dBack") { location.hash = "#/docs"; return; }
   if (el.id === "dEditOwner" && o) { const x = reader().get<DocOwner>("docOwners", o.id); if (x) ownerForm(x.group, x.id); }
+}
+function onChange(e: Event): void {
+  const i = e.target as HTMLInputElement, o = pageOwner();
+  if (i.id !== "dTaxRemind" || !o || document.body.dataset.mod !== "docs") return;
+  const p: DocPref = { ...(reader().get<DocPref>("docPrefs", prefId(o)) ?? { id: prefId(o) }), taxRemind: i.checked };
+  delete p.deleted;
+  docWrite([{ c: "docPrefs", r: p }]);
 }
 function onInput(e: Event): void {
   if ((e.target as HTMLElement).id !== "dq") return;
@@ -155,6 +172,7 @@ export const documents: Module = {
       rootEl = root;
       root.addEventListener("click", onTap);
       root.addEventListener("input", onInput);
+      root.addEventListener("change", onChange);
       root.addEventListener("keydown", onKey);
     }
     draw(root);

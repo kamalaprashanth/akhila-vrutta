@@ -56,7 +56,7 @@ for (const [name, vp, touch] of [["phone", { width: 390, height: 844 }, true], [
 
   if (touch) {
     const tb = await p.$$eval("#nav .tab", (l) => l.map((a) => a.textContent.trim()));
-    ok(tb.join(",") === "Today,Money,Home,Health,Menu", `Today's bottom bar has the main sections and the menu (${tb.join(", ")})`);
+    ok(tb.join(",") === "Today,Money,Household,Health,Menu", `Today's bottom bar has the main sections and the menu (${tb.join(", ")})`);
     await p.click("#navMenu"); await p.waitForTimeout(300);
     ok(await p.evaluate(() => document.body.classList.contains("dopen")), "…Menu there opens the side menu");
     await p.keyboard.press("Escape"); await p.waitForTimeout(300);
@@ -77,7 +77,7 @@ for (const [name, vp, touch] of [["phone", { width: 390, height: 844 }, true], [
   if (touch) {
     ok(!(await p.evaluate(() => document.body.classList.contains("dopen"))), "…and closes behind itself");
     const tabs = await p.$$eval("#nav .tab", (l) => l.map((a) => a.textContent.trim()));
-    ok(tabs.join(",") === "Overview,Activity,Plan,Accounts", `Money's own tabs are at the bottom (${tabs.join(", ")})`);
+    ok(tabs.join(",") === "Overview,Activity,Plan,Accounts,Menu", `Money's own tabs are at the bottom (${tabs.join(", ")})`);
     await p.click('#nav [data-sub="money:plan"]'); await p.waitForTimeout(800);
     ok((await p.evaluate(() => location.hash)) === "#/money/plan" && await p.getAttribute('#nav [data-sub="money:plan"]', "aria-current") === "page", "…Plan opens from them and shows as the open one");
   } else {
@@ -93,10 +93,19 @@ for (const [name, vp, touch] of [["phone", { width: 390, height: 844 }, true], [
   await p.evaluate(() => { location.hash = "#/money/home"; }); await p.waitForTimeout(800);
   ok(await p.isHidden("#mvSw"), "…and the switch isn't on other Money pages");
   await p.evaluate(() => { location.hash = "#/household/veh"; }); await p.waitForTimeout(400);
-  ok(await p.innerText("#title") === "Home" && /Add vehicle/.test(await text()), "Home opens on the tab in the address (Vehicles)");
+  ok(await p.innerText("#title") === "Household" && /Add vehicle/.test(await text()), "Household opens on the tab in the address (Vehicles)");
   if (touch) ok(await p.getAttribute('#nav [data-sub="household:veh"]', "aria-current") === "page", "…with Vehicles shown as the open tab");
   await p.evaluate(() => { location.hash = "#/health"; }); await p.waitForTimeout(400);
-  ok(!(await p.evaluate(() => document.body.classList.contains("hassubs"))) && await p.isHidden("#nav"), "a section without tabs has no bottom bar");
+  if (touch) {
+    const labels = await p.$$eval("#nav .tab", (t) => t.map((x) => x.textContent.trim()));
+    ok(labels.join(",") === "Today,Money,Household,Health,Menu" && await p.getAttribute('#nav [data-sub="main:health"]', "aria-current") === "page", `a section without tabs gets the main bar with itself on (${labels.join(", ")})`);
+    await p.evaluate(() => { location.hash = "#/docs"; }); await p.waitForTimeout(400);
+    const l2 = await p.$$eval("#nav .tab", (t) => t.map((x) => x.textContent.trim()));
+    ok(l2.join(",") === "Today,Money,Household,Docs,Menu", `…Documents (Docs) takes the fourth place (${l2.join(", ")})`);
+    await p.evaluate(() => { location.hash = "#/household/due"; }); await p.waitForTimeout(400);
+    const l3 = await p.$$eval("#nav .tab", (t) => t.map((x) => x.textContent.trim()));
+    ok(l3[l3.length - 1] === "Menu", `…and a section's own tabs end with Menu (${l3.join(", ")})`);
+  }
   ok(errors.length === 0, `no errors${errors.length ? `: ${errors.join(" | ")}` : ""}`);
   await ctx.close();
 }

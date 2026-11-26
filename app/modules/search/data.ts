@@ -6,8 +6,8 @@
 import type { Rec } from "../../core/store.ts";
 
 type Day = string;
-export type Area = "Money" | "Home" | "Health" | "Papers" | "Habits";
-export const AREAS: Area[] = ["Money", "Home", "Health", "Papers", "Habits"];
+export type Area = "Money" | "Household" | "Health" | "Papers" | "Habits";
+export const AREAS: Area[] = ["Money", "Household", "Health", "Papers", "Habits"];
 export interface Hit { area: Area; key: string; title: string; sub: string; date?: Day; amount?: number; href: string; open?: { c: string; id: string } }
 export interface Reader { all<T extends Rec = Rec>(c: string): T[]; get<T extends Rec = Rec>(c: string, id: string): T | undefined }
 
@@ -47,12 +47,12 @@ export function searchAll(r: Reader, q: string, opts: { catName?: (id: string) =
     for (const x of live(r, c)) if (hit([s(x.name), s(x.bank), s(x.sym), s(x.note)], words)) out.push({ area: "Money", key: `${c}:${x.id}`, title: s(x.name) || s(x.sym), sub: what, href });
   }
   /* Home */
-  for (const x of live(r, "hhVehicles")) if (hit([s(x.name), s(x.reg), s(x.model), s(x.kind)], words)) out.push({ area: "Home", key: `v:${x.id}`, title: s(x.name), sub: [s(x.reg), s(x.model)].filter(Boolean).join(" · ") || "Vehicle", href: "#/household/veh", open: { c: "hhVehicles", id: x.id } });
-  for (const x of live(r, "hhFuel")) { const v = r.get<R>("hhVehicles", s(x.vehicleId)); if (v && hit([s(v.name), s(x.note), "fuel"], words)) out.push({ area: "Home", key: `f:${x.id}`, title: "Fuel", sub: [s(v.name), dayLabel(s(x.date))].filter(Boolean).join(" · "), date: s(x.date), href: "#/household/veh" }); }
-  for (const x of live(r, "hhAppliances")) if (hit([s(x.name), s(x.model), s(x.service), s(x.note), homeName(x.home)], words)) out.push({ area: "Home", key: `a:${x.id}`, title: s(x.name), sub: [s(x.model), homeName(x.home)].filter(Boolean).join(" · ") || "Appliance", href: "#/household/appl", open: { c: "hhAppliances", id: x.id } });
-  for (const x of live(r, "hhJobs")) if (hit([s(x.name), s(x.note), homeName(x.home)], words)) out.push({ area: "Home", key: `j:${x.id}`, title: s(x.name), sub: [homeName(x.home), x.due ? `next ${dayLabel(s(x.due))}` : ""].filter(Boolean).join(" · "), date: s(x.due), href: "#/household/due" });
-  for (const x of live(r, "hhItems")) if (hit([s(x.text)], words)) out.push({ area: "Home", key: `i:${x.id}`, title: s(x.text), sub: `${x.list === "grocery" ? "Groceries" : "To do"}${x.doneOn ? " · done" : ""}`, href: "#/household/lists" });
-  for (const x of live(r, "hhHomes")) if (hit([s(x.name)], words)) out.push({ area: "Home", key: `h:${x.id}`, title: s(x.name), sub: "Home", href: "#/household/due" });
+  for (const x of live(r, "hhVehicles")) if (hit([s(x.name), s(x.reg), s(x.model), s(x.kind)], words)) out.push({ area: "Household", key: `v:${x.id}`, title: s(x.name), sub: [s(x.reg), s(x.model)].filter(Boolean).join(" · ") || "Vehicle", href: "#/household/veh", open: { c: "hhVehicles", id: x.id } });
+  for (const x of live(r, "hhFuel")) { const v = r.get<R>("hhVehicles", s(x.vehicleId)); if (v && hit([s(v.name), s(x.note), "fuel"], words)) out.push({ area: "Household", key: `f:${x.id}`, title: "Fuel", sub: [s(v.name), dayLabel(s(x.date))].filter(Boolean).join(" · "), date: s(x.date), href: "#/household/veh" }); }
+  for (const x of live(r, "hhAppliances")) if (hit([s(x.name), s(x.model), s(x.service), s(x.note), homeName(x.home)], words)) out.push({ area: "Household", key: `a:${x.id}`, title: s(x.name), sub: [s(x.model), homeName(x.home)].filter(Boolean).join(" · ") || "Appliance", href: "#/household/appl", open: { c: "hhAppliances", id: x.id } });
+  for (const x of live(r, "hhJobs")) if (hit([s(x.name), s(x.note), homeName(x.home)], words)) out.push({ area: "Household", key: `j:${x.id}`, title: s(x.name), sub: [homeName(x.home), x.due ? `next ${dayLabel(s(x.due))}` : ""].filter(Boolean).join(" · "), date: s(x.due), href: "#/household/due" });
+  for (const x of live(r, "hhItems")) if (hit([s(x.text)], words)) out.push({ area: "Household", key: `i:${x.id}`, title: s(x.text), sub: `${x.list === "grocery" ? "Groceries" : "To do"}${x.doneOn ? " · done" : ""}`, href: "#/household/lists" });
+  for (const x of live(r, "hhHomes")) if (hit([s(x.name)], words)) out.push({ area: "Household", key: `h:${x.id}`, title: s(x.name), sub: "Home", href: "#/household/due" });
   /* Health */
   const person = (id: unknown): string => s(r.get<R>("docOwners", s(id))?.name);
   for (const x of live(r, "hlMeds")) if (hit([s(x.name), s(x.dose), s(x.note), person(x.person)], words)) out.push({ area: "Health", key: `m:${x.id}`, title: s(x.name), sub: ["Medicine", person(x.person), x.stopped ? "stopped" : ""].filter(Boolean).join(" · "), href: "#/health" });

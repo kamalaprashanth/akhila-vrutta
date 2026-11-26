@@ -165,6 +165,12 @@
 .mv .dyears button{font:600 12.5px var(--body);padding:8px 12px;min-height:36px;border-radius:8px;border:0;background:var(--accent-soft);color:var(--accent);cursor:pointer}
 .mv .dyears button.no{background:var(--sunk);color:var(--muted)}
 .mv .dsugg{display:flex;gap:6px;flex-wrap:wrap}
+.mv .dcats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 4px}
+.mv .dcats button{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px 12px;min-height:84px;border-radius:14px;border:1px solid var(--line);background:var(--card,var(--bg));color:var(--ink);font:700 13px var(--body);text-align:center;cursor:pointer}
+.mv .dcats button:focus-visible,.mv .dpick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mv .dcats svg{width:24px;height:24px;fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.mv .dpick{width:100%;border:0;background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.mv .dchk input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:var(--accent)}
 
 /* Health (drawn with Money's look) */
 .mv.hlv .wrap{padding-top:10px}
@@ -207,3 +213,19 @@
 .mv .hhbox::after{content:"";position:absolute;inset:-9px}
 .mv .dchk .btn.sm{min-height:36px}
 .mv .hbslip{min-height:36px}
+
+/* Calendar › Family days, and Profile (drawn with Money's look) */
+.mv .calday{margin:6px 0 0;color:var(--muted);font:500 13.5px var(--body)}
+.mv .calday b{color:var(--accent);font-weight:700}
+.mv .calwhen{flex:none;font:700 13px var(--body);color:var(--muted);white-space:nowrap;margin-left:10px}
+.mv .calwhen.on{color:var(--accent)}
+.mv .calnext{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.mv .calnext span{font:600 12px var(--body);padding:4px 9px;border-radius:8px;background:var(--accent-soft);color:var(--accent)}
+.mv .calkinds{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 10px}
+.mv .calkinds button{font:700 13px var(--body);min-height:40px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.mv .calkinds button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.mv .grid3{display:grid;grid-template-columns:1.3fr 1fr 1.2fr;gap:0 8px}
+.mv .calchk{display:flex;align-items:center;gap:10px;min-height:44px;font:600 14px var(--body)}
+.mv .calchk input{width:20px;height:20px;accent-color:var(--accent)}
+.mv.pfv .acav{margin-right:12px}
+@media (max-width:380px){.mv .grid3{grid-template-columns:1fr 1fr}}

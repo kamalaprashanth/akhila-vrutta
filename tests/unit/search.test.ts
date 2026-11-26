@@ -41,6 +41,6 @@ test("a category name finds its entries; one letter finds nothing", () => {
 });
 test("grouped by area, newest first", () => {
   const g = grouped(searchAll(r, "activa"));
-  assert.deepEqual(g.map(([a]) => a), ["Money", "Home"]);
+  assert.deepEqual(g.map(([a]) => a), ["Money", "Household"]);
   assert.deepEqual(g[0]![1].map((x) => x.key), ["t:t1", "t:t2"]);
 });

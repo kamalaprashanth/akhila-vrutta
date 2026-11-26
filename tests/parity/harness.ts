@@ -1,6 +1,7 @@
 /* Test page: the Money tab with a fake in-memory store filled from an export (no cloud, no encryption). */
 import { ctx } from "../../app/core/app.ts";
 import { money } from "../../app/modules/money/index.ts";
+import { profile } from "../../app/modules/profile/index.ts";
 import { parseOldExport } from "../../app/modules/money/import.ts";
 import type { Changes, Rec, WriteOp } from "../../app/core/store.ts";
 import { installNative } from "../../app/core/native.ts";
@@ -31,8 +32,8 @@ for (const [c, list] of Object.entries(p.records)) fake.data.set(c, new Map(list
 (window as unknown as { FAKE: FakeStore }).FAKE = fake;
 (ctx as unknown as { store: FakeStore }).store = fake;
 (window as unknown as { AV_TEST: boolean }).AV_TEST = true;   // the planner's names (S, go, upsert…) as test hooks
-document.body.dataset.mod = "money";
-const render = () => money.render(document.getElementById("main")!);
+// #/profile shows the Profile page (About you moved there from Money settings); everything else is Money
+const render = () => { const m = location.hash.startsWith("#/profile") ? profile : money; document.body.dataset.mod = m.id; m.render(document.getElementById("main")!); };
 window.addEventListener("hashchange", render);
 render();
 // in the Android test app: Back, and "locking" (a reload) after a minute away, as the real app does

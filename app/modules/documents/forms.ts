@@ -138,3 +138,54 @@ export function ownerForm(group: DocOwner["group"], id?: string, then?: (o: Owne
     s.querySelector<HTMLElement>("#dl")?.addEventListener("click", () => askConfirm(`Delete "${o0!.name}"? Its documents stay, without an owner, until you delete them.`, "Delete", () => { docWrite([{ c: "docOwners", id: o0!.id, r: null }]); location.hash = "#/docs"; }));
   });
 }
+
+/* ---------- Documents › +: what it's for, which one, then the document ---------- */
+type Cat = { k: string; label: string; icon: string; list: () => { owner: Owner; name: string; sub?: string }[]; type: string; group?: DocOwner["group"]; empty: string };
+const live = (c: string): (Rec & Record<string, unknown>)[] => reader().all<Rec & Record<string, unknown>>(c).filter((x) => !x.deleted);
+const named = (c: string, pred: (x: Record<string, unknown>) => boolean = () => true) => live(c).filter(pred).map((x) => { const o = { c, id: x.id }, i = ownerInfo(reader(), o); return { owner: o, name: i?.name ?? String(x.name ?? ""), sub: i?.sub }; }).sort((a, b) => a.name.localeCompare(b.name));
+const people = () => named("docOwners", (x) => x.group === "people");
+const ICONS: Record<string, string> = {
+  property: "M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6", vehicle: "M5 16l1.5-5h11l1.5 5M4 16h16v3H4z", account: "M3 10l9-6 9 6M5 10v9M19 10v9M9 10v9M15 10v9M3 21h18",
+  loan: "M4 20h16M6 16V9M10 16V9M14 16V9M18 16V9M3 9l9-5 9 5", card: "M3 6h18v12H3zM3 10h18", appliance: "M6 3h12v18H6zM12 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+  id: "M4 5h16v14H4zM6 16c1-2 5-2 6 0M14 10h4M14 14h3", insurance: "M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6z", tax: "M7 3h10v18l-2.5-1.5L12 21l-2.5-1.5L7 21zM10 8h4M10 12h4",
+  medical: "M9 3h6v6h6v6h-6v6H9v-6H3V9h6z", edu: "M3 9l9-5 9 5-9 5zM7 11v5c3 2 7 2 10 0v-5", other: "M5 12h.01M12 12h.01M19 12h.01",
+};
+const CATS: Cat[] = [
+  { k: "property", label: "Property", icon: ICONS.property!, list: () => named("props"), type: "sale_deed", empty: "Add the property in Money › Accounts first." },
+  { k: "vehicle", label: "Vehicle", icon: ICONS.vehicle!, list: () => named("hhVehicles"), type: "rc", empty: "Add the vehicle in Household › Vehicles first." },
+  { k: "account", label: "Account", icon: ICONS.account!, list: () => named("accounts", (x) => !x.hidden && !["cash", "card", "loan"].includes(String(x.type ?? ""))), type: "sanction", empty: "Add the account in Money › Accounts first." },
+  { k: "loan", label: "Loan", icon: ICONS.loan!, list: () => [...named("loans"), ...named("accounts", (x) => !x.hidden && x.type === "loan")], type: "sanction", empty: "Add the loan in Money › Accounts first." },
+  { k: "card", label: "Credit card", icon: ICONS.card!, list: () => named("accounts", (x) => !x.hidden && x.type === "card"), type: "card", empty: "Add the card in Money › Accounts first." },
+  { k: "appliance", label: "Appliance", icon: ICONS.appliance!, list: () => named("hhAppliances"), type: "invoice", empty: "Add the appliance in Household › Appliances first." },
+  { k: "id", label: "Personal ID", icon: ICONS.id!, list: people, type: "aadhaar", group: "people", empty: "" },
+  { k: "insurance", label: "Insurance", icon: ICONS.insurance!, list: () => named("docOwners", (x) => x.group === "insurance"), type: "policy", group: "insurance", empty: "" },
+  { k: "tax", label: "Tax", icon: ICONS.tax!, list: people, type: "itr", group: "people", empty: "" },
+  { k: "medical", label: "Medical", icon: ICONS.medical!, list: people, type: "rx", group: "people", empty: "" },
+  { k: "edu", label: "Education & work", icon: ICONS.edu!, list: people, type: "degree", group: "people", empty: "" },
+  { k: "other", label: "Other", icon: ICONS.other!, list: () => named("docOwners", (x) => x.group === "other"), type: "other", group: "other", empty: "" },
+];
+const ico = (d: string): string => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+const WHO: Record<string, string> = { people: "Whose?", insurance: "Which policy?", other: "Which one?" };
+
+/** Step 1: what the document is for. */
+export function addPicker(): void {
+  openSheet("Add a document", html`<p class="note">What is it for?</p><div class="dcats">${raw(CATS.map((c) => html`<button type="button" data-cat="${c.k}">${raw(ico(c.icon))}<span>${c.label}</span></button>`).join(""))}</div>
+    <div class="btns"><button class="btn" id="cx" type="button">Cancel</button></div>`, (s) => {
+    $(s, "cx").onclick = closeModal;
+    s.querySelectorAll<HTMLElement>("[data-cat]").forEach((b) => { b.onclick = () => pickOwner(CATS.find((c) => c.k === b.dataset.cat)!); });
+  });
+}
+
+/** Step 2: which one it belongs to, then the document form. */
+function pickOwner(c: Cat): void {
+  const l = c.list();
+  const open = (owner: Owner): void => { closeModal(); setTimeout(() => docForm(undefined, { owner, type: c.type, ...(TYPES.person.find((t) => t.k === c.type)?.yearly ? { year: fyOf(today()) } : {}) }), 50); };
+  const addNew = c.group ? html`<button type="button" class="btn sm" id="dNewOwner">＋ ${GROUP_LABEL[c.group][0]}</button>` : "";
+  openSheet(c.label, html`<p class="note">${c.group ? WHO[c.group]! : `Which ${c.label.toLowerCase()}?`}</p>
+    ${raw(l.length ? html`<div class="list">${raw(l.map((o) => html`<button type="button" class="row tap dpick" data-key="${oKey(o.owner)}"><div class="main"><div class="t">${o.name}</div>${raw(o.sub ? html`<div class="s">${o.sub}</div>` : "")}</div></button>`).join(""))}</div>` : html`<p class="note">${c.empty || `Nothing here yet. Add the first one.`}</p>`)}
+    <div class="btns">${raw(addNew)}<button class="btn" id="dPrev" type="button">Back</button></div>`, (s) => {
+    $(s, "dPrev").onclick = () => addPicker();
+    s.querySelector<HTMLElement>("#dNewOwner")?.addEventListener("click", () => { closeModal(); ownerForm(c.group!, undefined, (o) => setTimeout(() => docForm(undefined, { owner: o, type: c.type }), 50)); });
+    s.querySelectorAll<HTMLElement>("[data-key]").forEach((b) => { b.onclick = () => open(parseKey(b.dataset.key!)); });
+  });
+}
