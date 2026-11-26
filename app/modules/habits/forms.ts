@@ -113,6 +113,18 @@ export function amountSheet(h: Habit, d: Day): void {
   });
 }
 
+/** One day from the heatmap, on a phone: two big buttons instead of a 10px square. */
+export function daySheet(h: Habit, d: Day, on: boolean, set: (v: number) => void): void {
+  const [yes, no] = h.kind === "avoid" ? ["Slipped", "Kept away"] : ["Done", "Not done"];
+  openSheet(`${h.name} · ${dayLabel(d, today())}`, html`<p class="note" style="margin-top:0">Now: ${on ? yes : no}.</p>
+    <div class="hbdaybtns"><button class="btn${on ? " pri" : ""}" id="dYes" type="button">${yes}</button><button class="btn${on ? "" : " pri"}" id="dNo" type="button">${no}</button></div>
+    <div class="btns"><button class="btn" id="cx" type="button">Cancel</button></div>`, (s) => {
+    $(s, "cx").onclick = closeModal;
+    $(s, "dYes").onclick = () => { closeModal(); if (!on) set(1); };
+    $(s, "dNo").onclick = () => { closeModal(); if (on) set(0); };
+  });
+}
+
 /* ---------- a set number of days, done ---------- */
 export function goalDoneSheet(h: Habit): void {
   openSheet(`🎉 ${h.goal} days`, html`<p>You've done <b>${h.name}</b> for ${String(h.goal)} days.</p><p class="note">Carry on as a daily habit (its days so far count towards the streak), or finish it here; it stays under Stopped or finished.</p>

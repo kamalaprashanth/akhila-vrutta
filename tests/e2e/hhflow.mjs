@@ -204,6 +204,8 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok((await recs("hhAppliances")).length === 0 && (await recs("files")).length === 0 && (await p.evaluate(() => window.DRIVE.size)) === 0, "removing the appliance removes its files from Drive");
 
   ok(errors.length === 0, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);
+  // for the layout check: the records this flow made, as a starting point for every page
+  if (name === "phone") { const dir = process.env.AV_DUMP ?? "test-results/seed"; await mkdir(dir, { recursive: true }); await writeFile(`${dir}/hhflow.json`, JSON.stringify(await p.evaluate(() => Object.fromEntries([...window.FAKE.data].map(([c, m]) => [c, [...m.values()]]))))); }
   await ctx.close();
 }
 await browser.close(); server.close();

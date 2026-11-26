@@ -123,6 +123,8 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok(!/<(span|div|b|button)\b/.test(await text()), "no markup shows as text");
   if (name === "phone") { await p.screenshot({ path: "test-results/health-phone.png", fullPage: true }); await p.click(`${V} [data-lab]`); await settle(); await p.screenshot({ path: "test-results/health-lab.png", fullPage: true }); await p.click(`${V} #hlBack`); await settle(); }
   ok(!errors.length, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);
+  // for the layout check: the records this flow made, as a starting point for every page
+  if (name === "phone") { const dir = process.env.AV_DUMP ?? "test-results/seed"; await mkdir(dir, { recursive: true }); await writeFile(`${dir}/hlflow.json`, JSON.stringify(await p.evaluate(() => Object.fromEntries([...window.FAKE.data].map(([c, m]) => [c, [...m.values()]]))))); }
   await ctx.close();
 }
 await browser.close(); server.close();

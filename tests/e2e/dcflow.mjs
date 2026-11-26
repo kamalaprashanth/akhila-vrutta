@@ -152,6 +152,8 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
     await p.click(`${L} #cx`); await settle();
   }
   ok(!errors.length, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);
+  // for the layout check: the records this flow made, as a starting point for every page
+  if (name === "phone") { const dir = process.env.AV_DUMP ?? "test-results/seed"; await mkdir(dir, { recursive: true }); await writeFile(`${dir}/dcflow.json`, JSON.stringify(await p.evaluate(() => Object.fromEntries([...window.FAKE.data].map(([c, m]) => [c, [...m.values()]]))))); }
   await ctx.close();
 }
 await browser.close(); server.close();

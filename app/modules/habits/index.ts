@@ -14,7 +14,7 @@ import {
   active, addDays, best, dayLabel, dayOf, dayShare, daysLabel, DN, doneOn, dueOn, goalState, habitNotes, habitsOf, heat, last30, logId, logsOf, monthName,
   nudgeTime, streak, todayCount, valueOn, weekCount, weekScore, weekStart, LOG, HABITS, type Day, type Habit, type Logs, type Reader,
 } from "./data.ts";
-import { amountSheet, goalDoneSheet, habitForm, nudgeSheet, starterSheet } from "./forms.ts";
+import { amountSheet, daySheet, goalDoneSheet, habitForm, nudgeSheet, starterSheet } from "./forms.ts";
 
 export const ICON = "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 12.5l2.8 2.8L16.5 9";
 
@@ -164,6 +164,8 @@ function onTap(e: Event): void {
   if (!h) return;
   if (d.cell) {
     if (h.kind === "amount") return amountSheet(h, d.cell);
+    // the squares are small on a phone: ask which, with big buttons, instead of flipping the one under the finger
+    if (matchMedia("(pointer: coarse)").matches) return daySheet(h, d.cell, valueOn(L, h, d.cell) >= 1, (v) => setValue(h, d.cell!, v));
     setValue(h, d.cell, valueOn(L, h, d.cell) >= 1 ? 0 : 1); return;
   }
   if (el.id === "hbEdit") return habitForm(h.id);

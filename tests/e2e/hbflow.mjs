@@ -4,7 +4,7 @@
 import { chromium } from "playwright";
 import { build } from "esbuild";
 import { createServer } from "node:http";
-import { readFile, mkdir } from "node:fs/promises";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
 const harness = (await build({ entryPoints: ["tests/e2e/hb-harness.ts"], bundle: true, format: "esm", write: false, target: "es2022" })).outputFiles[0].text;
@@ -27,7 +27,7 @@ const add = (d, n) => { const x = new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, +
 
 for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { width: 1280, height: 860 }]]) {
   console.log(name);
-  const ctx = await browser.newContext({ viewport: vp });
+  const ctx = await browser.newContext({ hasTouch: name === "phone", isMobile: name === "phone", viewport: vp });
   await ctx.route(/fonts\.g/, (r) => r.abort());
   const p = await ctx.newPage();
   await p.clock.setFixedTime(new Date(2026, 10, 25, 18, 0));
@@ -111,7 +111,18 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok(/Days in a row/.test(await text()) && /Last 6 months/.test(await text()), "tapping a habit opens its page: streaks and the calendar");
   ok((await p.$$(`${V} .hbheat button`)).length === 182 && (await p.$$(`${V} .hbheat .done`)).length === 3, "…26 weeks of days, 3 of them done");
   await p.click(`${V} .hbheat [data-cell="2026-11-10"]`); await settle();
+  if (name === "phone") { ok(!!(await p.$(`${L} #dYes`)), "on a phone a day's square opens a sheet with big buttons"); await p.click(`${L} #dYes`); await settle(); }
   ok((await p.$$(`${V} .hbheat .done`)).length === 3, "a day before it started can't be ticked");
+  if (name === "phone") {
+    const day = await p.getAttribute(`${V} .hbheat .done >> nth=0`, "data-cell");
+    await p.click(`${V} .hbheat [data-cell="${day}"]`); await settle();
+    ok(/Now: Done/.test(await p.innerText(`${L} .sheet`)), "…saying how the day stands");
+    await p.screenshot({ path: "test-results/habit-day-sheet.png" });
+    await p.click(`${L} #dNo`); await settle();
+    ok((await p.$$(`${V} .hbheat .done`)).length === 2, "…Not done unticks it");
+    await p.click(`${V} .hbheat [data-cell="${day}"]`); await settle(); await p.click(`${L} #dYes`); await settle();
+    ok((await p.$$(`${V} .hbheat .done`)).length === 3, "…and Done ticks it again");
+  }
   await p.click(`${V} #hbEdit`); await settle();
   await p.fill(`${L} #f_hbname`, "Walk 30 minutes");
   await p.click(`${L} #sv`); await settle();
@@ -146,6 +157,8 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
 
   if (name === "phone") { await p.screenshot({ path: "test-results/habits-phone.png", fullPage: true }); }
   ok(!errors.length, `no errors${errors.length ? ": " + errors.join(" | ") : ""}`);
+  // for the layout check: the records this flow made, as a starting point for every page
+  if (name === "phone") { const dir = process.env.AV_DUMP ?? "test-results/seed"; await mkdir(dir, { recursive: true }); await writeFile(`${dir}/hbflow.json`, JSON.stringify(await p.evaluate(() => Object.fromEntries([...window.FAKE.data].map(([c, m]) => [c, [...m.values()]]))))); }
   await ctx.close();
 }
 await browser.close(); server.close();
