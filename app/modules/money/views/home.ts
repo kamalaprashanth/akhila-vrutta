@@ -208,7 +208,7 @@ function insightCards(d: MoneyData, st: HomeState, h: PageHost): string {
 }
 
 /** The whole page. */
-export function homeHtml(d: MoneyData, st: HomeState, h: PageHost): string {
+export function homeParts(d: MoneyData, st: HomeState, h: PageHost): Record<"first" | "adv" | "pay" | "short" | "invest" | "renew" | "hero" | "needs" | "ins" | "recent", string> {
   const now = ymOf(d.today), cur = forecast(d, 1).months[0]!, m = mainAcc(d), bal = balances(d);
   const first = !d.live("txns").length && !d.live("recurring").length && !d.live("loans").length;
   let hero = "";
@@ -229,8 +229,16 @@ export function homeHtml(d: MoneyData, st: HomeState, h: PageHost): string {
   const recentH = `<div class="sh"><h3>Recent</h3><button class="lnk" type="button" data-go="activity">All ›</button></div>
     <div class="list">${recent.length ? recent.map((t) => txLine(d, t, { f: { type: "all", cat: "", acc: "", tag: "", period: "month", from: "", to: "", q: "" }, month: now })).join("") : '<div class="empty">No transactions yet. Tap Add to record one.</div>'}</div>`;
   void expenseTree; void CC; void short;
-  return `${first ? `<div class="banner" style="margin-top:6px"><b>Start here.</b> Add your bank accounts and cards in Accounts › Banks &amp; cards, your salary, SIPs and bills in Plan › Regular, loans in Accounts › Loans, then record spending with Add.</div>` : ""}
-  ${advButton(d)}<div class="cols"><div>${payTueCard(d, st)}${shortAlert(d)}${investCard(d)}${renewalsSoon(d)}${hero}${needs}</div><div>${insightCards(d, st, h)}${recentH}</div></div>`;
+  return {
+    first: first ? `<div class="banner" style="margin-top:6px"><b>Start here.</b> Add your bank accounts and cards in Accounts › Banks &amp; cards, your salary, SIPs and bills in Plan › Regular, loans in Accounts › Loans, then record spending with Add.</div>` : "",
+    adv: advButton(d), pay: payTueCard(d, st), short: shortAlert(d), invest: investCard(d), renew: renewalsSoon(d), hero, needs, ins: insightCards(d, st, h), recent: recentH,
+  };
+}
+/** The Overview (Calm): the balance first, then what to pay, move and put aside this week, what needs you, this
+ *  month's investments and renewals, insights and recent; the advisor last. Same parts as the planner's. */
+export function homeHtml(d: MoneyData, st: HomeState, h: PageHost): string {
+  const p = homeParts(d, st, h);
+  return `${p.first}<div class="cols"><div>${p.hero}${p.pay}${p.short}${p.needs}${p.invest}${p.renew}</div><div>${p.ins}${p.recent}${p.adv}</div></div>`;
 }
 
 export const homePage: Page = {

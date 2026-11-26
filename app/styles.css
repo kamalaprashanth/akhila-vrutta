@@ -212,3 +212,11 @@ body[data-mod="money"] main{padding:0}
 .tdtick.on svg{stroke:var(--on-accent)}
 .tdnone{margin:0;padding:6px 0 14px;color:var(--muted);font-size:14px}
 .tdmore{align-self:center;min-height:44px;border:0;background:transparent;color:var(--accent);font:700 14px var(--sans);cursor:pointer}
+
+/* Money › Activity: Transactions | Insights */
+.mvsw{display:flex;gap:8px;max-width:720px;margin:0 auto;padding:14px 16px 0}
+@media (min-width:900px){.mvsw{max-width:1120px;padding:16px 40px 0}}
+.mvsw[hidden]{display:none}
+.mvsw a{height:38px;padding:0 16px;border-radius:19px;display:flex;align-items:center;font:700 14px var(--sans);color:var(--muted);text-decoration:none;border:1px solid var(--line);background:var(--surface)}
+.mvsw a.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+#moneyView .cols>div:first-child>.hero:first-child{margin-top:14px}

@@ -52,7 +52,7 @@ export const SUBTABS: [string, string][] = [
 /** Pages that belong under a tab. */
 const PARENT: Record<string, string> = {
   forecast: "plan", loan: "accounts", card: "accounts", epf: "accounts", ppf: "accounts",
-  nps: "accounts", props: "accounts", prop: "accounts", more: "more",
+  nps: "accounts", props: "accounts", prop: "accounts", more: "more", insights: "activity", advisor: "home",
 };
 const tabOf = (v: string) => PARENT[v] ?? v;
 
@@ -78,6 +78,9 @@ function go(v0: string): void {
     b.classList.toggle("on", on);
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
+  // Activity: transactions and insights, switched at the top
+  const sw = document.getElementById("mvSw");
+  if (sw) { sw.hidden = t !== "activity"; sw.querySelectorAll<HTMLElement>("[data-sw]").forEach((a) => { const on = a.dataset.sw === v; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); }); }
   const want = `#/money/${v}`;
   if (location.hash.startsWith("#/money") && location.hash !== want) history.replaceState(null, "", want);
   notePage(want);
@@ -96,7 +99,7 @@ function ensureBox(): HTMLElement {
   box = document.createElement("div");
   box.id = "moneyView";
   box.hidden = true;
-  box.innerHTML = '<div class="mv"><div class="wrap" id="view" role="main"></div></div>';
+  box.innerHTML = '<div class="mv"><nav class="mvsw" id="mvSw" aria-label="Activity" hidden><a href="#/money/activity" data-sw="activity">Transactions</a><a href="#/money/insights" data-sw="insights">Insights</a></nav><div class="wrap" id="view" role="main"></div></div>';
   document.body.appendChild(box);
   pages = mountPages(box, PAGES, {
     data: currentData,
@@ -213,7 +216,7 @@ export const money: Module = {
   label: "Money",
   icon: ICON,
   subs: () => SUBTABS.map(sub),
-  more: () => ([["insights", "Insights"], ["advisor", "Advisor"], ["more", "Money settings"]] as [string, string][]).map(sub),
+  more: () => ([["advisor", "Advisor"], ["more", "Money settings"]] as [string, string][]).map(sub),
   sub: () => tabOf(S.view),
   render(root) {
     const s = ctx.store;

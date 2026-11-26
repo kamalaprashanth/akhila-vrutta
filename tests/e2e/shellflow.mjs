@@ -80,7 +80,13 @@ for (const [name, vp, touch] of [["phone", { width: 390, height: 844 }, true], [
     await p.click('#drawer [data-sub="money:plan"]'); await p.waitForTimeout(800);
     ok((await p.evaluate(() => location.hash)) === "#/money/plan", "…Plan opens from there");
   }
-  ok(await p.isVisible('#drawer [data-sub="money:insights"]').catch(() => false) || touch, "Insights, Advisor and Money settings are in the side menu");
+  ok(touch || (await p.isVisible('#drawer [data-sub="money:advisor"]') && await p.isVisible('#drawer [data-sub="money:more"]')), "Advisor and Money settings are in the side menu");
+  await p.evaluate(() => { location.hash = "#/money/activity"; }); await p.waitForTimeout(800);
+  ok(await p.isVisible('#mvSw [data-sw="insights"]'), "Activity has Transactions and Insights at the top");
+  await p.click('#mvSw [data-sw="insights"]'); await p.waitForTimeout(800);
+  ok((await p.evaluate(() => location.hash)) === "#/money/insights" && (touch ? await p.getAttribute('#nav [data-sub="money:activity"]', "aria-current") === "page" : await p.getAttribute('#drawer [data-sub="money:activity"]', "class") === "on"), "…Insights opens there, still under Activity");
+  await p.evaluate(() => { location.hash = "#/money/home"; }); await p.waitForTimeout(800);
+  ok(await p.isHidden("#mvSw"), "…and the switch isn't on other Money pages");
   await p.evaluate(() => { location.hash = "#/household/veh"; }); await p.waitForTimeout(400);
   ok(await p.innerText("#title") === "Home" && /Add vehicle/.test(await text()), "Home opens on the tab in the address (Vehicles)");
   if (touch) ok(await p.getAttribute('#nav [data-sub="household:veh"]', "aria-current") === "page", "…with Vehicles shown as the open tab");

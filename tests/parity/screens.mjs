@@ -240,7 +240,7 @@ const report = await f.evaluate(() => {
     const keep = { ptNext: S.ptNext, insOpen: S.insOpen, view: S.view };
     const host = { pref: (k, v) => prefGet(k, v) };
     for (const st of [{}, { ptNext: true }, { insOpen: true }, { ptNext: true, insOpen: true }])
-      page(`${tag} overview ${JSON.stringify(st)}`, () => { Object.assign(S, { ptNext: undefined, insOpen: undefined, view: "home" }, st); return vHome(); }, () => N.home.homeHtml(dx, { ...st }, host));
+      page(`${tag} overview ${JSON.stringify(st)}`, () => { Object.assign(S, { ptNext: undefined, insOpen: undefined, view: "home" }, st); return vHome(); }, () => { const x = N.home.homeParts(dx, { ...st }, host); return `${x.first}\n  ${x.adv}<div class="cols"><div>${x.pay}${x.short}${x.invest}${x.renew}${x.hero}${x.needs}</div><div>${x.ins}${x.recent}</div></div>`; });
     Object.assign(S, keep);
   };
   homePages(d2, "made-up");
