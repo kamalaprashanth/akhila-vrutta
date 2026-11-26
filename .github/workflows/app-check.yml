@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "ENFORCED or UNENFORCED"
+        description: "ENFORCED, UNENFORCED, or STATUS (only shows the setup)"
         required: true
         default: "UNENFORCED"
         type: choice
-        options: [ENFORCED, UNENFORCED]
+        options: [ENFORCED, UNENFORCED, STATUS]
 
 permissions:
   contents: read
@@ -27,5 +27,12 @@ jobs:
           gcloud auth activate-service-account --key-file "$RUNNER_TEMP/sa.json" -q; rm "$RUNNER_TEMP/sa.json"
           T=$(gcloud auth print-access-token)
           U="https://firebaseappcheck.googleapis.com/v1/projects/akhila-vrutta/services/firestore.googleapis.com"
+          if [ "$MODE" = STATUS ]; then
+            A="1:85806021255:android:ee14fc59d12561e064d622"
+            echo "== Play Integrity provider for the Android app"; curl -sS -H "Authorization: Bearer $T" "https://firebaseappcheck.googleapis.com/v1/projects/akhila-vrutta/apps/$A/playIntegrityConfig"
+            echo; echo "== Certificate fingerprints on the Android app"; curl -sS -H "Authorization: Bearer $T" "https://firebase.googleapis.com/v1beta1/projects/akhila-vrutta/androidApps/$A/sha"
+            echo; echo "== Play Integrity API enabled?"; curl -sS -H "Authorization: Bearer $T" "https://serviceusage.googleapis.com/v1/projects/akhila-vrutta/services/playintegrity.googleapis.com" | grep -o '"state": *"[A-Z_]*"'
+            echo; echo "== Cloud Firestore"; curl -sS -H "Authorization: Bearer $T" "$U"; exit 0
+          fi
           curl -sS -X PATCH -H "Authorization: Bearer $T" -H "Content-Type: application/json" "$U?updateMask=enforcementMode" -d "{\"enforcementMode\":\"$MODE\"}"
           echo; echo "Now:"; curl -sS -H "Authorization: Bearer $T" "$U"
