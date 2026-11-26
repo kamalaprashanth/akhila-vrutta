@@ -99,7 +99,8 @@ function vehTab(r: Reader, t: string): string {
 }
 
 function listsTab(r: Reader, t: string): string {
-  const all = live<Item>(r, "hhItems").filter((i) => !view.home || !i.home || i.home === view.home);
+  // a shared item (family space) shows whatever home is picked: its home may be the other member's
+  const all = live<Item>(r, "hhItems").filter((i) => !view.home || !i.home || i.home === view.home || !!(i as { owner?: string }).owner);
   const n = (k: string): number => all.filter((i) => i.list === k && !i.doneOn).length;
   const mine = all.filter((i) => i.list === view.list), open = mine.filter((i) => !i.doneOn).sort((a, b) => (a.due ?? "9").localeCompare(b.due ?? "9") || b.added.localeCompare(a.added));
   const done = mine.filter((i) => i.doneOn).sort((a, b) => b.doneOn!.localeCompare(a.doneOn!)).slice(0, 15);

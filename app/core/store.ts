@@ -32,7 +32,7 @@ export const BACKUP_LOG = "backupLog";
 export const META = "meta";
 export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, ...HABIT_COLLECTIONS, ...DOC_COLLECTIONS, ...CAL_COLLECTIONS, ...HEALTH_COLLECTIONS, FILES, BACKUP_LOG, META, FAMILY];
 /** What a family space holds: shared transactions, its members' names and what is shared. */
-export const FAMILY_COLLECTIONS: readonly string[] = ["txns", "famMembers", "famRules"];
+export const FAMILY_COLLECTIONS: readonly string[] = ["txns", "famMembers", "famRules", "famDays", "hhItems"];
 /** What a KP Money Planner import replaces (never Household or files). */
 export const IMPORT_SCOPE: readonly string[] = [...MONEY_COLLECTIONS, META];
 

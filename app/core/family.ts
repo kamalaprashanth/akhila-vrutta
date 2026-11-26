@@ -20,7 +20,7 @@ import { FAMILY, FAMILY_COLLECTIONS, Store, type Overlay, type Rec, type WriteOp
 
 export interface Space extends Rec { home: string; key: string; role: "owner" | "member" }
 export interface Member extends Rec { name: string }
-export interface Rules extends Rec { tags: string[] }
+export interface Rules extends Rec { tags: string[]; days?: boolean; lists?: boolean }
 type Tx = Rec & { type?: string; tags?: string[]; accountId?: string; toAccountId?: string; categoryId?: string; owner?: string; ownerName?: string; cat?: string; catBy?: string };
 
 let mine: Store | null = null, fam: Store | null = null, me = "", myName = "";
@@ -34,7 +34,12 @@ export const space = (): Space | null => (fam ? current : null) ?? (mine?.own<Sp
 export const familyOpen = (): boolean => !!fam;
 export const members = (): Member[] => (fam?.own<Member>("famMembers").filter((m) => !m.deleted) ?? []);
 export const memberName = (uid: string): string => members().find((m) => m.id === uid)?.name || "Family";
-export const sharedTags = (): string[] => (fam?.own<Rules>("famRules").find((r) => r.id === "rules")?.tags ?? ["Home"]);
+const rules = (): Rules => fam?.own<Rules>("famRules").find((r) => r.id === "rules") ?? { id: "rules", tags: ["Home"] };
+export const sharedTags = (): string[] => rules().tags ?? ["Home"];
+/** Whole collections shared by a switch: family days, and the to-do and grocery lists. */
+const WHOLE: Record<string, keyof Rules> = { famDays: "days", hhItems: "lists" };
+export const shares = (what: "days" | "lists"): boolean => !!rules()[what];
+const wholeOn = (c: string): boolean => !!WHOLE[c] && !!rules()[WHOLE[c]!];
 export const myUid = (): string => me;
 
 /* ---------- how shared transactions look here, and where writes go ---------- */
@@ -55,9 +60,10 @@ function view(t: Tx): Tx {
 const isShared = (t: Tx): boolean => (t.type === "expense" || t.type === "income") && (t.tags ?? []).some((g) => sharedTags().includes(g));
 
 const overlay: Overlay = {
-  colls: new Set(["txns", "accounts"]),
+  colls: new Set(["txns", "accounts", ...Object.keys(WHOLE)]),
   all(c) {
     if (!fam) return [];
+    if (WHOLE[c]) return wholeOn(c) ? fam.own(c).filter((x) => !x.deleted) : [];
     if (c === "txns") return fam.own<Tx>("txns").filter((t) => !t.deleted).map(view);
     // the other members' accounts: hidden, outside totals, never a balance here
     const others = new Set(fam.own<Tx>("txns").map((t) => t.owner).filter((u): u is string => !!u && u !== me));
@@ -67,11 +73,20 @@ const overlay: Overlay = {
   get(c, id) {
     if (!fam) return undefined;
     if (c === "txns") { const t = fam.own<Tx>("txns").find((x) => x.id === id && !x.deleted); return t ? view(t) : undefined; }
+    if (WHOLE[c]) return wholeOn(c) ? fam.own(c).find((x) => x.id === id && !x.deleted) : undefined;
     return id.startsWith("fam:") ? this.all(c).find((a) => a.id === id) : undefined;
   },
   route(op, here) {
     if (!fam) return [op];
     if (op.c === "accounts") return op.id.startsWith("fam:") ? [] : [op];
+    if (WHOLE[op.c]) {
+      const old = fam.own(op.c).find((x) => x.id === op.id && !x.deleted);
+      if (!op.r) { if (old) fam.writeMany([{ c: op.c, id: op.id, r: null }]); return here(op.c, op.id) ? [op] : []; }
+      if (wholeOn(op.c)) { fam.writeMany([{ c: op.c, id: op.id, r: { ...op.r, owner: (old?.owner as string | undefined) ?? me } }]); return here(op.c, op.id) ? [{ c: op.c, id: op.id, r: null }] : []; }
+      if (old) fam.writeMany([{ c: op.c, id: op.id, r: null }]);
+      const clean = { ...op.r }; delete clean.owner;
+      return [{ c: op.c, id: op.id, r: clean }];
+    }
     const old = fam.own<Tx>("txns").find((x) => x.id === op.id && !x.deleted);
     if (!op.r) { if (old) fam.writeMany([{ c: "txns", id: op.id, r: null }]); return here(op.c, op.id) ? [op] : []; }
     const r = op.r as Tx, owner = old?.owner ?? me;
@@ -106,6 +121,7 @@ export async function startFamily(store: Store, name: string, given?: Space): Pr
   fam.subscribe((ch) => { mine?.overlayChanged(ch.keys); changed(); });
   store.attach(overlay);
   if (myName && members().find((m) => m.id === me)?.name !== myName) fam.writeMany([{ c: "famMembers", id: me, r: { id: me, name: myName } }]);
+  await moveForTags();   // a switch the other member changed: your own records follow it
   changed();
 }
 function stopFamily(): void { fam?.close(); fam = null; current = null; mine?.attach(null); changed(); }
@@ -185,13 +201,23 @@ export async function removeMember(uid: string): Promise<void> {
 /** Which tags are shared; your transactions move in or out to match. */
 export async function setSharedTags(tags: string[]): Promise<void> {
   if (!fam) return;
-  fam.writeMany([{ c: "famRules", id: "rules", r: { id: "rules", tags } }]);
+  fam.writeMany([{ c: "famRules", id: "rules", r: { ...rules(), tags } }]);
   await moveForTags();
 }
-/** Your own transactions go where the shared tags say (each write is routed). */
+/** Shares (or stops sharing) family days or the lists; your own move to match. */
+export async function setShared(what: "days" | "lists", on: boolean): Promise<void> {
+  if (!fam) return;
+  fam.writeMany([{ c: "famRules", id: "rules", r: { ...rules(), [what]: on } }]);
+  await moveForTags();
+}
+/** Your own records go where the rules say (each write is routed): transactions by tag, family days and lists by their switch. */
 async function moveForTags(): Promise<void> {
   if (!mine || !fam) return;
   const ops: WriteOp[] = [];
+  for (const c of Object.keys(WHOLE)) {
+    if (wholeOn(c)) { for (const x of mine.own(c)) if (!x.deleted) ops.push({ c, id: x.id, r: x }); }
+    else for (const x of fam.own(c)) if (!x.deleted && x.owner === me) ops.push({ c, id: x.id, r: x });
+  }
   for (const t of mine.own<Tx>("txns")) if (!t.deleted && isShared(t)) ops.push({ c: "txns", id: t.id, r: t });
   for (const t of fam.own<Tx>("txns")) if (!t.deleted && t.owner === me && !isShared(t)) ops.push({ c: "txns", id: t.id, r: view(t) });
   if (ops.length) mine.writeMany(ops);

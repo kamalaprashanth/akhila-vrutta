@@ -530,6 +530,18 @@ try {
   let shared = "";
   for (let i = 0; i < 30 && !/₹99/.test(shared); i++) { await X.page.goto(`${BASE}/#/family`); await X.page.waitForTimeout(1000); shared = await X.page.innerText("main").catch(() => ""); }
   check(/₹99/.test(shared), "…and the member sees it (₹99 shared spending this month)");
+  // family days shared by the switch: the owner's family day moves to the family space and the member sees it
+  await A.page.goto(`${BASE}/#/family`);
+  await A.page.waitForSelector("#fmDays", { timeout: 20000 });
+  await A.page.check("#fmDays");
+  let famD = [];
+  for (let i = 0; i < 30 && !famD.length; i++) { await A.page.waitForTimeout(500); famD = (await api(`${FS}/homes/${famHome}/famDays?pageSize=20`)).body.documents ?? []; }
+  const famDPlain = famD.filter((d) => ["Cloud Amma", "1958"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  check(famD.length >= 1 && famDPlain === 0, `family days, once shared, are in the family space as ciphertext only (${famD.length})`);
+  let cal = "";
+  for (let i = 0; i < 20 && !/Cloud Amma/.test(cal); i++) { await X.page.goto(`${BASE}/#/calendar`); await X.page.waitForTimeout(1000); cal = await X.page.innerText("main").catch(() => ""); }
+  check(/Cloud Amma/.test(cal), "…and the member sees the owner's family day in their Calendar");
+  await X.page.goto(`${BASE}/#/family`); await X.page.waitForSelector("#fmLeave", { timeout: 20000 });
   await X.page.click("#fmLeave"); await X.page.click("#mvLayer #cy");
   let left = false;
   for (let i = 0; i < 20 && !left; i++) { await X.page.waitForTimeout(500); left = !(await api(`${FS}/homes/${famHome}`)).body?.fields?.members?.mapValue?.fields?.["intruder-uid"]; }

@@ -6,7 +6,7 @@ import type { Module } from "../types.ts";
 import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
 import { formatINR } from "../../core/money.ts";
-import { cancelInvite, createFamily, familyOpen, joinFamily, leaveFamily, makeInvite, members, myUid, onFamily, removeMember, setSharedTags, sharedTags, space, togetherThisMonth } from "../../core/family.ts";
+import { cancelInvite, createFamily, familyOpen, setShared, shares, joinFamily, leaveFamily, makeInvite, members, myUid, onFamily, removeMember, setSharedTags, sharedTags, space, togetherThisMonth } from "../../core/family.ts";
 import { askConfirm, closeModal, ensureLayer, openSheet, toast } from "../money/ui/kit.ts";
 
 const ICON = "M8 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM16 8a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM2 20c.8-3.5 11.2-3.5 12 0M13 20c.6-2.6 7.4-2.6 8 0";
@@ -40,7 +40,12 @@ function draw(root: HTMLElement): void {
     <div class="fmtags" role="group" aria-label="Shared tags">${raw(allTags().map((g) => html`<button type="button" data-tag="${g}" class="${tg.includes(g) ? "on" : ""}" aria-pressed="${String(tg.includes(g))}">${g}</button>`).join(""))}</div>
     <h2>This month, together</h2>
     <div class="list"><div class="row"><div class="main"><div class="t">${formatINR(mo.total)} shared spending</div><div class="s">${mo.by.map((x) => `${x.name} ${formatINR(x.amount)}`).join(" · ") || "Nothing shared yet this month"}</div></div></div></div>
-    <p class="note">Family days, lists, documents and household items can be shared in the next update.</p>
+    <h2>Also share</h2>
+    <div class="list">
+      <label class="row dchk"><div class="main"><div class="t">Family days</div><div class="s">Birthdays, anniversaries and shraddha, with reminders on both phones</div></div><input type="checkbox" id="fmDays" ${shares("days") ? "checked" : ""} aria-label="Share family days"></label>
+      <label class="row dchk"><div class="main"><div class="t">Groceries and to-do lists</div><div class="s">Household › Lists, one list for both of you</div></div><input type="checkbox" id="fmLists" ${shares("lists") ? "checked" : ""} aria-label="Share the lists"></label>
+    </div>
+    <p class="note">Documents, appliances, vehicles and properties: share each one from its own page (in the next update).</p>
     <div class="btns" style="margin-top:12px">${raw(owner ? "" : html`<button type="button" class="btn danger" id="fmLeave">Leave the family space</button>`)}</div>
   </div></div>`;
 }
@@ -83,6 +88,14 @@ function onTap(e: Event): void {
   if (el.dataset.tag) { const t = el.dataset.tag, cur = sharedTags(); return run(() => setSharedTags(cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]), cur.includes(t) ? `${t} is no longer shared` : `${t} is shared`); }
 }
 
+function onChange(e: Event): void {
+  const i = e.target as HTMLInputElement;
+  if (document.body.dataset.mod !== "family" || !["fmDays", "fmLists"].includes(i.id)) return;
+  const what = i.id === "fmDays" ? "days" : "lists", label = what === "days" ? "Family days" : "The lists";
+  busy = true;
+  void setShared(what, i.checked).then(() => toast(i.checked ? `${label} shared with the family` : `${label} no longer shared`), (x) => toast(err(x))).finally(() => { busy = false; if (rootEl) draw(rootEl); });
+}
+
 let unsub: (() => void) | null = null;
 export const family: Module = {
   id: "family",
@@ -91,7 +104,7 @@ export const family: Module = {
   hidden: true,
   render(root) {
     if (ctx.store) ensureLayer();
-    if (rootEl !== root) { rootEl = root; root.addEventListener("click", onTap); }
+    if (rootEl !== root) { rootEl = root; root.addEventListener("click", onTap); root.addEventListener("change", onChange); }
     unsub ??= onFamily(() => { if (document.body.dataset.mod === "family" && rootEl) draw(rootEl); });
     draw(root);
   },
