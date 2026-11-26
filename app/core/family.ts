@@ -169,7 +169,9 @@ export async function startFamily(store: Store, name: string, given?: Space): Pr
   } catch (e) { console.warn("family", e); fam = null; return; }
   fam.subscribe((ch) => { if (!ch.local && ch.keys.some((k) => k.c === "famRules")) localRules = null; mine?.overlayChanged(ch.keys); changed(); });
   store.attach(overlay);
-  if (myName && members().find((m) => m.id === me)?.name !== myName) fam.writeMany([{ c: "famMembers", id: me, r: { id: me, name: myName } }]);
+  // always on the member list (the copier counts copies against it), with a first name when there is one
+  const meRec = members().find((m) => m.id === me);
+  if (!meRec || (myName && meRec.name !== myName)) fam.writeMany([{ c: "famMembers", id: me, r: { id: me, name: myName || meRec?.name || "" } }]);
   await moveForTags();   // a switch the other member changed: your own records follow it
   changed();
 }
