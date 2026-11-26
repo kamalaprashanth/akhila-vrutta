@@ -517,7 +517,7 @@ try {
   const fh = await api(`${FS}/homes/${famHome}`);
   check(fh.body?.fields?.members?.mapValue?.fields?.["intruder-uid"]?.stringValue === "member", "the other account joins with the 6 words, as a member");
   check(((await api(`${FS}:runQuery`, { method: "POST", body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "invites" }] } }) })).body ?? []).filter((x) => x.document).length === 0, "…and the invite is used up");
-  await denied("a member can't make itself the owner", api(`${FS}/homes/${famHome}?updateMask.fieldPaths=members.\`intruder-uid\``, { method: "PATCH", body: JSON.stringify({ fields: { members: { mapValue: { fields: { "intruder-uid": { stringValue: "owner" } } } } } }) }, intr));
+  await denied("a member can't make itself the owner", api(`${FS}/homes/${famHome}?updateMask.fieldPaths=${encodeURIComponent("members.`intruder-uid`")}`, { method: "PATCH", body: JSON.stringify({ fields: { members: { mapValue: { fields: { "intruder-uid": { stringValue: "owner" } } } } } }) }, intr));
   await A.page.goto(`${BASE}/#/money/activity`);
   await A.page.waitForFunction(() => typeof S === "object" && !!S.data, null, { timeout: 30000 });
   await A.page.evaluate(() => upsert("txns", { id: "famtx1", type: "expense", amount: 99, date: new Date().toISOString().slice(0, 10), accountId: S.data.accounts[0].id, note: "shared vegetables", tags: ["Home"], updatedAt: Date.now() }));
