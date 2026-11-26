@@ -47,8 +47,7 @@ const ICON = "M3 7h18v12H3zM3 11h18M7 15h3";
 
 /** Money's own tabs: [page, label]. */
 export const SUBTABS: [string, string][] = [
-  ["home", "Overview"], ["activity", "Transactions"], ["plan", "Plan"],
-  ["insights", "Insights"], ["accounts", "Accounts"], ["advisor", "Advisor"],
+  ["home", "Overview"], ["activity", "Activity"], ["plan", "Plan"], ["accounts", "Accounts"],
 ];
 /** Pages that belong under a tab. */
 const PARENT: Record<string, string> = {
@@ -73,9 +72,11 @@ function go(v0: string): void {
   if (!isView(v)) v = "home";
   S.view = v;
   const t = tabOf(v);
-  document.querySelectorAll<HTMLElement>("#moneySub [data-mv]").forEach((b) => {
-    b.classList.toggle("on", b.dataset.mv === t);
-    if (b.dataset.mv === t) b.scrollIntoView({ block: "nearest", inline: "nearest" });
+  // the shell's tabs (bottom bar and side menu) follow the page shown
+  document.querySelectorAll<HTMLElement>("[data-sub^='money:']").forEach((b) => {
+    const on = b.dataset.sub === `money:${t}` || b.dataset.sub === `money:${v}`;
+    b.classList.toggle("on", on);
+    if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
   const want = `#/money/${v}`;
   if (location.hash.startsWith("#/money") && location.hash !== want) history.replaceState(null, "", want);
@@ -201,10 +202,19 @@ export function startMoney(): void { if (ctx.store) start(); }
 export const moneyWrite = (ops: MoneyWrite[]): void => writeMoney(ops);
 export const moneyNow = () => currentData();
 
+const SUBICON: Record<string, string> = {
+  home: "M4 11l8-7 8 7v9H4z", activity: "M5 7h14M5 12h14M5 17h9", plan: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",
+  accounts: "M3 10l9-6 9 6M5 10v9M19 10v9M9 10v9M15 10v9M3 21h18", insights: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+  advisor: "M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z", more: "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 2v3M12 19v3M2 12h3M19 12h3",
+};
+const sub = ([id, label]: [string, string]) => ({ id, label, icon: SUBICON[id] ?? "", href: `#/money/${id}` });
 export const money: Module = {
   id: "money",
   label: "Money",
   icon: ICON,
+  subs: () => SUBTABS.map(sub),
+  more: () => ([["insights", "Insights"], ["advisor", "Advisor"], ["more", "Money settings"]] as [string, string][]).map(sub),
+  sub: () => tabOf(S.view),
   render(root) {
     const s = ctx.store;
     if (!s) {
@@ -221,12 +231,7 @@ export const money: Module = {
       return;
     }
     const want = location.hash.split("/")[2];
-    root.innerHTML = html`<nav class="msub" id="moneySub" aria-label="Money">
-      ${SUBTABS.map(([v, l]) => raw(html`<a href="#/money/${v}" data-mv="${v}" class="${tabOf(want || S.view) === v ? "on" : ""}">${l}</a>`))}
-      <a href="#/money/more" data-mv="more" class="mset ${tabOf(want || S.view) === "more" ? "on" : ""}" aria-label="Money settings" title="Money settings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></a>
-    </nav>
-    <button class="fab" id="moneyAdd" type="button" aria-label="Add transaction">
+    root.innerHTML = html`    <button class="fab" id="moneyAdd" type="button" aria-label="Add transaction">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`;
     // + : the add form, into the main account, from every money page.
     root.querySelector("#moneyAdd")!.addEventListener("click", () => {

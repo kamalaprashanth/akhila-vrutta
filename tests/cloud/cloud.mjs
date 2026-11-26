@@ -241,7 +241,8 @@ try {
   await A.page.click("#hhView #addHome");
   await A.page.fill("#mvLayer #f_hname", "Cloud home");
   await A.page.click("#mvLayer #sv");
-  await A.page.click('#hhView [data-tab="lists"]');
+  await A.page.evaluate(() => { location.hash = "#/household/lists"; });
+  await A.page.waitForSelector("#hhView #hhNew", { timeout: 20000 });
   await A.page.fill("#hhView #hhNew", "Cloud to-do 9");
   await A.page.press("#hhView #hhNew", "Enter");
   await A.page.waitForTimeout(3000);
@@ -261,9 +262,8 @@ try {
   check(hbDocs.length >= 2 && hbPlain === 0 && hbDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a habit and its tick are in the cloud as ciphertext only (${hbDocs.length} records)`);
   /* Vehicles and Documents: a car, a person and their Aadhaar are saved encrypted (checked again after the reload) */
   const tap = async (sel) => { try { await A.page.click(sel, { timeout: 15000 }); } catch (e) { await shot(A.page, "tap-failed"); throw new Error(`tap ${sel}: ${e.message.split("\n")[0]} | screen: ${(await A.page.innerText("body").catch(() => "")).replace(/\s+/g, " ").slice(0, 300)}`); } };
-  await A.page.goto(`${BASE}/#/household`);
-  await A.page.waitForSelector('#hhView [data-tab="veh"]', { timeout: 20000 });
-  await tap('#hhView [data-tab="veh"]');
+  await A.page.goto(`${BASE}/#/household/veh`);
+  await A.page.waitForSelector("#hhView #addVeh", { timeout: 20000 });
   await tap("#hhView #addVeh");
   await A.page.fill("#mvLayer #f_vname", "Cloud car");
   await tap("#mvLayer #sv");
@@ -317,7 +317,7 @@ try {
   await A.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
   await A.page.goto(`${BASE}/#/household`);
   await A.page.waitForSelector("#hhView .hchip", { timeout: 20000 });
-  await A.page.click('#hhView [data-tab="lists"]').catch(() => {});
+  await A.page.evaluate(() => { location.hash = "#/household/lists"; });
   await A.page.waitForTimeout(500);
   const hhText = await A.page.innerText("#hhView");
   check(/Cloud home/.test(hhText) && /Cloud to-do 9/.test(hhText), "after a Money re-import and a reload, the home and the to-do are still there");

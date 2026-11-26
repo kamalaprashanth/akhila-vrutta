@@ -121,7 +121,7 @@ jobs:
           node tests/android/testpage.mjs build-android-test
           (cd mobile && npm ci --no-audit --no-fund)
           node mobile/prepare.mjs build-android-test --icons
-          (cd mobile && npx --yes @capacitor/assets@3 generate --android --iconBackgroundColor '#f7f2e8' --splashBackgroundColor '#f7f2e8' --splashBackgroundColorDark '#10201b')
+          (cd mobile && npx --yes @capacitor/assets@3 generate --android --iconBackgroundColor '#0e5e4c' --splashBackgroundColor '#0e5e4c' --splashBackgroundColorDark '#0b4f40')
       - name: Test app (Money test page with made-up data)
         run: |
           node mobile/prepare.mjs build-android-test

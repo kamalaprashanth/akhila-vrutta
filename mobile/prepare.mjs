@@ -16,14 +16,14 @@ if (!process.argv.includes("--no-sdk")) await copySdk(WWW);
 /* icon and splash, from the logo */
 if (process.argv.includes("--icons")) {
   const { chromium } = await import("playwright");
-  const svg = readFileSync("static/icons/logo.svg", "utf8"), bg = "#f7f2e8";
-  const inner = svg.replace(/<rect width="512" height="512" rx="116" fill="#f7f2e8"\/>/, "");   // the logo without its tile
+  const svg = readFileSync("static/icons/logo.svg", "utf8"), bg = "#0e5e4c";
+  const inner = svg.replace(/<rect width="512" height="512" rx="116" fill="#0e5e4c"\/>/, "");   // the logo without its tile
   const shots = [
     ["icon-only.png", 1024, `<div style="width:1024px;height:1024px;background:${bg}">${svg.replace("<svg ", '<svg width="1024" height="1024" ')}</div>`],
     ["icon-foreground.png", 1024, `<div style="width:1024px;height:1024px;display:grid;place-items:center">${inner.replace("<svg ", '<svg width="620" height="620" ')}</div>`],
     ["icon-background.png", 1024, `<div style="width:1024px;height:1024px;background:${bg}"></div>`],
     ["splash.png", 2732, `<div style="width:2732px;height:2732px;background:${bg};display:grid;place-items:center">${inner.replace("<svg ", '<svg width="700" height="700" ')}</div>`],
-    ["splash-dark.png", 2732, `<div style="width:2732px;height:2732px;background:#10201b;display:grid;place-items:center">${inner.replace("<svg ", '<svg width="700" height="700" ')}</div>`],
+    ["splash-dark.png", 2732, `<div style="width:2732px;height:2732px;background:#0b4f40;display:grid;place-items:center">${inner.replace("<svg ", '<svg width="700" height="700" ')}</div>`],
   ];
   mkdirSync("mobile/assets", { recursive: true });
   const b = await chromium.launch();

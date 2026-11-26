@@ -92,7 +92,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok(tx.length === txBefore + 1 && newTx?.type === "expense" && newTx.amount === 120000 && newTx.date === today && /AC service \(Where we live\)/.test(newTx.note), "…and it's an expense in Money");
 
   // an appliance with a warranty ending soon, a photo and a PDF
-  await p.click(`${V} [data-tab="appl"]`); await settle();
+  await p.evaluate(() => { location.hash = "#/household/appl"; }); await settle();
   await p.click(`${V} #addAppl`); await settle();
   await fill("aname", "Washing machine"); await fill("ahome", homeId); await fill("amodel", "LG FHM1408");
   await fill("abought", "2025-01-03"); await fill("aprice", "38,990"); await fill("awarr", addDays(40));
@@ -122,11 +122,11 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   const appl = (await recs("hhAppliances"))[0];
   ok(appl?.name === "Washing machine" && appl.price === 3899000 && appl.warrantyTo === addDays(40) && files.every((f) => f.owner.id === appl.id), "the appliance is saved (₹38,990 as paise), its files with it");
   ok(/under warranty/i.test(await p.innerText(V)) && /2 files/.test(await p.innerText(V)), "listed under warranty, with 2 files");
-  await p.click(`${V} [data-tab="due"]`); await settle();
+  await p.evaluate(() => { location.hash = "#/household/due"; }); await settle();
   ok(/Washing machine warranty ends/.test(await p.innerText(V)), "a warranty ending within 60 days shows in Due");
 
   // open the files: decrypted here
-  await p.click(`${V} [data-tab="appl"]`); await settle();
+  await p.evaluate(() => { location.hash = "#/household/appl"; }); await settle();
   await p.click(`${V} [data-appl="${appl.id}"]`); await settle();
   const photo = files.find((f) => f.mime === "image/png"), inv = files.find((f) => f.mime === "application/pdf");
   await p.click(`${L} [data-file="${photo.id}"]`);
@@ -165,7 +165,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${L} #cx`); await settle();
 
   // lists
-  await p.click(`${V} [data-tab="lists"]`); await settle();
+  await p.evaluate(() => { location.hash = "#/household/lists"; }); await settle();
   await p.fill(`${V} #hhNew`, "Fix the bathroom tap"); await p.press(`${V} #hhNew`, "Enter"); await settle();
   await p.fill(`${V} #hhNew`, "Change the hall light"); await p.press(`${V} #hhNew`, "Enter"); await settle();
   let items = await recs("hhItems");
@@ -173,9 +173,9 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   const tap = items.find((i) => i.text === "Fix the bathroom tap");
   await p.click(`${V} [data-item="${tap.id}"]`); await settle();
   await fill("idue", addDays(2)); await fill("ihome", homeId); await p.click(`${L} #sv`); await settle();
-  await p.click(`${V} [data-tab="due"]`); await settle();
+  await p.evaluate(() => { location.hash = "#/household/due"; }); await settle();
   ok(/Fix the bathroom tap/.test(await p.innerText(V)), "a to-do with a date shows in Due");
-  await p.click(`${V} [data-tab="lists"]`); await settle();
+  await p.evaluate(() => { location.hash = "#/household/lists"; }); await settle();
   const hall = items.find((i) => i.text === "Change the hall light");
   await p.click(`${V} [data-tick="${hall.id}"]`); await settle();
   ok((await recs("hhItems")).find((i) => i.id === hall.id)?.doneOn === today && /done/i.test(await p.innerText(V)), "ticking one moves it to Done");
@@ -190,14 +190,14 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
 
   // one home at a time
   await p.click(`${V} [data-home="prB"]`); await settle();
-  await p.click(`${V} [data-tab="due"]`); await settle();
+  await p.evaluate(() => { location.hash = "#/household/due"; }); await settle();
   const other = await p.$$eval(`${V} .hhbody .row`, (l) => l.map((e) => e.textContent).join(" | "));
   ok(!/AC service|bathroom tap|Washing machine/.test(other) && /nothing due for this home/i.test(await p.innerText(`${V} .hhbody`)), `choosing another home shows only its things${other ? ": " + other.slice(0, 200) : ""}`);
   await p.click(`${V} [data-home=""]`); await settle();
   await p.screenshot({ path: `test-results/hh-${name}-due.png`, fullPage: true });
 
   // removing the appliance removes its files from Drive
-  await p.click(`${V} [data-tab="appl"]`); await settle();
+  await p.evaluate(() => { location.hash = "#/household/appl"; }); await settle();
   await p.click(`${V} [data-appl="${appl.id}"]`); await settle();
   await p.click(`${L} #dl`); await settle();
   await p.click(`${L} .sheet .btn.danger, ${L} .sheet .btn.pri`); await settle();

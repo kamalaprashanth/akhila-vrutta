@@ -45,7 +45,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   const sheet = () => p.innerText(`${L} .sheet`);
 
   /* ---------- Vehicles ---------- */
-  await p.click('#hhView [data-tab="veh"]'); await settle();
+  await p.evaluate(() => { location.hash = "#/household/veh"; }); await settle();
   ok(/No vehicles yet/.test(await p.innerText("#hhView")), "Household has a Vehicles tab, empty to start");
   await p.click("#hhView #addVeh"); await settle();
   await p.fill(`${L} #f_vname`, "Car"); await p.fill(`${L} #f_vreg`, "KA 01 AB 4321"); await p.fill(`${L} #f_vmodel`, "Hatchback");
@@ -78,7 +78,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok(car.renew.insurance === "2027-12-08" && (await txns()) === t0 + 3, "renewed: the car's insurance runs to 8 Dec 2027, and the premium is in Money");
   await p.click(`${L} #cx`); await settle();
   await p.evaluate((id) => { const f = window.FAKE; f.writeMany([{ c: "hhVehicles", id, r: { ...f.get("hhVehicles", id), renew: { ...f.get("hhVehicles", id).renew, puc: "2026-12-01" } } }]); }, car.id);
-  await p.click('#hhView [data-tab="due"]'); await p.click('#hhView [data-home=""]'); await settle();
+  await p.evaluate(() => { location.hash = "#/household/due"; }); await p.click('#hhView [data-home=""]'); await settle();
   ok(/Car puc renewal/i.test(await p.innerText("#hhView")), "Household's Due list shows the car's PUC renewal");
 
   /* ---------- Documents ---------- */
@@ -145,7 +145,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
     await p.screenshot({ path: "test-results/documents-phone.png", fullPage: true });
     await p.click('#dView [data-owner="props/prB"]'); await settle(); await p.screenshot({ path: "test-results/documents-property.png", fullPage: true });
     await p.click('#dView .dchk[data-add="khata"]'); await settle(); await p.screenshot({ path: "test-results/documents-add.png" }); await p.click(`${L} #cx`); await settle();
-    await p.evaluate(() => { location.hash = "#/household"; }); await settle(); await p.click('#hhView [data-tab="veh"]'); await settle();
+    await p.evaluate(() => { location.hash = "#/household/due"; }); await settle(); await p.evaluate(() => { location.hash = "#/household/veh"; }); await settle();
     await p.screenshot({ path: "test-results/vehicles-tab.png" });
     await p.click("#hhView [data-veh]"); await settle(); await p.screenshot({ path: "test-results/vehicle-page.png" });
     ok(!/<(span|div|b|button)\b/.test(await sheet()), "the vehicle page shows no markup as text");

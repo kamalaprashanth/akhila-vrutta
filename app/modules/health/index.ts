@@ -24,6 +24,14 @@ export const reader = (): Reader => ({ all: (c) => ctx.store?.all(c) ?? [], get:
 export const today = (): string => dayOf(new Date());
 
 /** Saves health records and redraws. null moves a record to the trash. */
+/** Ticks (or unticks) today's dose of a medicine at a time; the stock follows. Also used by Today. */
+export function takeMed(medId: string, time: string): void {
+  const r = reader(), m = r.get<Med>("hlMeds", medId); if (!m) return;
+  const id = logId(m.id, today(), time), was = taken(r, m, today(), time);
+  const ops: { c: string; r: Rec | null; id?: string }[] = [{ c: "hlMedLog", id, r: was ? null : { id, med: m.id, day: today(), time } }];
+  if (m.stock != null) ops.push({ c: "hlMeds", r: { ...m, stock: Math.max(0, m.stock + (was ? 1 : -1)) } });
+  hlWrite(ops);
+}
 export function hlWrite(ops: { c: string; r: Rec | null; id?: string }[]): void {
   if (!ctx.store || !ops.length) return;
   ctx.store.writeMany(ops.map((o) => ({ c: o.c, id: o.id ?? o.r!.id, r: o.r ? { ...o.r, updatedAt: Date.now() } : null })));
@@ -124,13 +132,7 @@ function onTap(e: Event): void {
   if (el.id === "hlAddP") return ownerForm("people", undefined, (o) => { person = o.id; keep(); redraw(); });
   if (d.kind) return readingSheet(person, d.kind);
   if (d.lab) { location.hash = `#/health/lab/${encodeURIComponent(d.lab)}`; return; }
-  if (d.take) {
-    const m = r.get<Med>("hlMeds", d.take); if (!m) return;
-    const id = logId(m.id, today(), d.time!), was = taken(r, m, today(), d.time!);
-    const ops: { c: string; r: Rec | null; id?: string }[] = [{ c: "hlMedLog", id, r: was ? null : { id, med: m.id, day: today(), time: d.time! } }];
-    if (m.stock != null) ops.push({ c: "hlMeds", r: { ...m, stock: Math.max(0, m.stock + (was ? 1 : -1)) } });
-    return hlWrite(ops);
-  }
+  if (d.take) return takeMed(d.take, d.time!);
   if (d.med) return medForm(person, d.med);
   if (d.ck) return checkupForm(person, d.ck);
   if (d.visit) return visitForm(person, d.visit);

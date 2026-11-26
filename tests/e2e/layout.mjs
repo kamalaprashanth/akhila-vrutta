@@ -30,8 +30,8 @@ const base = `http://127.0.0.1:${server.address().port}/shell.html`;
 await mkdir("test-results/layout", { recursive: true });
 
 const WIDTHS = [["small phone", 320, 640, true], ["phone", 390, 844, true], ["big phone", 430, 932, true], ["phone landscape", 844, 390, true], ["tablet", 768, 1024, true], ["laptop", 1280, 800, false], ["desktop", 1920, 1080, false]];
-const PAGES = [["home", "#/home"], ["money home", "#/money/home"], ["money activity", "#/money/activity"], ["money accounts", "#/money/accounts"], ["money plan", "#/money/plan"], ["money insights", "#/money/insights"], ["money advisor", "#/money/advisor"], ["money more", "#/money/more"],
-  ["household due", "#/household", "due"], ["household appliances", "#/household", "appl"], ["household vehicles", "#/household", "veh"], ["household lists", "#/household", "lists"],
+const PAGES = [["today", "#/today"], ["money home", "#/money/home"], ["money activity", "#/money/activity"], ["money accounts", "#/money/accounts"], ["money plan", "#/money/plan"], ["money insights", "#/money/insights"], ["money advisor", "#/money/advisor"], ["money more", "#/money/more"],
+  ["household due", "#/household/due"], ["household appliances", "#/household/appl"], ["household vehicles", "#/household/veh"], ["household lists", "#/household/lists"],
   ["habits", "#/habits"], ["habit page", "#/habits", null, "[data-habit]"], ["health", "#/health"], ["health lab", `#/health/lab/${seed.hlLabs?.[0]?.id}`], ["documents", "#/docs"], ["documents owner", "#/docs", null, "[data-owner]"], ["settings", "#/settings"]];
 
 const audit = (touch) => {
@@ -79,7 +79,7 @@ for (const [wname, w, h, touch] of WIDTHS) {
   const p = await ctx.newPage();
   await p.clock.setFixedTime(new Date(2026, 10, 26, 10, 0));
   const errors = []; p.on("pageerror", (e) => errors.push(e.message));
-  await p.goto(base + "#/home"); await p.waitForSelector("#nav .tab", { timeout: 20000 });
+  await p.goto(base + "#/today"); await p.waitForSelector("#drawer .dit", { state: "attached", timeout: 20000 });
   for (const [pname, hash, tab, open] of PAGES) {
     await p.evaluate((x) => { document.querySelector("#mvLayer #modal")?.replaceChildren(); location.hash = x; }, hash);
     await p.waitForTimeout(hash.startsWith("#/money") ? 900 : 300);

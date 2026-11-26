@@ -45,3 +45,5 @@ setFileBackend({
 });
 document.body.dataset.mod = "household";
 household.render(document.getElementById("main")!);
+// the shell's tabs link to #/household/<tab>; the shell draws the page again on each
+window.addEventListener("hashchange", () => household.render(document.getElementById("main")!));

@@ -1,7 +1,10 @@
 /** The shell: unlock, then header, tab bar and routing between modules. */
 import { MODULES } from "./modules/pages.ts";
+import type { Module } from "./modules/types.ts";
+import { todayCount } from "./modules/today/index.ts";
+import { lotus } from "./core/logo.ts";
 import { html, raw, $, toast } from "./core/dom.ts";
-import { installNative, isNative } from "./core/native.ts";
+import { installNative, isNative, onBackClose } from "./core/native.ts";
 import { config } from "./core/firebase.ts";
 import { ctx } from "./core/app.ts";
 import { closeLock, lockProgress, unlock } from "./core/lock.ts";
@@ -15,34 +18,88 @@ import { startBackups } from "./core/backup-auto.ts";
 
 const AUTO_LOCK_MS = 2 * 60 * 1000;
 
-const routeId = (): string => location.hash.replace(/^#\/?/, "").split("/")[0] || "home";
+const routeId = (): string => { const r = location.hash.replace(/^#\/?/, "").split("/")[0] || "today"; return r === "home" ? "today" : r; };
+const svg = (d: string): string => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+const LOCK = "M5 11h14v9H5zM8 11V8a4 4 0 0 1 8 0v3";
 
-function renderNav(active: string): string {
-  return MODULES.map((m) =>
-    html`<a href="#/${m.id}" class="tab${m.id === active ? " on" : ""}" ${raw(m.id === active ? 'aria-current="page"' : "")}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${m.icon}"/></svg><span>${m.tab ?? m.label}</span></a>`,
-  ).join("");
+/** The side menu: every section, the open one with its own pages under it. */
+function renderDrawer(mod: Module): string {
+  const cur = mod.sub?.() ?? "";
+  const item = (m: Module): string => {
+    const on = m.id === mod.id, n = m.id === "today" ? todayCount() : 0;
+    const subs = on ? [...(m.subs?.() ?? []), ...(m.more?.() ?? [])] : [];
+    return html`<a href="#/${m.id}" class="dit${on ? " on" : ""}" ${raw(on ? 'aria-current="page"' : "")}>${raw(svg(m.icon))}<span>${m.label}</span>${raw(n ? html`<i>${String(n)}</i>` : "")}</a>
+      ${raw(subs.length ? html`<div class="dsub">${raw(subs.map((x) => html`<a href="${x.href}" data-sub="${m.id}:${x.id}" class="${x.id === cur ? "on" : ""}" ${raw(x.id === cur ? 'aria-current="page"' : "")}>${x.label}</a>`).join(""))}</div>` : "")}`;
+  };
+  const main = MODULES.filter((m) => !m.hidden && m.id !== "settings"), set = MODULES.find((m) => m.id === "settings");
+  const locks = ctx.session && ctx.session.mode !== "remember";
+  return html`<div class="dhead">${raw(lotus(36))}<b>Akhila Vrutta</b></div>
+    <nav class="dlist" aria-label="Sections">${raw(main.map(item).join(""))}</nav>
+    <div class="dfoot">${raw(set ? item(set) : "")}${raw(locks ? html`<button type="button" class="dit" id="lockNow">${raw(svg(LOCK))}<span>Lock now</span></button>` : "")}</div>`;
 }
 
+/** The open section's own tabs, at the bottom of a phone. */
+function renderNav(mod: Module): string {
+  const subs = mod.subs?.() ?? [], cur = mod.sub?.() ?? "";
+  return subs.map((x) => html`<a href="${x.href}" data-sub="${mod.id}:${x.id}" class="tab${x.id === cur ? " on" : ""}" ${raw(x.id === cur ? 'aria-current="page"' : "")}><span class="ti">${raw(svg(x.icon))}</span><span>${x.label}</span></a>`).join("");
+}
+
+function setDrawer(open: boolean): void {
+  document.body.classList.toggle("dopen", open);
+  $("#scrim")!.hidden = !open;
+  $("#menuBtn")?.setAttribute("aria-expanded", String(open));
+  if (open) $("#drawer .dit.on")?.focus({ preventScroll: true });
+}
+const drawerOpen = (): boolean => document.body.classList.contains("dopen");
+
+let lastHash = "";
 function render(): void {
   const mod = MODULES.find((m) => m.id === routeId()) ?? MODULES[0];
   if (!mod) return;
-  const nav = $("#nav");
-  const main = $("#main");
-  const title = $("#title");
-  if (nav) nav.innerHTML = renderNav(mod.id);
+  // a new page closes the menu (a redraw after a change doesn't)
+  if (location.hash !== lastHash) { lastHash = location.hash; setDrawer(false); }
+  const nav = $("#nav"), main = $("#main"), title = $("#title"), drawer = $("#drawer");
   document.body.dataset.mod = mod.id;
   if (mod.id !== "money") hideMoney();
-  if (title) title.textContent = mod.id === "home" ? "Akhila Vrutta" : mod.label;
+  if (title) title.textContent = mod.label;
   if (main) {
     mod.render(main);
     main.focus({ preventScroll: true });
   }
-  document.title = mod.id === "home" ? "Akhila Vrutta" : `${mod.label} · Akhila Vrutta`;
+  // after the page: a section may pick its tab while rendering (Money, Home)
+  const subs = mod.subs?.() ?? [];
+  document.body.classList.toggle("hassubs", subs.length > 0);
+  if (nav) nav.innerHTML = renderNav(mod);
+  if (drawer) drawer.innerHTML = renderDrawer(mod);
+  document.title = mod.id === "today" ? "Akhila Vrutta" : `${mod.label} · Akhila Vrutta`;
+}
+
+function installShell(): void {
+  $("#menuBtn")?.addEventListener("click", () => setDrawer(!drawerOpen()));
+  $("#scrim")?.addEventListener("click", () => setDrawer(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && drawerOpen()) setDrawer(false); });
+  $("#drawer")?.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.closest("#lockNow")) { location.reload(); return; }
+    if (t.closest("a")) setDrawer(false);
+  });
+  // swipe in from the left edge opens the menu; swipe left closes it
+  let x0 = -1, y0 = 0;
+  document.addEventListener("touchstart", (e) => { const p = e.touches[0]!; x0 = drawerOpen() || p.clientX < 24 ? p.clientX : -1; y0 = p.clientY; }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (x0 < 0) return;
+    const p = e.changedTouches[0]!, dx = p.clientX - x0, dy = Math.abs(p.clientY - y0);
+    if (dy < 60 && dx > 50 && !drawerOpen()) setDrawer(true);
+    else if (dy < 60 && dx < -50 && drawerOpen()) setDrawer(false);
+    x0 = -1;
+  }, { passive: true });
+  // Android Back closes the menu first
+  onBackClose(() => { if (!drawerOpen()) return false; setDrawer(false); return true; });
 }
 
 async function boot(): Promise<void> {
   ctx.rerender = render;
+  installShell();
   window.addEventListener("hashchange", render);
   if (!config().firebase) { render(); return; } // local and test builds run without the cloud
   const session = await unlock();
@@ -76,7 +133,7 @@ async function boot(): Promise<void> {
   startBackups();
 
   // The Android app: Back, and locking after a minute away (choosing a file also leaves the app for a moment).
-  installNative({ home: "#/home", hint: (t) => toast(t), lockAfterMs: 60 * 1000, lock: () => location.reload(), locks: () => session.mode !== "remember" });
+  installNative({ home: "#/today", hint: (t) => toast(t), lockAfterMs: 60 * 1000, lock: () => location.reload(), locks: () => session.mode !== "remember" });
   if (isNative()) return;
   let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {

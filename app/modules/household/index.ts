@@ -117,7 +117,7 @@ function draw(root: HTMLElement): void {
   const chips = html`<div class="hhtop" role="group" aria-label="Which home">${[["", "All homes"], ...hs.map((h) => [h.id, h.name])].map(([k, l]) => raw(html`<button type="button" class="hchip ${k === view.home ? "on" : ""}" data-home="${k}" aria-pressed="${String(k === view.home)}">${l}</button>`))}<button type="button" class="hchip add" id="addHome" aria-label="Add a home">＋ Home</button></div>`;
   const body = view.tab === "due" ? dueTab(r, t) : view.tab === "appl" ? applTab(r, t) : view.tab === "veh" ? vehTab(r, t) : listsTab(r, t);
   const scroll = window.scrollY;
-  root.innerHTML = html`<div class="mv hhv"><div class="wrap" id="hhView">${raw(chips)}${raw(seg([["due", "Due"], ["appl", "Appliances"], ["veh", "Vehicles"], ["lists", "Lists"]], view.tab, "tab"))}<div class="hhbody">${raw(body)}</div></div></div>`;
+  root.innerHTML = html`<div class="mv hhv"><div class="wrap" id="hhView">${raw(chips)}<div class="hhbody">${raw(body)}</div></div></div>`;
   window.scrollTo(0, scroll);
 }
 
@@ -126,7 +126,7 @@ function onTap(e: Event): void {
   if (!el || !rootEl?.contains(el) || document.body.dataset.mod !== "household") return;
   const d = el.dataset, r = reader();
   if (d.home !== undefined) { view.home = d.home; keep(); return redraw(); }
-  if (d.tab) { view.tab = d.tab as View["tab"]; keep(); return redraw(); }
+  if (d.tab) { location.hash = `#/household/${d.tab}`; return; }
   if (d.list) { view.list = d.list as View["list"]; keep(); return redraw(); }
   if (d.job) return doneForm(d.job);
   if (d.appl) return applianceForm(d.appl);
@@ -167,11 +167,22 @@ export function startHousehold(): void {
   scheduleReminders();
 }
 
+const TABS: [View["tab"], string, string][] = [
+  ["due", "Due", "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2"],
+  ["appl", "Appliances", "M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM12 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM8 6h2"],
+  ["veh", "Vehicles", "M5 16l1.5-5h11l1.5 5M4 16h16v3H4zM8 19v.01M16 19v.01"],
+  ["lists", "Lists", "M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"],
+];
 export const household: Module = {
   id: "household",
-  label: "Household",
+  label: "Home",
   icon: ICON,
+  subs: () => TABS.map(([id, label, icon]) => ({ id, label, icon, href: `#/household/${id}` })),
+  sub: () => view.tab,
   render(root) {
+    // #/household/<tab> picks the tab (the bottom tabs and the side menu link there)
+    const want = location.hash.split("/")[2] as View["tab"] | undefined;
+    if (want && TABS.some(([k]) => k === want) && want !== view.tab) { view.tab = want; keep(); }
     ensureLayer();
     startMoney();   // Money's accounts and categories, for "add the cost to Money"
     startHousehold();

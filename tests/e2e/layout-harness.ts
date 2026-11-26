@@ -17,6 +17,7 @@ class FakeStore {
       if (!this.data.has(op.c)) this.data.set(op.c, new Map());
       if (op.r) this.data.get(op.c)!.set(op.id, structuredClone(op.r)); else this.data.get(op.c)!.delete(op.id);
     }
+    for (const f of this.subs) f({ keys: ops.map((o) => ({ c: o.c, id: o.id })), local: true });
   }
 }
 const fake = new FakeStore();
@@ -28,3 +29,5 @@ const W = window as unknown as Record<string, unknown>;
 W.FAKE = fake; W.AV_TEST = true;
 (ctx as unknown as { store: FakeStore }).store = fake;
 await import("../../app/main.ts");
+// as the real shell does after a change: draw the page again (Money draws itself)
+fake.subscribe(() => requestAnimationFrame(() => { if (document.body.dataset.mod !== "money") (ctx as unknown as { rerender?: () => void }).rerender?.(); }));

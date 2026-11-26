@@ -1,4 +1,5 @@
 /** The lock screen: first-time setup on a device, and unlocking every time the app opens. */
+import { lotus } from "./logo.ts";
 import { html, raw, toast } from "./dom.ts";
 import { formatSecretKey, parseSecretKey, SecretKeyNeeded } from "./crypto.ts";
 import { attachMeter, strength } from "./strength.ts";
@@ -23,7 +24,8 @@ function show(inner: string): HTMLElement {
     el.setAttribute("aria-label", "Unlock Akhila Vrutta");
     document.body.appendChild(el);
   }
-  el.innerHTML = html`<div class="lockc"><img class="lockmark" src="icons/logo.svg" alt=""><h2 class="lockt">Akhila Vrutta</h2>${raw(inner)}</div>`;
+  el.innerHTML = html`<div class="lockhero"><svg class="lockrings" viewBox="0 0 400 400" aria-hidden="true"><circle cx="200" cy="200" r="110"/><circle cx="200" cy="200" r="160"/><circle cx="200" cy="200" r="210"/><circle cx="200" cy="200" r="260"/></svg>${raw(lotus(120, "onDark", true, "Akhila Vrutta"))}<h2 class="lockt">Akhila Vrutta</h2><p class="locktag">Your whole life, in one private place</p></div>
+    <div class="lockc">${raw(inner)}<p class="locksec"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v9H5zM8 11V8a4 4 0 0 1 8 0v3"/></svg>End-to-end encrypted · zero-knowledge</p></div>`;
   const f = el.querySelector("input:not([hidden])") as HTMLInputElement | null;
   if (f) setTimeout(() => f.focus(), 60);
   return el;
