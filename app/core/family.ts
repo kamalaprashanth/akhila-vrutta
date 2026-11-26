@@ -29,7 +29,8 @@ export const onFamily = (fn: () => void): (() => void) => { listeners.add(fn); r
 const changed = (): void => listeners.forEach((f) => f());
 
 async function fb(): Promise<Fb> { const f = await initFirebase(); if (!f) throw new Error("Firebase isn't configured for this build."); return f; }
-export const space = (): Space | null => (mine?.own<Space>(FAMILY).find((x) => x.id === "space" && !x.deleted) ?? null);
+let current: Space | null = null;
+export const space = (): Space | null => (fam ? current : null) ?? (mine?.own<Space>(FAMILY).find((x) => x.id === "space" && !x.deleted) ?? null);
 export const familyOpen = (): boolean => !!fam;
 export const members = (): Member[] => (fam?.own<Member>("famMembers").filter((m) => !m.deleted) ?? []);
 export const memberName = (uid: string): string => members().find((m) => m.id === uid)?.name || "Family";
@@ -92,10 +93,12 @@ const overlay: Overlay = {
 };
 
 /** Opens the family space (when this account has one) and shows it with your own data. */
-export async function startFamily(store: Store, name: string): Promise<void> {
+export async function startFamily(store: Store, name: string, given?: Space): Promise<void> {
   mine = store; me = store.uid; myName = name || myName;
-  const sp = space();
+  // a space just saved is sealed in the background, so it may not be in the store yet: it's passed in
+  const sp = given ?? space();
   if (!sp || fam) return;
+  current = sp;
   try {
     const key = await aesKey(fromB64(sp.key));
     fam = await Store.open(sp.home, me, key, undefined, FAMILY_COLLECTIONS);
@@ -105,7 +108,7 @@ export async function startFamily(store: Store, name: string): Promise<void> {
   if (myName && members().find((m) => m.id === me)?.name !== myName) fam.writeMany([{ c: "famMembers", id: me, r: { id: me, name: myName } }]);
   changed();
 }
-function stopFamily(): void { fam?.close(); fam = null; mine?.attach(null); changed(); }
+function stopFamily(): void { fam?.close(); fam = null; current = null; mine?.attach(null); changed(); }
 export const setMyName = (n: string): void => { myName = n; };
 
 /** Starts a family space with you as its owner. */
@@ -115,8 +118,9 @@ export async function createFamily(): Promise<void> {
   const { fs, db } = await fb();
   const home = toB64(rnd(15)).replace(/[+/=]/g, "x");
   await fs.setDoc!(fs.doc!(db, "homes", home), { members: { [me]: "owner" }, schema: 1, created: fs.serverTimestamp!() });
-  mine.writeMany([{ c: FAMILY, id: "space", r: { id: "space", home, key: toB64(rnd(32)), role: "owner" } }]);
-  await startFamily(mine, myName);
+  const sp: Space = { id: "space", home, key: toB64(rnd(32)), role: "owner" };
+  mine.writeMany([{ c: FAMILY, id: "space", r: sp }]);
+  await startFamily(mine, myName, sp);
   fam?.writeMany([{ c: "famRules", id: "rules", r: { id: "rules", tags: ["Home"] } }]);
   await moveForTags();
 }
@@ -157,8 +161,9 @@ export async function joinFamily(code: string): Promise<void> {
   try { got = JSON.parse(TD.decode(await open(await codeKey(code, id), inv.box, `invite/${id}`))); } catch { throw new Error("That code isn't right. Check the 6 words."); }
   await fs.updateDoc!(fs.doc!(db, "homes", got.home), { [`members.${me}`]: "member", invite: id });
   await fs.deleteDoc!(fs.doc!(db, "invites", id)).catch(() => {});
-  mine.writeMany([{ c: FAMILY, id: "space", r: { id: "space", home: got.home, key: got.key, role: "member" } }]);
-  await startFamily(mine, myName);
+  const sp: Space = { id: "space", home: got.home, key: got.key, role: "member" };
+  mine.writeMany([{ c: FAMILY, id: "space", r: sp }]);
+  await startFamily(mine, myName, sp);
   await moveForTags();
 }
 
