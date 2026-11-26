@@ -279,6 +279,8 @@ jobs:
 
   release:
     needs: preview
+    # always(): when the checks ran on the branch, the skipped check job would otherwise skip this too
+    if: always() && needs.preview.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
