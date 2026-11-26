@@ -36,6 +36,16 @@ export function hhWrite(ops: { c: string; r: Rec | null; id?: string }[]): void 
   scheduleReminders();
 }
 
+/** Saves, then runs `then` once the change is on this device (saving encrypts first, so it isn't instant). */
+export function hhWriteThen(ops: { c: string; r: Rec | null; id?: string }[], then: () => void): void {
+  const store = ctx.store;
+  if (!store || !ops.length) return then();
+  const ids = new Set(ops.map((o) => `${o.c}/${o.id ?? o.r!.id}`));
+  let done = false;
+  const off = store.subscribe((ch) => { if (!done && ch.keys.some((k) => ids.has(`${k.c}/${k.id}`))) { done = true; off(); then(); } });
+  hhWrite(ops);
+}
+
 let rootEl: HTMLElement | null = null;
 const redraw = (): void => { if (rootEl && document.body.dataset.mod === "household") draw(rootEl); };
 

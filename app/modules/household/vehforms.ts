@@ -4,7 +4,7 @@ import type { Rec } from "../../core/store.ts";
 import { askConfirm, closeModal, field, openSheet, toast, val } from "../money/ui/kit.ts";
 import { addMonths, dayLabel, daysBetween, live, type Done } from "./data.ts";
 import { costFields, costOps } from "./forms.ts";
-import { hhWrite, reader, today } from "./index.ts";
+import { hhWrite, hhWriteThen, reader, today } from "./index.ts";
 import { FUELS, fuelOf, icon, KINDS, mileage, nextService, odometer, RENEWALS, vehicleTitle, type Fuel, type Renewal, type Vehicle } from "./vehicles.ts";
 
 const uid = (): string => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -83,8 +83,8 @@ export function vehicleForm(id?: string): void {
       const sv = { km: num(val("vskm")), months: num(val("vsmon")), lastDate: val("vsdate") || undefined, lastKm: num(val("vskm0")) };
       const svc = Object.fromEntries(Object.entries(sv).filter(([, x]) => x != null && x !== "" && x !== 0)) as Vehicle["service"];
       if (svc && Object.keys(svc).length) o.service = svc; else delete o.service;
-      closeModal(); hhWrite([{ c: "hhVehicles", r: o }]); toast(isNew ? "Vehicle added" : "Saved");
-      vehicleSheet(o.id);
+      closeModal(); toast(isNew ? "Vehicle added" : "Saved");
+      hhWriteThen([{ c: "hhVehicles", r: o }], () => vehicleSheet(o.id));
     };
     s.querySelector<HTMLElement>("#dl")?.addEventListener("click", () => askConfirm(`Remove "${v.name}" with its fuel log? Costs already in Money stay there.`, "Remove", () => {
       hhWrite([{ c: "hhVehicles", id: v.id, r: null }, ...fuelOf(reader(), v.id).map((f) => ({ c: "hhFuel", id: f.id, r: null }))]);
@@ -110,12 +110,14 @@ export function fuelForm(vehicleId: string, fillId?: string): void {
       const o: Fuel = { ...(f0 ?? { id: uid(), vehicleId: v.id }), date, odo, litres, full: $<HTMLInputElement>(s, "ffull").checked } as Fuel;
       if (f0) { const a = paise(val("famt")); if (a) o.amount = a; else delete o.amount; }
       else { const c = costOps(s, `Fuel: ${v.name}`, date); if (c.cost) o.amount = c.cost; if (c.txnId) o.txnId = c.txnId; }
-      closeModal(); hhWrite([{ c: "hhFuel", r: o }]);
-      const m = mileage(fuelOf(reader(), v.id));
-      toast(`Saved${m ? ` · ${m} km/${v.fuel === "ev" ? "kWh" : "l"}` : ""}${o.txnId ? " · added to Money" : ""}`);
-      vehicleSheet(v.id);
+      closeModal();
+      hhWriteThen([{ c: "hhFuel", r: o }], () => {
+        const m = mileage(fuelOf(reader(), v.id));
+        toast(`Saved${m ? ` · ${m} km/${v.fuel === "ev" ? "kWh" : "l"}` : ""}${o.txnId ? " · added to Money" : ""}`);
+        vehicleSheet(v.id);
+      });
     };
-    s.querySelector<HTMLElement>("#dl")?.addEventListener("click", () => { closeModal(); hhWrite([{ c: "hhFuel", id: f0!.id, r: null }]); vehicleSheet(v.id); });
+    s.querySelector<HTMLElement>("#dl")?.addEventListener("click", () => { closeModal(); hhWriteThen([{ c: "hhFuel", id: f0!.id, r: null }], () => vehicleSheet(v.id)); });
   });
 }
 
@@ -132,10 +134,10 @@ export function vServiceForm(vehicleId: string): void {
       const c = costOps(s, `${v.name}: ${what}`, date);
       const done = { id: uid(), home: "", date, vehicleId: v.id, kind: "service", what, ...(odo != null ? { odo } : {}), ...c, ...(val("snote") ? { note: val("snote") } : {}) };
       const nv: Vehicle = { ...v, service: { ...(v.service ?? {}), lastDate: date, ...(odo != null ? { lastKm: odo } : {}) } };
-      closeModal(); hhWrite([{ c: "hhDone", r: done as Rec }, { c: "hhVehicles", r: nv }]);
+      closeModal();
       const n = nextService(nv, odo ?? 0);
       toast(`Saved${n ? `. Next ${[n.km != null ? `at ${km(n.km)}` : "", n.date ? dayLabel(n.date, t) : ""].filter(Boolean).join(" or ")}` : ""}${c.txnId ? " · added to Money" : ""}`);
-      vehicleSheet(v.id);
+      hhWriteThen([{ c: "hhDone", r: done as Rec }, { c: "hhVehicles", r: nv }], () => vehicleSheet(v.id));
     };
   });
 }
@@ -153,9 +155,8 @@ export function renewForm(vehicleId: string, key: Renewal): void {
       const to = val("rto"); if (!to) return toast("Set the new valid-till date.");
       const c = costOps(s, `${v.name}: ${label}`, t);
       closeModal();
-      hhWrite([{ c: "hhVehicles", r: { ...v, renew: { ...(v.renew ?? {}), [key]: to } } }, { c: "hhDone", r: { id: uid(), home: "", date: t, vehicleId: v.id, kind: "renewal", what: `${label} renewed, valid till ${dayLabel(to, t)}`, ...c } as Rec }]);
       toast(`${label} valid till ${dayLabel(to, t)}${c.txnId ? " · added to Money" : ""}`);
-      vehicleSheet(v.id);
+      hhWriteThen([{ c: "hhVehicles", r: { ...v, renew: { ...(v.renew ?? {}), [key]: to } } }, { c: "hhDone", r: { id: uid(), home: "", date: t, vehicleId: v.id, kind: "renewal", what: `${label} renewed, valid till ${dayLabel(to, t)}`, ...c } as Rec }], () => vehicleSheet(v.id));
     };
   });
 }
