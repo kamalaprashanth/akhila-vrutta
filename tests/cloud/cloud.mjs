@@ -559,7 +559,7 @@ try {
   await X.page.waitForSelector('#dView [data-add="pan"]', { timeout: 20000 });
   await X.page.click('#dView [data-add="pan"]');
   await X.page.setInputFiles("#mvLayer #dPick", { name: "pan.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64") });
-  await X.page.waitForSelector("#mvLayer [data-file]", { timeout: 30000 });
+  await X.page.waitForSelector("#mvLayer [data-file]", { timeout: 30000 }).catch(async (e) => { throw new Error(`no file tile | toast: ${await X.page.innerText("#toast").catch(() => "")} | sheet: ${(await X.page.innerText("#mvLayer").catch(() => "")).replace(/\s+/g, " ").slice(0, 300)} | ${e.message.split("\n")[0]}`); });
   await X.page.click("#mvLayer #sv");
   let blobs = [];
   for (let i = 0; i < 30 && !blobs.length; i++) { await X.page.waitForTimeout(500); blobs = (await api(`${FS}/homes/${famHome}/famBlobs?pageSize=20`)).body.documents ?? []; }
