@@ -186,6 +186,13 @@ export async function signIn(): Promise<SignedInUser | null> {
   }
 }
 
+/** The signed-in Google account's first name (shown in Settings › Account; never the e-mail address). */
+export async function userName(): Promise<string> {
+  const fb = await initFirebase();
+  const n = (fb?.auth as { currentUser?: { displayName?: string | null } } | undefined)?.currentUser?.displayName ?? "";
+  return n.split(" ")[0] ?? "";
+}
+
 export async function signOutNow(): Promise<void> {
   const fb = await initFirebase();
   if (fb) await fb.authMod.signOut!(fb.auth);

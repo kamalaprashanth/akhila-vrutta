@@ -1,12 +1,14 @@
 rules_version = '2';
-// Only listed Google accounts can use this project. Every record is ciphertext;
-// these rules refuse anything that isn't shaped like an encrypted record.
+// Anyone signed in with Google can have their own home; nobody can read anyone else's. Every record is
+// ciphertext; these rules refuse anything that isn't shaped like an encrypted record.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    // Accounts allowed to create a home. Family members will be added here later.
-    function allowed() { return signedIn() && request.auth.uid in ['Qc1qDKgHAJgWaYnppeUni1hPxXr1']; }
+    // Every signed-in account may create its own home (open to the public since 26 Nov 2026).
+    function allowed() { return signedIn(); }
+    // The app's owner (the daily price job looks up only the owner's US tickers).
+    function appOwner() { return signedIn() && request.auth.uid in ['Qc1qDKgHAJgWaYnppeUni1hPxXr1']; }
     function homeDoc(home) { return get(/databases/$(database)/documents/homes/$(home)); }
     function member(home) { return allowed() && request.auth.uid in homeDoc(home).data.members; }
     function owner(home) { return member(home) && homeDoc(home).data.members[request.auth.uid] == 'owner'; }
@@ -36,8 +38,8 @@ service cloud.firestore {
     match /priceStatus/{doc} { allow read: if allowed(); }
     // The US tickers to look up (names only, no amounts), so the job stays within Alpha Vantage's daily limit.
     match /priceWatch/{uid} {
-      allow read: if allowed() && request.auth.uid == uid;
-      allow write: if allowed() && request.auth.uid == uid
+      allow read: if appOwner() && request.auth.uid == uid;
+      allow write: if appOwner() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['us', 'at'])
         && request.resource.data.us is list && request.resource.data.us.size() <= 30;
     }

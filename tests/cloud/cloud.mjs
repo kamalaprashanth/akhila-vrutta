@@ -421,14 +421,18 @@ try {
   }
 
   progress("intruder and rules");
-  /* 8. Another Google account is turned away, and the rules refuse it directly too */
+  /* 8. Open to everyone: another Google account sets up its own home, and still can't touch the owner's */
   const X = await device("intruder", { user: "intruder" });
   await X.page.goto(BASE);
-  await X.page.click("#lk_g");
-  await X.page.waitForFunction(() => /isn't allowed/.test(document.querySelector("#lock")?.textContent ?? ""), null, { timeout: 20000 });
-  ok("another Google account is told it isn't allowed");
-  await shot(X.page, "intruder");
+  check(/Only you can read it/.test(await lockText(X.page)) && /Terms/.test(await lockText(X.page)), "a new account sees the welcome: what the app is, privacy, Terms and Privacy policy");
+  await signInAndSetup(X.page, { create: true, pass: "second account passphrase 42" });
+  await X.page.waitForSelector(".tdy", { timeout: 30000 });
+  ok("another Google account sets up its own home and opens Today");
+  await shot(X.page, "second-account");
   const intr = await idToken("intruder");
+  const xUser = await api(`${FS}/users/intruder-uid`, {}, intr), xHome = xUser.body?.fields?.home?.stringValue;
+  check(xUser.status === 200 && !!xHome && xHome !== home, `…its own home, not the owner's (${xHome})`);
+  check((await api(`${FS}/homes/${xHome}`, {}, intr)).status === 200 && (await api(`${FS}/homes/${xHome}`, {}, owner)).status === 403, "…which it can read, and the owner can't");
   check(typeof intr === "string" && intr.length > 20 && typeof owner === "string" && owner.length > 20, "test sign-in tokens obtained");
   const denied = async (label, p) => { const r = await p; check(r.status === 403, `rules: ${label} (HTTP ${r.status}${r.status === 403 ? "" : " " + JSON.stringify(r.body).slice(0, 160)})`); };
   await denied("another account can't read the home", api(`${FS}/homes/${home}`, {}, intr));
@@ -439,7 +443,7 @@ try {
     api(`${FS}/homes/${home}/txns?documentId=plain1`, { method: "POST", body: JSON.stringify({ fields: { amount: { integerValue: "500" } } }) }, owner));
   await denied("records can't go into unknown collections",
     api(`${FS}/homes/${home}/secrets?documentId=x`, { method: "POST", body: JSON.stringify({ fields: { iv: { stringValue: "AAAAAAAAAAAAAAAA" }, ct: { stringValue: "abc" }, by: { stringValue: OWNER_UID } } }) }, owner));
-  await denied("another account can't read prices", api(`${FS}/prices/mf`, {}, intr));
+  check((await api(`${FS}/prices/mf`, {}, intr)).status !== 403, "another account can read the public price lists");
   await denied("another account can't write a price watch list", api(`${FS}/priceWatch/intruder-uid`, { method: "PATCH", body: JSON.stringify({ fields: { us: { arrayValue: { values: [{ stringValue: "AAPL" }] } } } }) }, intr));
   const pw = await api(`${FS}/priceWatch/${OWNER_UID}`, { method: "PATCH", body: JSON.stringify({ fields: { us: { arrayValue: { values: [{ stringValue: "AAPL" }] } }, at: { stringValue: "now" } } }) }, owner);
   check(pw.status === 200, `rules: the owner can save their US ticker list (HTTP ${pw.status})`);
@@ -455,6 +459,22 @@ try {
   const s1 = await fnAs("aiStatus", owner, {}), s2 = await fnAs("aiStatus", intr, {});
   check(s1.body?.result?.on === true && s2.body?.result?.on === false, `functions: Claude is on for the owner and off for another account (${JSON.stringify(s1.body?.result)} / ${JSON.stringify(s2.body?.result)})`);
   await denied("an account can't switch Claude on for itself", api(`${FS}/aiAccess/intruder-uid`, { method: "PATCH", body: JSON.stringify({ fields: { on: { booleanValue: true } } }) }, intr));
+  // Admin (owner only): counts, and switching Claude on for someone
+  const st = await fnAs("adminStats", owner, {});
+  check(st.body?.result?.accounts >= 2, `admin: the owner sees how many accounts there are (${JSON.stringify(st.body?.result)})`);
+  for (const f of ["adminStats", "adminAiList", "adminAiSet"]) { const r = await fnAs(f, intr, { uid: "intruder-uid", on: true }); check(r.status === 403 || r.body?.error?.status === "PERMISSION_DENIED", `admin: another account can't use ${f}`); }
+  await fnAs("adminAiSet", owner, { uid: "intruder-uid", name: "Test", on: true });
+  const on2 = await fnAs("aiStatus", intr, {}), lst = await fnAs("adminAiList", owner, {});
+  check(on2.body?.result?.on === true && lst.body?.result?.people?.some((p) => p.uid === "intruder-uid" && p.name === "Test" && p.on), "admin: the owner switches Claude on for another account, and it's on for them");
+  await fnAs("adminAiSet", owner, { uid: "intruder-uid", remove: true });
+  check((await fnAs("aiStatus", intr, {})).body?.result?.on === false, "…and off again");
+  // Deleting an account removes everything of theirs, and nothing of anyone else's
+  const del0 = await fnAs("deleteAccount", intr, {});
+  check(del0.status === 400 || del0.body?.error?.status === "INVALID_ARGUMENT", "deleting an account needs the typed confirmation");
+  const del = await fnAs("deleteAccount", intr, { confirm: "DELETE" });
+  check(del.body?.result?.ok === true, `an account deletes itself (${JSON.stringify(del.body).slice(0, 120)})`);
+  check((await api(`${FS}/homes/${xHome}`)).status === 404 && (await api(`${FS}/homes/${xHome}/keys/intruder-uid`)).status === 404 && (await api(`${FS}/users/intruder-uid`)).status === 404, "…its home, key and account record are gone");
+  check((await api(`${FS}/homes/${home}`)).status === 200, "…and the owner's home is untouched");
   const ownRead = await api(`${FS}/homes/${home}`, {}, owner);
   check(ownRead.status === 200, `rules: the owner can read their home (HTTP ${ownRead.status})`);
 

@@ -18,28 +18,30 @@
 <body>
 <main>
   <h1>Akhila Vrutta: privacy</h1>
-  <p class="muted">Last updated 25 November 2026. Applies to the website kp-akhila-vrutta.web.app and the Android app (in.kp.akhilavrutta).</p>
+  <p class="muted">Last updated 26 November 2026. Applies to the website kp-akhila-vrutta.web.app and the Android app (in.kp.akhilavrutta).</p>
   <section>
     <h2>What the app is</h2>
-    <p>A private app for one household's money, home and documents. Only accounts the owner has allowed can use it.</p>
+    <p>A private place for your money, home, health records, documents and habits. Anyone can use it with a Google account; each account's data is kept apart and encrypted.</p>
     <h2>Your data is encrypted before it leaves your device</h2>
-    <p>Everything you enter (transactions, accounts, household records) is encrypted on your device with a key made from your passphrase. Google Cloud (Firebase), where it is stored, holds only the encrypted form. Nobody else, including the developer, Google or Anthropic, can read it without your passphrase.</p>
+    <p>Everything you enter is encrypted on your device (AES-256-GCM) with a key made from your passphrase (Argon2id) and, if you turn it on, a Secret Key. Google Cloud (Firebase), where it is stored, holds only the encrypted form. Nobody else, including the developer, Google or Anthropic, can read it, and nobody can reset your passphrase for you.</p>
     <h2>Files</h2>
-    <p>Bills, warranty cards and photos you add are encrypted on your device and kept in a folder named "Akhila Vrutta" in your own Google Drive. The app asks Google Drive only for access to the files it created itself; it cannot see anything else in your Drive.</p>
+    <p>Bills, reports, warranty cards and photos you add are encrypted on your device and kept in a folder named "Akhila Vrutta" in your own Google Drive, with your encrypted backups. The app asks Google Drive only for access to the files it created itself; it cannot see anything else in your Drive.</p>
     <h2>Sign-in</h2>
-    <p>You sign in with your Google account through Google. The app uses it only to recognise you. Your email address is not shown in the app or shared.</p>
-    <h2>The Advisor</h2>
-    <p>If you ask the Advisor a question, that question and the figures it needs are sent to Anthropic's Claude through the app's own server to write the answer. They are not used to train models and are not kept by the app.</p>
+    <p>You sign in with your Google account through Google. The app uses it only to recognise you; it shows your first name and never your email address. To keep the service working, the app notes when an account was last used (a date, nothing else).</p>
+    <h2>Claude (the Advisor and "Read with Claude")</h2>
+    <p>These are switched off unless the app's owner switches them on for your account. When they are on and you use them, the question and the figures or report text they need are sent to Anthropic's Claude through the app's own server to write the answer. They are not used to train models and are not kept by the app; only a count of questions per day is kept.</p>
     <h2>On your phone</h2>
-    <p>Fingerprint unlock uses a key kept in your phone's secure hardware; your fingerprint never leaves the phone. Bill and maintenance reminders are scheduled on the phone itself and name the bill only, never an amount. The camera is used only when you choose to photograph a document.</p>
+    <p>Fingerprint unlock uses a key kept in your phone's secure hardware; your fingerprint never leaves the phone. Reminders are scheduled on the phone itself and never show amounts, medicine or test names. Search runs on the device. The camera is used only when you choose to photograph a document. Google Play Integrity and reCAPTCHA (Firebase App Check) check that requests come from the genuine app.</p>
     <h2>What isn't done</h2>
     <ul>
       <li>No advertising, analytics or tracking.</li>
       <li>No data is sold or shared with anyone.</li>
       <li>No PAN, full account numbers, PRAN or folio numbers are kept (last 4 digits only).</li>
     </ul>
-    <h2>Deleting your data</h2>
-    <p>Records you delete are removed from the cloud. To delete everything, contact the owner of the app, who can remove the account's encrypted data and the app's folder in Google Drive.</p>
+    <h2>Deleting your account and data</h2>
+    <p>In the app: Settings › Account › Delete my account and data. It deletes your encrypted records in the cloud, your encrypted files and backups in your Google Drive, and your sign-in, straight away and for good. If you can no longer open the app, write to the address below from your Google account's email and it will be done within 30 days.</p>
+    <h2>Contact</h2>
+    <p>Akhila Vrutta is made by an individual developer in Bengaluru, India. Email: <a href="mailto:[SUPPORT EMAIL]">[SUPPORT EMAIL]</a>.</p>
   </section>
 </main>
 </body>

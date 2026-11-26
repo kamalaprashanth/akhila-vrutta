@@ -219,7 +219,7 @@ jobs:
           node -e '
             const j = require("./fns.json");
             const names = (j.result || []).map((f) => f.id || f.name?.split("/").pop());
-            const want = ["askClaude", "aiStatus", "refreshPricesNow", "refreshPrices"];
+            const want = ["askClaude", "aiStatus", "adminStats", "adminAiList", "adminAiSet", "deleteAccount", "refreshPricesNow", "refreshPrices"];
             const missing = want.filter((w) => !names.includes(w));
             console.log(`::notice title=Cloud Functions::running: ${names.join(", ")}`);
             if (missing.length) { console.log(`::error title=Cloud Functions::missing: ${missing.join(", ")}`); process.exit(1); }

@@ -5,7 +5,8 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret, defineString, defineInt } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
 
 initializeApp();
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
@@ -50,10 +51,67 @@ async function aiAllowed(uid) {
   return s.exists && s.data().on === true;
 }
 
-/* Is Claude switched on for the signed-in account (the app shows the Advisor and "Read with Claude" only then). */
-exports.aiStatus = onCall({ region: "asia-south1", memory: "256MiB", maxInstances: 2 }, async (req) => {
+/* Is Claude switched on for the signed-in account (the app shows the Advisor and "Read with Claude" only then),
+   and is it the owner (who sees Admin). Called once after each unlock, so it also notes when the account was
+   last used (for the owner's "active this week" count; nothing else about the account is kept). */
+exports.aiStatus = onCall({ region: "asia-south1", memory: "256MiB", maxInstances: 4 }, async (req) => {
   if (!req.auth) throw new HttpsError("unauthenticated", "Sign in first.");
-  return { on: await aiAllowed(req.auth.uid) };
+  const uid = req.auth.uid;
+  await getFirestore().doc(`seen/${uid}`).set({ at: FieldValue.serverTimestamp() }).catch(() => {});
+  return { on: await aiAllowed(uid), owner: uid === OWNER_UID.value() };
+});
+
+const isOwner = (req) => { if (!req.auth || req.auth.uid !== OWNER_UID.value()) throw new HttpsError("permission-denied", "Only the app's owner can do that."); };
+const UID_RE = /^[A-Za-z0-9_-]{6,128}$/;
+
+/* Admin (owner only): how many accounts, how many used it this week, Claude questions today; counts only. */
+exports.adminStats = onCall({ region: "asia-south1", memory: "256MiB", maxInstances: 1 }, async (req) => {
+  isOwner(req);
+  const db = getFirestore(), week = Timestamp.fromMillis(Date.now() - 7 * 864e5), day = istDay();
+  const [users, active, usage] = await Promise.all([
+    db.collection("users").count().get(),
+    db.collection("seen").where("at", ">=", week).count().get(),
+    db.collection("aiUsage").where("day", "==", day).get(),
+  ]);
+  return { accounts: users.data().count, active: active.data().count, asksToday: usage.docs.reduce((n, d) => n + (d.data().n || 0), 0) };
+});
+
+/* Admin: who has Claude (a name only the owner sees, on/off, questions today). */
+exports.adminAiList = onCall({ region: "asia-south1", memory: "256MiB", maxInstances: 1 }, async (req) => {
+  isOwner(req);
+  const db = getFirestore(), day = istDay(), snap = await db.collection("aiAccess").get();
+  const out = [];
+  for (const d of snap.docs) {
+    const u = await db.doc(`aiUsage/${d.id}`).get(), ud = u.exists ? u.data() : {};
+    out.push({ uid: d.id, name: d.data().name || "", on: d.data().on === true, today: ud.day === day ? ud.n || 0 : 0 });
+  }
+  return { people: out.sort((a, b) => a.name.localeCompare(b.name)) };
+});
+exports.adminAiSet = onCall({ region: "asia-south1", memory: "256MiB", maxInstances: 1 }, async (req) => {
+  isOwner(req);
+  const { uid, name, on, remove } = req.data || {};
+  if (typeof uid !== "string" || !UID_RE.test(uid)) throw new HttpsError("invalid-argument", "That isn't a user ID.");
+  if (uid === OWNER_UID.value()) throw new HttpsError("invalid-argument", "Claude is always on for you.");
+  const ref = getFirestore().doc(`aiAccess/${uid}`);
+  if (remove) { await ref.delete(); return { ok: true }; }
+  await ref.set({ on: on !== false, name: typeof name === "string" ? name.slice(0, 40) : "" }, { merge: true });
+  return { ok: true };
+});
+
+/* Deletes the caller's account: every home they own (all its records), their membership elsewhere, their
+   account records, and their sign-in. The app deletes their encrypted files in their Google Drive first. */
+exports.deleteAccount = onCall({ region: "asia-south1", memory: "512MiB", timeoutSeconds: 300, maxInstances: 2 }, async (req) => {
+  if (!req.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  if (!req.data || req.data.confirm !== "DELETE") throw new HttpsError("invalid-argument", "Type DELETE to confirm.");
+  const uid = req.auth.uid, db = getFirestore();
+  const homes = await db.collection("homes").where(`members.${uid}`, "in", ["owner", "member"]).get();
+  for (const h of homes.docs) {
+    if (h.data().members[uid] === "owner") await db.recursiveDelete(h.ref);
+    else { await h.ref.collection("keys").doc(uid).delete().catch(() => {}); await h.ref.update({ [`members.${uid}`]: FieldValue.delete() }); }
+  }
+  for (const c of ["users", "aiAccess", "aiUsage", "priceWatch", "seen"]) await db.doc(`${c}/${uid}`).delete().catch(() => {});
+  await getAuth().deleteUser(uid).catch(() => {});
+  return { ok: true, homes: homes.size };
 });
 
 exports.askClaude = onCall(
