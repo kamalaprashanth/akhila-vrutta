@@ -6,8 +6,8 @@ import { isNative } from "../../../core/native.ts";
 import { esc } from "../../../core/dom.ts";
 import { addM, dayIn, dLabel, lastDay, mShort, ymOf, type Day } from "../calc/dates.ts";
 import { num, type Loan, type MoneyData, type Paise, type Rec } from "../calc/data.ts";
-import { cardInfo, countsAcc, type Account } from "../calc/accounts.ts";
-import { catName, fmtD, FREQ, NSE_HOL, type Recurring } from "../calc/plan.ts";
+import { cardInfo, countsAcc, dueOf, type Account } from "../calc/accounts.ts";
+import { cardBills, catName, fmtD, FREQ, NSE_HOL, type Recurring } from "../calc/plan.ts";
 import { bigBills } from "../calc/reserve.ts";
 import { propList, reserveAcc, type Property } from "../calc/properties.ts";
 import { bankOf, kindOf, loanSum, schedule } from "../calc/loans.ts";
@@ -64,6 +64,22 @@ export function reminderItems(d: MoneyData): { t: string; d: Day; rr: string; s:
     const b = bankOf(l) as { day?: number } | null, s = schedule(d, l);
     if (!b || !s || !num(b.day) || kindOf(l) === "cardemi" || l.closedOn || !s.end || s.end < now) continue;
     out.push({ t: `${l.name} EMI`, d: nextDate(d, num(b.day)), rr: `FREQ=MONTHLY;BYMONTHDAY=${num(b.day)};UNTIL=${lastDay(s.end).replace(/-/g, "")}`, s: `${money(loanSum(d, l).emiNow)} · until ${mShort(s.end)}` });
+  }
+  return out.sort((a, b) => a.d.localeCompare(b.d));
+}
+
+/** The phone's reminders: as above, but a card only when it has a bill to pay. A card's every-month rule
+ *  (right for a calendar file) is replaced by this month's and next month's actual bills: none when nothing is
+ *  owed or the bill is already paid. */
+export function phoneItems(d: MoneyData): { t: string; d: Day; rr: string; s: string }[] {
+  const out = reminderItems(d).filter((x) => !x.t.endsWith(" bill due"));
+  const cards = new Map(d.live<Account>("accounts").map((a) => [a.id, a]));
+  const seen = new Set<string>();
+  for (const ym of [ymOf(d.today), addM(ymOf(d.today), 1)]) for (const b of cardBills(d, ym)) {
+    const a = cards.get(b.id); if (!a || b.paidC || b.amount < 50 || seen.has(b.key)) continue;
+    seen.add(b.key);
+    const due = dueOf(a, b.key.split("|")[1]!);
+    out.push({ t: `${a.name} bill due`, d: due, rr: `FREQ=MONTHLY;UNTIL=${due.replace(/-/g, "")}`, s: "Credit card bill" });
   }
   return out.sort((a, b) => a.d.localeCompare(b.d));
 }

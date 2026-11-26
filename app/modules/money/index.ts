@@ -16,7 +16,7 @@ import { planPage } from "./views/plan.ts";
 import { homePage } from "./views/home.ts";
 import { insightsPage } from "./views/insights.ts";
 import { advisorPage, setAsk } from "./views/advisor.ts";
-import { morePage, reminderItems } from "./views/more.ts";
+import { morePage, phoneItems } from "./views/more.ts";
 import { cardPage } from "./views/card.ts";
 import { loanPage } from "./views/loan.ts";
 import { epfPage } from "./views/epf.ts";
@@ -109,7 +109,7 @@ function ensureBox(): HTMLElement {
   return box;
 }
 
-const dueItems = () => reminderItems(currentData());
+const dueItems = () => phoneItems(currentData());
 const currentData = () => moneyData((c) => ctx.store!.all(c), MONEY_COLLECTIONS);
 
 /** Saves records (in paise), makes the automatic entries that follow, and draws the page again. */
