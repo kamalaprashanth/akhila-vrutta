@@ -107,6 +107,7 @@ function draw(root: HTMLElement): void {
   root.innerHTML = html`<div class="tdy">
     <p class="tddate">${date}</p>
     <h1 class="tdh">${greet}</h1>
+    <a class="tdsearch" href="#/search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search everything</a>
     <section class="tdcard" aria-labelledby="tdT"><h2 id="tdT">Today${left ? ` · ${left} to do` : ""}</h2>
       ${raw(today.length ? today.map(row).join("") : html`<p class="tdnone">Nothing due today.</p>`)}</section>
     <section class="tdcard" aria-labelledby="tdW"><h2 id="tdW">Next 7 days</h2>

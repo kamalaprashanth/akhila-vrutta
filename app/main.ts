@@ -63,6 +63,7 @@ function render(): void {
   document.body.dataset.mod = mod.id;
   if (mod.id !== "money") hideMoney();
   if (title) title.textContent = mod.label;
+  const sb = $("#searchBtn"); if (sb) sb.hidden = mod.id === "search";
   if (main) {
     mod.render(main);
     main.focus({ preventScroll: true });

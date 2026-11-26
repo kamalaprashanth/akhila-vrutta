@@ -13,3 +13,8 @@
   unlock screen), plain where it's small (side menu, app icons). `node scripts/icons.mjs` remakes the web icons
   from `static/icons/logo.svg`; the Android icon and splash are made from the same file in CI.
 - Tests: `tests/e2e/shellflow.mjs`; every page at seven widths in `tests/e2e/layout.mjs`.
+- **Search everything** (`app/modules/search`): the 🔍 on every page (and the box on Today). Every word must
+  appear, in any order; an amount (5000, 5,000, ₹5,000) finds Money entries of that amount. Results by
+  section (Money, Home, Health, Papers, Habits) with the words marked; chips narrow it; a transaction or a
+  document opens its form. It runs on the device over the decrypted records; recent searches are kept only
+  until the app is closed. Tests: `tests/unit/search.test.ts`, `tests/e2e/searchflow.mjs`.

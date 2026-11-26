@@ -10,7 +10,7 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit --erasableSyntaxOnly",
     "test:unit": "node --test \"tests/unit/*.test.ts\"",
-    "test:e2e": "node tests/e2e/smoke.mjs && node tests/e2e/txflow.mjs && node tests/e2e/accflow.mjs && node tests/e2e/planflow.mjs && node tests/e2e/homeflow.mjs && node tests/e2e/insflow.mjs && node tests/e2e/advflow.mjs && node tests/e2e/moreflow.mjs && node tests/e2e/detflow.mjs && node tests/e2e/taps.mjs && node tests/e2e/hhflow.mjs && node tests/e2e/hbflow.mjs && node tests/e2e/bkflow.mjs && node tests/e2e/dcflow.mjs && node tests/e2e/hlflow.mjs && node tests/e2e/cardremind.mjs && node tests/e2e/shellflow.mjs && node tests/e2e/layout.mjs",
+    "test:e2e": "node tests/e2e/smoke.mjs && node tests/e2e/txflow.mjs && node tests/e2e/accflow.mjs && node tests/e2e/planflow.mjs && node tests/e2e/homeflow.mjs && node tests/e2e/insflow.mjs && node tests/e2e/advflow.mjs && node tests/e2e/moreflow.mjs && node tests/e2e/detflow.mjs && node tests/e2e/taps.mjs && node tests/e2e/hhflow.mjs && node tests/e2e/hbflow.mjs && node tests/e2e/bkflow.mjs && node tests/e2e/dcflow.mjs && node tests/e2e/hlflow.mjs && node tests/e2e/cardremind.mjs && node tests/e2e/shellflow.mjs && node tests/e2e/searchflow.mjs && node tests/e2e/layout.mjs",
     "check": "npm run typecheck && npm run test:unit && npm run build && npm run test:e2e && npm run test:calc && npm run test:screens",
     "test:parity": "node tests/parity/parity.mjs",
     "test:cloud": "AV_EMULATORS=1 node scripts/build.mjs && firebase emulators:exec --only auth,firestore,hosting,functions --project demo-akhila-vrutta \"node tests/cloud/cloud.mjs\"",

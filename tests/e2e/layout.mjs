@@ -32,7 +32,7 @@ await mkdir("test-results/layout", { recursive: true });
 const WIDTHS = [["small phone", 320, 640, true], ["phone", 390, 844, true], ["big phone", 430, 932, true], ["phone landscape", 844, 390, true], ["tablet", 768, 1024, true], ["laptop", 1280, 800, false], ["desktop", 1920, 1080, false]];
 const PAGES = [["today", "#/today"], ["money home", "#/money/home"], ["money activity", "#/money/activity"], ["money accounts", "#/money/accounts"], ["money plan", "#/money/plan"], ["money insights", "#/money/insights"], ["money advisor", "#/money/advisor"], ["money more", "#/money/more"],
   ["household due", "#/household/due"], ["household appliances", "#/household/appl"], ["household vehicles", "#/household/veh"], ["household lists", "#/household/lists"],
-  ["habits", "#/habits"], ["habit page", "#/habits", null, "[data-habit]"], ["health", "#/health"], ["health lab", `#/health/lab/${seed.hlLabs?.[0]?.id}`], ["documents", "#/docs"], ["documents owner", "#/docs", null, "[data-owner]"], ["settings", "#/settings"]];
+  ["habits", "#/habits"], ["habit page", "#/habits", null, "[data-habit]"], ["health", "#/health"], ["health lab", `#/health/lab/${seed.hlLabs?.[0]?.id}`], ["documents", "#/docs"], ["documents owner", "#/docs", null, "[data-owner]"], ["settings", "#/settings"], ["search", "#/search"]];
 
 const audit = (touch) => {
   const W = innerWidth, H = innerHeight, out = { sideways: document.documentElement.scrollWidth > W + 1 ? document.documentElement.scrollWidth : 0, cut: [], under: [], small: [], tiny: [] };
