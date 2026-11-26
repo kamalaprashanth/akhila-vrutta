@@ -2,6 +2,8 @@ name: Check and deploy
 # Every push: unit tests, page checks, cloud tests on Firebase emulators.
 # main only: deploy to a private preview address, check it, then put that exact build live,
 # check the live site, and roll back automatically if the live check fails.
+# To save Actions minutes: a commit that already passed the checks on its branch isn't checked again on main
+# (main releases that branch run's build), and the Android app is built and tested on main only.
 on:
   push:
     branches: ["**"]
@@ -10,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,7 +24,24 @@ env:
   FT: npx --yes firebase-tools@14
 
 jobs:
+  seen:
+    # On main: the branch run that already checked this exact commit, if there is one.
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.find.outputs.run }}
+    steps:
+      - id: find
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          R=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&status=success&per_page=20" --jq '[.workflow_runs[] | select(.name == "${{ github.workflow }}" and .head_branch != "main" and .event == "push")][0].id // empty')
+          echo "run=$R" >> "$GITHUB_OUTPUT"
+          [ -n "$R" ] && echo "::notice title=Checks::Already passed on its branch (run $R); releasing that build" || echo "::notice title=Checks::Not checked on a branch; checking here"
+
   check:
+    needs: seen
+    if: needs.seen.outputs.run == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,10 +86,12 @@ jobs:
   android:
     # The Android app: built from this commit's site, tested on an emulator; on main, signed and attached
     # to a GitHub release for installing on the phone.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -174,8 +196,8 @@ jobs:
 
   functions:
     # Advisor (askClaude) and price updates. Separate from the site release, so a missing key never blocks it.
-    needs: check
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [seen, check]
+    if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && (needs.check.result == 'success' || (needs.check.result == 'skipped' && needs.seen.outputs.run != ''))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -204,8 +226,8 @@ jobs:
           '
 
   preview:
-    needs: check
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [seen, check]
+    if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && (needs.check.result == 'success' || (needs.check.result == 'skipped' && needs.seen.outputs.run != ''))
     runs-on: ubuntu-latest
     outputs:
       channel: ${{ steps.deploy.outputs.channel }}
@@ -218,6 +240,9 @@ jobs:
         with:
           name: dist
           path: dist
+          # the branch run's build when this commit was checked there
+          run-id: ${{ needs.seen.outputs.run }}
+          github-token: ${{ github.token }}
       - name: Deploy key
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_AKHILA_VRUTTA }}
