@@ -491,6 +491,49 @@ try {
   check(on2.body?.result?.on === true && lst.body?.result?.people?.some((p) => p.uid === "intruder-uid" && p.name === "Test" && p.on), "admin: the owner switches Claude on for another account, and it's on for them");
   await fnAs("adminAiSet", owner, { uid: "intruder-uid", remove: true });
   check((await fnAs("aiStatus", intr, {})).body?.result?.on === false, "…and off again");
+  /* Family space: the owner starts one and invites; the other account joins with the 6 words; a transaction tagged
+     Home is shared (sealed with the family key), and the rules hold */
+  progress("family");
+  await A.page.goto(`${BASE}/#/family`);
+  await A.page.waitForSelector("#fmNew", { timeout: 20000 });
+  await A.page.click("#fmNew");
+  await A.page.waitForSelector("#fmInvite", { timeout: 30000 });
+  await A.page.click("#fmInvite");
+  await A.page.waitForSelector("#mvLayer .fmcode span", { timeout: 30000 });
+  const code = (await A.page.$$eval("#mvLayer .fmcode span", (l) => l.map((x) => x.textContent.trim()))).join(" ");
+  check(code.split(" ").length === 6, "the owner starts a family space and gets a 6-word invite code");
+  await A.page.click("#mvLayer #cx");
+  const homesOf = async (uid) => ((await api(`${FS}:runQuery`, { method: "POST", body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "homes" }], where: { fieldFilter: { field: { fieldPath: `members.\`${uid}\`` }, op: "EQUAL", value: { stringValue: "owner" } } } } }) })).body ?? []).map((x) => x.document?.name?.split("/").pop()).filter(Boolean);
+  const famHome = (await homesOf(OWNER_UID)).find((h) => h !== home);
+  check(!!famHome, `…a second home, the family space (${famHome})`);
+  check((await api(`${FS}/homes/${famHome}`, {}, intr)).status === 403, "rules: before joining, the other account can't read the family space");
+  check((await api(`${FS}/invites?pageSize=5`, {}, intr)).status === 403, "rules: invites can't be listed");
+  await X.page.goto(`${BASE}/#/family`);
+  await X.page.waitForSelector("#fmJoin", { timeout: 20000 });
+  await X.page.click("#fmJoin");
+  await X.page.fill("#mvLayer #f_fmcode", code.toUpperCase());
+  await X.page.click("#mvLayer #sv");
+  await X.page.waitForSelector("#fmLeave", { timeout: 60000 }).catch(() => {});
+  const fh = await api(`${FS}/homes/${famHome}`);
+  check(fh.body?.fields?.members?.mapValue?.fields?.["intruder-uid"]?.stringValue === "member", "the other account joins with the 6 words, as a member");
+  check(((await api(`${FS}:runQuery`, { method: "POST", body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "invites" }] } }) })).body ?? []).filter((x) => x.document).length === 0, "…and the invite is used up");
+  await denied("a member can't make itself the owner", api(`${FS}/homes/${famHome}?updateMask.fieldPaths=members.\`intruder-uid\``, { method: "PATCH", body: JSON.stringify({ fields: { members: { mapValue: { fields: { "intruder-uid": { stringValue: "owner" } } } } } }) }, intr));
+  await A.page.goto(`${BASE}/#/money/activity`);
+  await A.page.waitForFunction(() => typeof S === "object" && !!S.data, null, { timeout: 30000 });
+  await A.page.evaluate(() => upsert("txns", { id: "famtx1", type: "expense", amount: 99, date: new Date().toISOString().slice(0, 10), accountId: S.data.accounts[0].id, note: "shared vegetables", tags: ["Home"], updatedAt: Date.now() }));
+  let famTx = [];
+  for (let i = 0; i < 30 && !famTx.length; i++) { await A.page.waitForTimeout(500); famTx = (await api(`${FS}/homes/${famHome}/txns?pageSize=20`)).body.documents ?? []; }
+  const famPlain = famTx.filter((d) => ["shared vegetables", "Home", "9900"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  check(famTx.length >= 1 && famPlain === 0 && famTx.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a transaction tagged Home goes to the family space, as ciphertext only (${famTx.length})`);
+  const priv = await api(`${FS}/homes/${home}/txns/famtx1`);
+  check(priv.status === 404 || priv.body?.fields?.del?.booleanValue === true, "…and not into the owner's own home");
+  let shared = "";
+  for (let i = 0; i < 30 && !/₹99/.test(shared); i++) { await X.page.goto(`${BASE}/#/family`); await X.page.waitForTimeout(1000); shared = await X.page.innerText("main").catch(() => ""); }
+  check(/₹99/.test(shared), "…and the member sees it (₹99 shared spending this month)");
+  await X.page.click("#fmLeave"); await X.page.click("#mvLayer #cy");
+  let left = false;
+  for (let i = 0; i < 20 && !left; i++) { await X.page.waitForTimeout(500); left = !(await api(`${FS}/homes/${famHome}`)).body?.fields?.members?.mapValue?.fields?.["intruder-uid"]; }
+  check(left && (await api(`${FS}/homes/${famHome}`, {}, intr)).status === 403, "a member can leave, and then can't read the family space");
   // Deleting an account removes everything of theirs, and nothing of anyone else's
   const del0 = await fnAs("deleteAccount", intr, {});
   check(del0.status === 400 || del0.body?.error?.status === "INVALID_ARGUMENT", "deleting an account needs the typed confirmation");

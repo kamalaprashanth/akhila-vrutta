@@ -7,6 +7,7 @@ import { today } from "./today/index.ts";
 import { search } from "./search/index.ts";
 import { profile } from "./profile/index.ts";
 import { calendar } from "./calendar/index.ts";
+import { family } from "./family/index.ts";
 
 import { health } from "./health/index.ts";
 export { health };
@@ -16,4 +17,4 @@ export { docs };
 
 export { today };
 /** In the side menu's order. */
-export const MODULES: Module[] = [today, calendar, money, household, health, habits, docs, profile, settings, search];
+export const MODULES: Module[] = [today, calendar, money, household, health, habits, docs, profile, settings, search, family];

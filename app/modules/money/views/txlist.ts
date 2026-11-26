@@ -251,8 +251,10 @@ export function txLine(d: MoneyData, it: Item, st: TxState): string {
   if (t.splitOf) sub += " · split";
   if (t.hist && (t.date ?? "") >= "2026-11-01") sub += " · already in balances";
   const picked = !!st.sel?.has(t.id);
+  // shared in the family space: who added it
+  const own = (t as { ownerName?: string; owner?: string }), fam = own.owner ? `<span class="tagmini famtag">Family · ${esc((own.ownerName || "?").slice(0, 1).toUpperCase())}</span>` : "";
   const selC = st.selOn ? ` selon ${picked ? "picked" : ""}` : "";
-  return `<div class="row tap${selC}" data-tx="${esc(t.id)}" role="button" tabindex="0" ${selC ? `aria-pressed="${picked}"` : ""}>${txIcon(d, t)}<div class="main"><div class="t">${esc(title)}</div><div class="s">${esc(sub)}</div>${(t.tags ?? []).length ? `<div class="tagrow">${t.tags!.map((g) => `<span class="tagmini">${esc(g)}</span>`).join("")}</div>` : ""}</div><div class="amt ${cls}">${sign}${moneyP(num(t.amount))}</div></div>`;
+  return `<div class="row tap${selC}" data-tx="${esc(t.id)}" role="button" tabindex="0" ${selC ? `aria-pressed="${picked}"` : ""}>${txIcon(d, t)}<div class="main"><div class="t">${esc(title)}</div><div class="s">${esc(sub)}</div>${(t.tags ?? []).length || fam ? `<div class="tagrow">${fam}${(t.tags ?? []).map((g) => `<span class="tagmini">${esc(g)}</span>`).join("")}</div>` : ""}</div><div class="amt ${cls}">${sign}${moneyP(num(t.amount))}</div></div>`;
 }
 
 /* ---------- saved views and the bulk bar ---------- */

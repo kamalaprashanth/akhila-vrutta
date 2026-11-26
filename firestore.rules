@@ -44,6 +44,19 @@ service cloud.firestore {
         && request.resource.data.us is list && request.resource.data.us.size() <= 30;
     }
 
+    // Family invites: made by a family space's owner, read by whoever has the 6 words (the id comes from them),
+    // removed once used (or by the owner). They hold the family key sealed with a key from the same words.
+    match /invites/{id} {
+      allow get: if allowed();   // one by its id only: invites can't be listed
+      allow create: if allowed()
+        && request.resource.data.keys().hasOnly(['home', 'by', 'exp', 'box'])
+        && request.resource.data.by == request.auth.uid
+        && get(/databases/$(database)/documents/homes/$(request.resource.data.home)).data.members[request.auth.uid] == 'owner'
+        && request.resource.data.exp is timestamp && request.resource.data.exp < request.time + duration.value(25, 'h')
+        && sealed(request.resource.data.box);
+      allow delete: if allowed() && request.auth.uid in get(/databases/$(database)/documents/homes/$(resource.data.home)).data.members;
+    }
+
     // Which home an account belongs to.
     match /users/{uid} {
       allow read: if allowed() && request.auth.uid == uid;
@@ -58,7 +71,25 @@ service cloud.firestore {
         && request.resource.data.members == { (request.auth.uid): 'owner' }
         && request.resource.data.created == request.time;
       allow update: if owner(home)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'schema']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'schema'])
+        // the owner stays the owner
+        && request.resource.data.members[request.auth.uid] == 'owner';
+      // Joining a family space: you add only yourself, as a member, with a live invite for this home.
+      allow update: if allowed() && !(request.auth.uid in resource.data.members)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'invite'])
+        && request.resource.data.members.diff(resource.data.members).addedKeys() == [request.auth.uid].toSet()
+        && request.resource.data.members.diff(resource.data.members).changedKeys().size() == 0
+        && request.resource.data.members.diff(resource.data.members).removedKeys().size() == 0
+        && request.resource.data.members[request.auth.uid] == 'member'
+        && request.resource.data.invite is string
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.invite)).data.home == home
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.invite)).data.exp > request.time;
+      // Leaving a family space: a member takes only themselves out.
+      allow update: if member(home) && resource.data.members[request.auth.uid] == 'member'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+        && request.resource.data.members.diff(resource.data.members).removedKeys() == [request.auth.uid].toSet()
+        && request.resource.data.members.diff(resource.data.members).addedKeys().size() == 0
+        && request.resource.data.members.diff(resource.data.members).changedKeys().size() == 0;
 
       // Each member's passphrase-wrapped data key.
       match /keys/{uid} {
@@ -79,6 +110,7 @@ service cloud.firestore {
                       'snaps', 'goals', 'views', 'trades', 'props', 'propItems', 'settings', 'meta',
                       'hhHomes', 'hhJobs', 'hhDone', 'hhAppliances', 'hhItems', 'hhVehicles', 'hhFuel', 'files',
                       'habits', 'habitLog', 'habitPrefs', 'backupLog', 'docs', 'docOwners', 'docPrefs', 'famDays',
+                      'family', 'famMembers', 'famRules',
                       'hlProfiles', 'hlReadings', 'hlLabs', 'hlMeds', 'hlMedLog', 'hlVisits', 'hlCheckups']
           && request.resource.data.keys().hasOnly(['iv', 'ct', 'z', 'at', 'by', 'del'])
           && sealed(request.resource.data)

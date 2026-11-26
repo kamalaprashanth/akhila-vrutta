@@ -11,6 +11,7 @@ import { moneyNow, startMoney } from "../money/index.ts";
 import { ensureLayer, toast } from "../money/ui/kit.ts";
 import { profileSection } from "../money/views/more.ts";
 import { profForm } from "../money/ui/profform.ts";
+import { members, sharedTags, space } from "../../core/family.ts";
 
 const ICON = "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21c1-4 15-4 16 0";
 const short = (uid: string): string => (uid.length > 10 ? `${uid.slice(0, 4)}…${uid.slice(-4)}` : uid);
@@ -26,6 +27,8 @@ function draw(root: HTMLElement): void {
       <div class="row"><span class="acav" aria-hidden="true">${(name || "·")[0]!.toUpperCase()}</span><div class="main"><div class="t">${name || "You"}</div><div class="s">Signed in with Google</div></div></div>
       <div class="row"><div class="main"><div class="t">Your user ID</div><div class="s"><code>${short(s.uid)}</code> · share it with the app's owner to switch Claude on for you</div></div><button class="btn sm" type="button" id="pfCopy">Copy</button></div>
     </div>` : "")}
+    <h2>Family</h2>
+    <div class="list"><a class="row tap" href="#/family" style="text-decoration:none;color:inherit"><div class="main"><div class="t">${space() ? `Family space · ${members().length} member${members().length === 1 ? "" : "s"}` : "Share with your family"}</div><div class="s">${space() ? `Sharing transactions tagged ${sharedTags().join(", ")}` : "Start a family space, or join one with a code"}</div></div><span class="amt mut">›</span></a></div>
     ${raw(about || html`<h2>About you</h2><p class="note">Set up Money first; then your age, family, income and goals go here.</p>`)}
   </div></div>`;
 }

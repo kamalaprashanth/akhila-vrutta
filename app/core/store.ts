@@ -21,6 +21,8 @@ export const HABIT_COLLECTIONS = ["habits", "habitLog", "habitPrefs"] as const;
 export const DOC_COLLECTIONS = ["docs", "docOwners", "docPrefs"] as const;
 /** Calendar: family days (birthdays, anniversaries, shraddha), each by its English date and its tithi. */
 export const CAL_COLLECTIONS = ["famDays"] as const;
+/** This account's family space (its id and key, kept encrypted here). */
+export const FAMILY = "family";
 /** Health: profiles (height), readings, lab reports, medicines and doses taken, doctor visits, check-ups. */
 export const HEALTH_COLLECTIONS = ["hlProfiles", "hlReadings", "hlLabs", "hlMeds", "hlMedLog", "hlVisits", "hlCheckups"] as const;
 export const FILES = "files";
@@ -28,7 +30,9 @@ export const FILES = "files";
 export const BACKUP_LOG = "backupLog";
 /** Housekeeping: schema versions and where the data came from. */
 export const META = "meta";
-export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, ...HABIT_COLLECTIONS, ...DOC_COLLECTIONS, ...CAL_COLLECTIONS, ...HEALTH_COLLECTIONS, FILES, BACKUP_LOG, META];
+export const COLLECTIONS: readonly string[] = [...MONEY_COLLECTIONS, ...HOUSEHOLD_COLLECTIONS, ...HABIT_COLLECTIONS, ...DOC_COLLECTIONS, ...CAL_COLLECTIONS, ...HEALTH_COLLECTIONS, FILES, BACKUP_LOG, META, FAMILY];
+/** What a family space holds: shared transactions, its members' names and what is shared. */
+export const FAMILY_COLLECTIONS: readonly string[] = ["txns", "famMembers", "famRules"];
 /** What a KP Money Planner import replaces (never Household or files). */
 export const IMPORT_SCOPE: readonly string[] = [...MONEY_COLLECTIONS, META];
 
@@ -49,6 +53,16 @@ export interface Changes {
   local: boolean;
 }
 type Listener = (ch: Changes) => void;
+/**
+ * Another store shown together with this one (the family space): its records join this one's in `colls`, and
+ * writes to those collections go through `route`, which saves what belongs there and returns what stays here.
+ */
+export interface Overlay {
+  colls: ReadonlySet<string>;
+  all(c: string): Rec[];
+  get(c: string, id: string): Rec | undefined;
+  route(op: WriteOp, here: (c: string, id: string) => boolean): WriteOp[];
+}
 export interface WriteOp {
   c: string;
   id: string;
@@ -65,21 +79,24 @@ export class Store {
 
   private fb: Fb;
   private dek: CryptoKey;
+  private colls: readonly string[];
+  private overlay: Overlay | null = null;
   readonly home: string;
   readonly uid: string;
 
-  private constructor(fb: Fb, home: string, uid: string, dek: CryptoKey) {
+  private constructor(fb: Fb, home: string, uid: string, dek: CryptoKey, colls: readonly string[]) {
     this.fb = fb;
     this.home = home;
     this.uid = uid;
     this.dek = dek;
-    for (const c of COLLECTIONS) this.data.set(c, new Map());
+    this.colls = colls;
+    for (const c of colls) this.data.set(c, new Map());
   }
 
-  static async open(home: string, uid: string, dek: CryptoKey, onProgress?: (msg: string) => void): Promise<Store> {
+  static async open(home: string, uid: string, dek: CryptoKey, onProgress?: (msg: string) => void, colls: readonly string[] = COLLECTIONS): Promise<Store> {
     const fb = await initFirebase();
     if (!fb) throw new Error("Firebase isn't configured for this build.");
-    const s = new Store(fb, home, uid, dek);
+    const s = new Store(fb, home, uid, dek, colls);
     await s.start(onProgress);
     return s;
   }
@@ -105,7 +122,7 @@ export class Store {
     const { fs } = this.fb;
     // 1. What this device already has (ciphertext in Firestore's cache).
     const cursors = new Map<string, number>();
-    for (const c of COLLECTIONS) {
+    for (const c of this.colls) {
       const snap = await fs.getDocsFromCache!(this.col(c)).catch(() => null);
       let max = 0;
       if (snap) {
@@ -117,7 +134,7 @@ export class Store {
     }
     // 2. Anything newer from the cloud, now and as it happens.
     const first: Promise<void>[] = [];
-    for (const c of COLLECTIONS) {
+    for (const c of this.colls) {
       const since = (fs.Timestamp as unknown as { fromMillis(ms: number): unknown }).fromMillis(cursors.get(c) ?? 0);
       const q = fs.query!(this.col(c), fs.where!("at", ">", since));
       first.push(new Promise((res) => {
@@ -143,6 +160,13 @@ export class Store {
     for (const m of this.data.values()) m.clear();
   }
 
+  /** Shows another store's records with this one's (null takes it away). */
+  attach(o: Overlay | null): void { this.overlay = o; this.emit({ keys: [], local: false }); }
+  /** Tells this store's listeners that the attached one changed. */
+  overlayChanged(keys: { c: string; id: string }[]): void { this.emit({ keys, local: false }); }
+  /** Only this store's own records (not the attached one's). */
+  own<T extends Rec = Rec>(c: string): T[] { return [...(this.data.get(c)?.values() ?? [])] as T[]; }
+
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -152,10 +176,18 @@ export class Store {
   }
 
   all<T extends Rec = Rec>(c: string): T[] {
-    return [...(this.data.get(c)?.values() ?? [])] as T[];
+    const mine = [...(this.data.get(c)?.values() ?? [])] as T[];
+    return this.overlay?.colls.has(c) ? [...mine, ...(this.overlay.all(c) as T[])] : mine;
   }
   get<T extends Rec = Rec>(c: string, id: string): T | undefined {
-    return this.data.get(c)?.get(id) as T | undefined;
+    return (this.data.get(c)?.get(id) ?? (this.overlay?.colls.has(c) ? this.overlay.get(c, id) : undefined)) as T | undefined;
+  }
+  /** Writes for the attached store go there; the rest stay here. */
+  private routed(ops: WriteOp[]): WriteOp[] {
+    const o = this.overlay;
+    if (!o) return ops;
+    const here = (c: string, id: string): boolean => !!this.data.get(c)?.has(id);
+    return ops.flatMap((op) => (o.colls.has(op.c) ? o.route(op, here) : [op]));
   }
   count(c?: string): number {
     if (c) return this.data.get(c)?.size ?? 0;
@@ -176,6 +208,7 @@ export class Store {
 
   async put(c: string, r: Rec): Promise<void> {
     if (!this.data.has(c)) throw new Error(`Unknown collection ${c}`);
+    if (this.overlay?.colls.has(c)) { this.writeMany([{ c, id: r.id, r }]); return; }
     const { fs, db } = this.fb;
     const d = await this.docFor(c, r);
     this.data.get(c)!.set(r.id, structuredClone(r));
@@ -185,6 +218,7 @@ export class Store {
 
   /** Moves a record to the trash (kept 30 days, then removed). */
   async remove(c: string, id: string): Promise<void> {
+    if (this.overlay?.colls.has(c)) { this.writeMany([{ c, id, r: null }]); return; }
     const { fs, db } = this.fb;
     this.data.get(c)!.delete(id);
     this.emit({ keys: [{ c, id }], local: true });
@@ -217,8 +251,10 @@ export class Store {
   }
 
   /** Saves a set of changes in the background (batched); returns once they are on this device. */
-  writeMany(ops: WriteOp[]): void {
-    for (const op of ops) if (!this.data.has(op.c)) throw new Error(`Unknown collection ${op.c}`);
+  writeMany(ops0: WriteOp[]): void {
+    for (const op of ops0) if (!this.data.has(op.c)) throw new Error(`Unknown collection ${op.c}`);
+    // a trashed record that is only in the attached store has nothing to trash here
+    const ops = this.routed(ops0).filter((op) => op.r || this.data.get(op.c)!.has(op.id));
     if (ops.length) this.track(this.commit(ops));
   }
 
