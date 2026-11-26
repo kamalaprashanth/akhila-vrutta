@@ -34,7 +34,7 @@ function draw(root: HTMLElement): void {
     ${raw(familyOpen() ? "" : html`<p class="note err">The family space couldn't be opened just now. Check your connection.</p>`)}
     <h2>Members</h2>
     <div class="list">${raw(ms.map((m) => html`<div class="row"><span class="acav" aria-hidden="true">${(m.name || "?")[0]!.toUpperCase()}</span><div class="main"><div class="t">${m.id === me ? `${m.name || "You"} (you)` : m.name || "Member"}</div></div>${raw(owner && m.id !== me ? html`<button type="button" class="btn sm ghost" data-rm="${m.id}">Remove</button>` : "")}</div>`).join("") || html`<div class="empty">Only you so far.</div>`)}</div>
-    ${raw(owner ? html`<button type="button" class="btn pri fmwide" id="fmInvite">Invite someone</button>` : "")}
+    ${raw(owner ? html`<button type="button" class="btn pri fmwide" id="fmInvite" ${busy ? "disabled" : ""}>Invite someone</button>` : "")}
     <h2>Shared in Money</h2>
     <p class="note">Transactions with these tags are shared as soon as either of you saves them. Both of you can see and change them, and both count them as household spending; only the payer's balance changes.</p>
     <div class="fmtags" role="group" aria-label="Shared tags">${raw(allTags().map((g) => html`<button type="button" data-tag="${g}" class="${tg.includes(g) ? "on" : ""}" aria-pressed="${String(tg.includes(g))}">${g}</button>`).join(""))}</div>
