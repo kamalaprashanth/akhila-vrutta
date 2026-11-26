@@ -11,7 +11,7 @@ import { docForm } from "../documents/forms.ts";
 import { moneyNow, startMoney } from "../money/index.ts";
 import { catName } from "../money/calc/plan.ts";
 import { txnForm } from "../money/ui/txform.ts";
-import { ensureLayer } from "../money/ui/kit.ts";
+import { ensureLayer } from "../../core/ui.ts";
 import { AREAS, grouped, parse, searchAll, type Area, type Hit, type Reader } from "./data.ts";
 
 const reader = (): Reader => ({ all: (c) => ctx.store?.all(c) ?? [], get: (c, id) => ctx.store?.get(c, id) });

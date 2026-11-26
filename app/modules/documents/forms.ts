@@ -2,7 +2,7 @@
 import { html, raw } from "../../core/dom.ts";
 import type { Rec } from "../../core/store.ts";
 import { addFile, connectDrive, fileSize, filesOf, isPopupBlocked, needsDriveTap, removeFile, type FileRec } from "../../core/files.ts";
-import { askConfirm, closeModal, field, openSheet, toast, val } from "../money/ui/kit.ts";
+import { askConfirm, closeModal, field, openSheet, toast, val } from "../../core/ui.ts";
 import { viewFile } from "../household/forms.ts";
 import { fyLabel, fyOf, groups, last4, ownerInfo, ownerKind, recentFys, TYPES, typeOf, type Doc, type DocOwner, type Owner } from "./data.ts";
 import { docWrite, reader, today } from "./index.ts";

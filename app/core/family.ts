@@ -15,7 +15,8 @@
  * the payer's balance moves), and its category is theirs with the same name. Both count it as spending.
  */
 import { aesKey, argon2Raw, fromB64, open, rnd, seal, TD, TE, toB64 } from "./crypto.ts";
-import { initFirebase, type Fb } from "./firebase.ts";
+import { callable, initFirebase, type Fb } from "./firebase.ts";
+import { toast } from "./dom.ts";
 import { FAMILY, FAMILY_COLLECTIONS, Store, type Overlay, type Rec, type WriteOp } from "./store.ts";
 
 export interface Space extends Rec { home: string; key: string; role: "owner" | "member" }
@@ -132,7 +133,7 @@ const overlay: Overlay = {
     const r = op.r as Tx, owner = old?.owner ?? me;
     if (owner !== me || isShared(r)) {
       const shown = old ? view(old).categoryId : undefined;
-      const rec: Tx = { ...r, owner, ownerName: old?.ownerName ?? myName };
+      const rec: Tx & { editedBy?: string; editedName?: string } = { ...r, owner, ownerName: old?.ownerName ?? myName, editedBy: me, editedName: myName };
       if (owner !== me) { rec.accountId = old!.accountId; if (old!.toAccountId) rec.toAccountId = old!.toAccountId; else delete rec.toAccountId; }
       if (!old || r.categoryId !== shown) { rec.catBy = me; rec.cat = catName(r.categoryId); if (!r.categoryId) delete rec.categoryId; }
       else { rec.categoryId = old.categoryId; rec.cat = old.cat; rec.catBy = old.catBy; }
@@ -161,12 +162,15 @@ export async function startFamily(store: Store, name: string, given?: Space): Pr
     const role = (hd.data() as { members?: Record<string, string> } | undefined)?.members?.[me];
     if (role === "owner" || role === "member") current = { ...sp, role };
   } catch (e) {
-    if ((e as { code?: string }).code === "permission-denied") { await hooks.removed?.().catch(() => {}); current = null; store.writeMany([{ c: FAMILY, id: "space", r: null }]); changed(); return; }
+    // "permission denied" also comes from an App Check or connection hiccup: nothing is deleted on its own;
+    // the Family page says it can't be opened and lets the person forget it (review #1)
+    if ((e as { code?: string }).code === "permission-denied") { lost = true; current = sp; changed(); return; }
   }
   try {
     const key = await aesKey(fromB64(sp.key));
     fam = await Store.open(sp.home, me, key, undefined, FAMILY_COLLECTIONS);
   } catch (e) { console.warn("family", e); fam = null; return; }
+  fam.onWriteError((e) => toast(`Couldn't save a change to the family space${(e as { code?: string })?.code ? ` (${(e as { code?: string }).code})` : ""}. Check your connection and try again.`));
   fam.subscribe((ch) => { if (!ch.local && ch.keys.some((k) => k.c === "famRules")) localRules = null; mine?.overlayChanged(ch.keys); changed(); });
   store.attach(overlay);
   // always on the member list (the copier counts copies against it), with a first name when there is one
@@ -174,6 +178,32 @@ export async function startFamily(store: Store, name: string, given?: Space): Pr
   if (!meRec || (myName && meRec.name !== myName)) fam.writeMany([{ c: "famMembers", id: me, r: { id: me, name: myName || meRec?.name || "" } }]);
   await moveForTags();   // a switch the other member changed: your own records follow it
   changed();
+}
+let lost = false;
+/** The family space couldn't be opened (removed, or App Check / connection trouble). */
+export const lostAccess = (): boolean => lost;
+/** The person confirmed it: forget the family space here and delete its files from their Drive. */
+export async function forgetFamily(): Promise<void> {
+  await hooks.removed?.().catch((e) => console.warn("family files", e));
+  lost = false; current = null;
+  mine?.writeMany([{ c: FAMILY, id: "space", r: null }]);
+  stopFamily();
+}
+/** Tries again to open a family space that couldn't be opened. */
+export async function retryFamily(): Promise<void> { if (!mine) return; const sp = space(); lost = false; current = null; if (sp) await startFamily(mine, myName, sp); }
+/** Reads who you are in the space now (after a hand-over on another phone; review #10). */
+export async function refreshRole(): Promise<void> {
+  const sp = current; if (!sp || !fam) return;
+  try {
+    const { fs, db } = await fb();
+    const role = ((await fs.getDoc!(fs.doc!(db, "homes", sp.home))).data() as { members?: Record<string, string> } | undefined)?.members?.[me];
+    if ((role === "owner" || role === "member") && role !== sp.role) { current = { ...sp, role }; mine?.writeMany([{ c: FAMILY, id: "space", r: { ...sp, role } }]); changed(); }
+  } catch { /* offline */ }
+}
+/** Records in the family space that you shared or own, for your own backup (review #3). */
+export function sharedByMe(c: string): Rec[] {
+  if (!fam) return [];
+  return fam.own<Rec & { sharer?: string; owner?: unknown }>(c).filter((x) => !x.deleted && (x.sharer === me || x.owner === me));
 }
 /** What the files side does when you leave or were taken out (deletes your Family folder in Drive). */
 const hooks: { removed?: () => Promise<void>; leaving?: () => Promise<void> } = {};
@@ -198,11 +228,17 @@ export async function createFamily(): Promise<void> {
 /* ---------- invites: 6 words, once, for 24 hours ---------- */
 const WORDS = ("acorn amber anchor apple arrow aster autumn bamboo banana basil beach bell berry birch bison blossom bridge brook bubble cabin cactus camel candle canyon carrot castle cedar cherry chess cider cloud clover cobalt comet copper coral cotton crane cricket crystal daisy delta desert dolphin dove dragon dune eagle ember falcon fern fig firefly flute forest fossil fox galaxy garden garlic gecko ginger glacier globe grape guava harbor hazel heron hill honey horizon island ivory jade jasmine jungle kayak kettle kiwi koala lagoon lantern lava lemon lily lime lion lotus lunar mango maple marble meadow melon mint monsoon moss mountain mustard nectar needle nest nutmeg oasis ocean olive onyx orange orchid otter owl palm panda papaya parrot peach pearl pebble pepper petal piano pine planet plum pond poppy prism pumpkin quartz quill rabbit radish rain raven reef ribbon river robin rocket rose ruby saffron sage salmon sand sapphire saturn scarf seed shell silver sky sloth snow spark spice spruce squash star stone storm sugar summit sun swan tamarind tea teak thunder tiger timber tomato topaz tulip turtle valley velvet violet volcano walnut water wave whale willow wind winter wolf yak zebra zinnia anise apricot badger beacon blaze bloom bramble breeze brick butter cashew cello chalk cliff cocoa compass cove crimson cumin cypress dawn dew drum elm emerald falls feather flame flint fog frost gale gem gold granite gull hawk heath hive ink iris jet juniper kite lark lattice leaf linen lynx mallow mesa mist moon nova oak pansy pigeon quince rattan sequoia sienna thistle tundra umber wren").split(" ");
 const normCode = (code: string): string => code.toLowerCase().split(/[^a-z]+/).filter(Boolean).join(" ");
-async function inviteId(code: string): Promise<string> {
-  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", TE.encode(`akhila-vrutta invite v1:${normCode(code)}`)));
-  return [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+/**
+ * The invite's id and key both come from one slow Argon2id run over the 6 words (review #7): an id seen
+ * somewhere gives no shortcut to the words. id = first 16 bytes of SHA-256("id" ‖ k), key = SHA-256("key" ‖ k).
+ */
+async function fromCode(code: string): Promise<{ id: string; key: CryptoKey }> {
+  const k = await argon2Raw(normCode(code), toB64(TE.encode("akhila-vrutta invite v2")), 65536, 3, 1);
+  const part = async (tag: string): Promise<Uint8Array<ArrayBuffer>> => { const m = new Uint8Array(tag.length + k.length); m.set(TE.encode(tag)); m.set(k, tag.length); return new Uint8Array(await crypto.subtle.digest("SHA-256", m)); };
+  const idb = await part("id"), key = await aesKey(await part("key"));
+  k.fill(0);
+  return { id: [...idb.slice(0, 16)].map((x) => x.toString(16).padStart(2, "0")).join(""), key };
 }
-const codeKey = async (code: string, id: string): Promise<CryptoKey> => aesKey(await argon2Raw(normCode(code), toB64(TE.encode(id)), 65536, 3, 1));
 
 /** Makes a one-time code that lets someone join (owner only). */
 export async function makeInvite(): Promise<{ code: string; id: string }> {
@@ -210,7 +246,7 @@ export async function makeInvite(): Promise<{ code: string; id: string }> {
   if (!sp || sp.role !== "owner") throw new Error("Only the family space's owner can invite.");
   // 256 words: one random byte picks each word evenly (6 words = 48 bits, slowed by Argon2id)
   const pick = rnd(6), code = [...pick].map((b) => WORDS[b % WORDS.length]!).join(" ");
-  const id = await inviteId(code), box = await seal(await codeKey(code, id), TE.encode(JSON.stringify({ home: sp.home, key: sp.key })), `invite/${id}`);
+  const { id, key } = await fromCode(code), box = await seal(key, TE.encode(JSON.stringify({ home: sp.home, key: sp.key })), `invite/${id}`);
   const { fs, db } = await fb();
   await fs.setDoc!(fs.doc!(db, "invites", id), { home: sp.home, by: me, exp: (fs.Timestamp as unknown as { fromMillis(n: number): unknown }).fromMillis(Date.now() + 24 * 3600e3), box });
   return { code, id };
@@ -222,13 +258,13 @@ export async function joinFamily(code: string): Promise<void> {
   if (!mine) throw new Error("Unlock first.");
   if (space()) throw new Error("You're already in a family space. Leave it first.");
   if (normCode(code).split(" ").length !== 6) throw new Error("The code is 6 words.");
-  const id = await inviteId(code), { fs, db } = await fb();
+  const { id, key } = await fromCode(code), { fs, db } = await fb();
   const snap = await fs.getDoc!(fs.doc!(db, "invites", id)).catch(() => null);
   if (!snap || !snap.exists()) throw new Error("That code isn't right, or it was used or has expired. Ask for a new one.");
   const inv = snap.data() as { home: string; exp: { toMillis(): number }; box: { iv: string; ct: string } };
   if (inv.exp.toMillis() < Date.now()) throw new Error("That code has expired. Ask for a new one.");
   let got: { home: string; key: string };
-  try { got = JSON.parse(TD.decode(await open(await codeKey(code, id), inv.box, `invite/${id}`))); } catch { throw new Error("That code isn't right. Check the 6 words."); }
+  try { got = JSON.parse(TD.decode(await open(key, inv.box, `invite/${id}`))); } catch { throw new Error("That code isn't right. Check the 6 words."); }
   await fs.updateDoc!(fs.doc!(db, "homes", got.home), { [`members.${me}`]: "member", invite: id });
   await fs.deleteDoc!(fs.doc!(db, "invites", id)).catch(() => {});
   const sp: Space = { id: "space", home: got.home, key: got.key, role: "member" };
@@ -244,6 +280,7 @@ export async function leaveFamily(): Promise<void> {
   if (sp.role === "owner" && members().length > 1) throw new Error("You own the family space: hand it over to another member first.");
   await hooks.leaving?.().catch((e) => console.warn("family files", e));   // your copies in your Drive go
   if (sp.role === "member") await fs.updateDoc!(fs.doc!(db, "homes", sp.home), { [`members.${me}`]: fs.deleteField!() });
+  else await (await callable("deleteFamilySpace"))({ home: sp.home }).catch((e) => console.warn("family delete", e));   // an owner alone: nothing left behind
   stopFamily();
   mine.writeMany([{ c: FAMILY, id: "space", r: null }]);
 }
@@ -299,3 +336,10 @@ export function togetherThisMonth(ym: string): { total: number; by: { uid: strin
   const list = [...by].map(([uid, amount]) => ({ uid, name: uid === me ? "You" : memberName(uid), amount }));
   return { total: list.reduce((s, x) => s + x.amount, 0), by: list };
 }
+
+/** Tests only: put two stand-in stores in place of your home and the family space (review #15). */
+export const __test = {
+  setup(m: Store, f: Store, uid: string, name: string): void { mine = m; fam = f; me = uid; myName = name; localRules = null; current = { id: "space", home: "fam", key: "", role: "owner" }; },
+  overlay,
+  moveForTags: (): Promise<void> => moveForTags(),
+};

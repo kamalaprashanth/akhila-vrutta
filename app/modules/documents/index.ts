@@ -11,7 +11,7 @@ import { connectDrive, filesOf, needsDriveTap } from "../../core/files.ts";
 import { familyOpen, memberName, myUid, sharerOf } from "../../core/family.ts";
 import { shareItem, unshareItem } from "../../core/famshare.ts";
 import { setReminderSource, scheduleReminders } from "../../core/reminders.ts";
-import { ensureLayer, toast } from "../money/ui/kit.ts";
+import { ensureLayer, toast } from "../../core/ui.ts";
 import { startMoney } from "../money/index.ts";
 import { setVehicleDocs } from "../household/vehforms.ts";
 import { attention, checklist, docNotes, docsOf, fyLabel, groups, keyScore, ownerInfo, prefId, recentFys, search, taxRemind, typeOf, TYPES, type Doc, type DocOwner, type DocPref, type Owner, type OwnerInfo, type Reader } from "./data.ts";

@@ -22,12 +22,14 @@ test("2026 has an Adhika Jyeshtha; a day in it is never picked", () => {
   const d = nextTithi(2, 3, "2026-05-01")!;   // Jyeshtha Shukla Chaturthi: the real (nija) month, in June
   assert.ok(d >= "2026-06-15" && d <= "2026-06-20", d);
 });
-test("family days come round on the date and on the tithi", () => {
+test("a birthday comes round on its date only; a shraddha on its tithi", () => {
   const f = { id: "a", kind: "birthday" as const, name: "Amma", date: "1958-08-14", tithi: { m: 4, t: 6 }, byDate: true, byTithi: true };
   assert.equal(famTitle(f), "Amma's birthday");
   const o = occurrences(f, "2026-11-26", 400);
   assert.ok(o.some((x) => x.by === "date" && x.date === "2027-08-14" && x.years === 69));
-  const t = o.find((x) => x.by === "tithi")!;
+  assert.ok(!o.some((x) => x.by === "tithi"), "an old birthday saved with a tithi isn't reminded on it any more");
+  const sh = { id: "s", kind: "shraddha" as const, name: "Thatha", tithi: { m: 4, t: 6 }, byDate: false, byTithi: true };
+  const t = occurrences(sh, "2026-11-26", 400).find((x) => x.by === "tithi")!;
   assert.equal(panchang(t.date).month, 4); assert.equal(panchang(t.date).tithi, 6);
   const leap = occurrences({ id: "b", kind: "birthday", name: "X", date: "2000-02-29", byDate: true, byTithi: false }, "2026-01-01", 120);
   assert.equal(leap[0]!.date, "2026-02-28");

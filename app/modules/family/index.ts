@@ -8,8 +8,8 @@ import { ctx } from "../../core/app.ts";
 import { formatINR } from "../../core/money.ts";
 import { connectDrive, famDrive } from "../../core/files.ts";
 import { notInMyDrive, syncFamilyFiles } from "../../core/famfiles.ts";
-import { cancelInvite, createFamily, familyOpen, handOver, setShared, shares, joinFamily, leaveFamily, makeInvite, members, myUid, onFamily, removeMember, setSharedTags, sharedTags, space, togetherThisMonth } from "../../core/family.ts";
-import { askConfirm, closeModal, ensureLayer, openSheet, toast } from "../money/ui/kit.ts";
+import { cancelInvite, createFamily, familyOpen, forgetFamily, handOver, lostAccess, refreshRole, retryFamily, setShared, shares, joinFamily, leaveFamily, makeInvite, members, myUid, onFamily, removeMember, setSharedTags, sharedTags, space, togetherThisMonth } from "../../core/family.ts";
+import { askConfirm, closeModal, ensureLayer, openSheet, toast } from "../../core/ui.ts";
 
 const ICON = "M8 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM16 8a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM2 20c.8-3.5 11.2-3.5 12 0M13 20c.6-2.6 7.4-2.6 8 0";
 const err = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -27,6 +27,14 @@ function draw(root: HTMLElement): void {
       <p class="note">A shared space for your family. What you share is end-to-end encrypted with the family's own key; everything else stays private to each of you.</p>
       <div class="list"><button type="button" class="row tap fmbtn" id="fmNew"><div class="main"><div class="t">Start a family space</div><div class="s">Then invite your family with a one-time code</div></div><span class="amt mut">›</span></button>
       <button type="button" class="row tap fmbtn" id="fmJoin"><div class="main"><div class="t">Join a family</div><div class="s">With the 6 words you were given</div></div><span class="amt mut">›</span></button></div>
+    </div></div>`;
+    return;
+  }
+  if (lostAccess()) {
+    root.innerHTML = html`<div class="mv fmv"><div class="wrap">
+      <h2>Family</h2>
+      <p class="note">The family space couldn't be opened just now. Usually that's the connection or the app's security check; it can also mean you were taken out of it. Nothing has been deleted.</p>
+      <div class="btns"><button type="button" class="btn pri" id="fmRetry">Try again</button><button type="button" class="btn danger" id="fmForget">I was removed: forget it</button></div>
     </div></div>`;
     return;
   }
@@ -80,11 +88,13 @@ function joinSheet(): void {
 
 function onTap(e: Event): void {
   if (document.body.dataset.mod !== "family" || busy) return;
-  const el = (e.target as HTMLElement).closest<HTMLElement>("#fmNew,#fmJoin,#fmInvite,#fmLeave,#fmDrive,[data-tag],[data-rm],[data-own]");
+  const el = (e.target as HTMLElement).closest<HTMLElement>("#fmNew,#fmJoin,#fmInvite,#fmLeave,#fmDrive,#fmRetry,#fmForget,[data-tag],[data-rm],[data-own]");
   if (!el || !rootEl?.contains(el)) return;
   const run = (fn: () => Promise<void>, ok?: string): void => { busy = true; void fn().then(() => { if (ok) toast(ok); }, (x) => toast(err(x))).finally(() => { busy = false; if (rootEl) draw(rootEl); }); };
   if (el.id === "fmNew") return run(createFamily, "Family space started");
   if (el.id === "fmJoin") return joinSheet();
+  if (el.id === "fmRetry") return run(retryFamily);
+  if (el.id === "fmForget") return askConfirm("Forget the family space on this account? Its files are moved to your Drive's Trash. Do this only if you were removed.", "Forget it", () => run(forgetFamily, "Family space forgotten"));
   if (el.id === "fmDrive") return run(async () => { await connectDrive(); await syncFamilyFiles(); }, "Saving family files to your Drive");
   if (el.dataset.own) return askConfirm("Make them the owner of the family space? You stay a member; they can invite and remove people.", "Make owner", () => run(() => handOver(el.dataset.own!), "Ownership handed over"));
   if (el.id === "fmInvite") { busy = true; void makeInvite().then(({ code, id }) => inviteSheet(code, id), (x) => toast(err(x))).finally(() => { busy = false; }); return; }
@@ -112,5 +122,6 @@ export const family: Module = {
     if (rootEl !== root) { rootEl = root; root.addEventListener("click", onTap); root.addEventListener("change", onChange); }
     unsub ??= onFamily(() => { if (document.body.dataset.mod === "family" && rootEl) draw(rootEl); });
     draw(root);
+    void refreshRole();   // a hand-over made on another phone shows here at once
   },
 };

@@ -171,13 +171,19 @@ export class Store {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
   }
+  /** Goes up on every change (for work that's kept until something changes). */
+  rev = 0;
   private emit(ch: Changes = { keys: [], local: true }): void {
+    this.rev++;
     this.listeners.forEach((fn) => fn(ch));
   }
 
   all<T extends Rec = Rec>(c: string): T[] {
     const mine = [...(this.data.get(c)?.values() ?? [])] as T[];
-    return this.overlay?.colls.has(c) ? [...mine, ...(this.overlay.all(c) as T[])] : mine;
+    if (!this.overlay?.colls.has(c)) return mine;
+    // one copy of a record (a restored backup may hold a shared one too: the family's wins)
+    const fam = this.overlay.all(c) as T[], ids = new Set(fam.map((x) => x.id));
+    return [...mine.filter((x) => !ids.has(x.id)), ...fam];
   }
   get<T extends Rec = Rec>(c: string, id: string): T | undefined {
     return (this.data.get(c)?.get(id) ?? (this.overlay?.colls.has(c) ? this.overlay.get(c, id) : undefined)) as T | undefined;
@@ -203,8 +209,11 @@ export class Store {
 
   private track(p: Promise<unknown>): void {
     this.pending++;
-    p.finally(() => { this.pending--; this.emit(); }).catch((e) => console.warn("write failed", e));
+    p.finally(() => { this.pending--; this.emit(); }).catch((e) => { console.warn("write failed", e); this.errorFns.forEach((f) => f(e)); });
   }
+  private errorFns = new Set<(e: unknown) => void>();
+  /** A change the cloud refused (rules, App Check, quota): shown to the person, not only logged (review #4). */
+  onWriteError(fn: (e: unknown) => void): () => void { this.errorFns.add(fn); return () => this.errorFns.delete(fn); }
 
   async put(c: string, r: Rec): Promise<void> {
     if (!this.data.has(c)) throw new Error(`Unknown collection ${c}`);

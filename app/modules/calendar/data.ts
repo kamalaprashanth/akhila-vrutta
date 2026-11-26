@@ -1,6 +1,6 @@
 /**
- * Family days: birthdays, anniversaries, shraddha and other dates, each kept on its English date, on its tithi,
- * or both (approved design, 26 Nov 2026).
+ * Family days: birthdays, anniversaries and other dates on their English date; a shraddha on its tithi (and its
+ * date too if asked). Changed with the owner on 26 Nov 2026: only a shraddha has a tithi.
  *   famDays { kind, name, date?, tithi?: { m: month 0–11 from Chaitra, t: tithi 0–29 }, byDate, byTithi, before? (days), note? }
  */
 import type { Rec } from "../../core/store.ts";
@@ -24,14 +24,14 @@ export interface Occ { id: string; date: Day; by: "date" | "tithi"; years?: numb
 /** This family day's occurrences from `from` for `days` days. */
 export function occurrences(f: FamDay, from: Day, days: number): Occ[] {
   const end = addDays(from, days), out: Occ[] = [], title = famTitle(f);
-  if (f.byDate && f.date) {
+  if ((f.byDate || f.kind !== "shraddha") && f.date) {   // birthdays, anniversaries, other days: always by date
     for (let y = +from.slice(0, 4); y <= +end.slice(0, 4); y++) {
       let d = `${y}${f.date.slice(4)}`;
       if (f.date.slice(5) === "02-29" && !(y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0))) d = `${y}-02-28`;
       if (d >= from && d <= end) out.push({ id: f.id, date: d, by: "date", years: f.kind === "other" ? undefined : y - +f.date.slice(0, 4), title });
     }
   }
-  if (f.byTithi && f.tithi) {
+  if (f.byTithi && f.tithi && f.kind === "shraddha") {   // only a shraddha is kept by its tithi
     let at = from;
     for (let k = 0; k < 3; k++) {
       const d = nextTithi(f.tithi.m, f.tithi.t, at);

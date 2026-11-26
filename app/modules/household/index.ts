@@ -8,7 +8,7 @@ import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
 import type { Rec } from "../../core/store.ts";
 import { setReminderSource, scheduleReminders } from "../../core/reminders.ts";
-import { ensureLayer } from "../money/ui/kit.ts";
+import { ensureLayer } from "../../core/ui.ts";
 import { startMoney } from "../money/index.ts";
 import { dueChip, dueGroups, dueRows, dayLabel, dayOf, homeName, homes, householdNotes, live, type Appliance, type Item, type Reader } from "./data.ts";
 import { applianceForm, doneForm, homeForm, itemForm, jobForm, starterSheet } from "./forms.ts";

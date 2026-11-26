@@ -6,6 +6,7 @@ import { config } from "./firebase.ts";
 import { BACKUP_LOG } from "./store.ts";
 import type { PassWrap } from "./crypto.ts";
 import { passWrapOf } from "./vault.ts";
+import { sharedByMe } from "./family.ts";
 
 /** Makes a backup file of everything now (for Download, Drive, or before a restore). */
 export async function backupNow(): Promise<Uint8Array<ArrayBuffer>> {
@@ -13,7 +14,8 @@ export async function backupNow(): Promise<Uint8Array<ArrayBuffer>> {
   if (!s || !st) throw new Error("The app is locked.");
   const wrap = (window as unknown as { AV_TEST_WRAP?: PassWrap }).AV_TEST_WRAP ?? await passWrapOf(s.home, s.uid);
   if (!wrap) throw new Error("Couldn't read your key from the cloud. Check the connection and try again.");
-  return makeBackup(wrap, s.dek, (c) => st.own?.(c) ?? st.all(c), config().build);
+  // your own records, and the ones you shared with the family (review #3): a member can't delete them for good
+  return makeBackup(wrap, s.dek, (c) => [...(st.own?.(c) ?? st.all(c)), ...sharedByMe(c)], config().build);
 }
 
 let running = false;

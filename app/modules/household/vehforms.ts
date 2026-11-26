@@ -1,7 +1,7 @@
 /** Vehicles' sheets: a vehicle's page, adding or changing one, a fill, a service, a renewal. */
 import { html, raw } from "../../core/dom.ts";
 import type { Rec } from "../../core/store.ts";
-import { askConfirm, closeModal, field, openSheet, toast, val } from "../money/ui/kit.ts";
+import { askConfirm, closeModal, field, openSheet, toast, val } from "../../core/ui.ts";
 import { addMonths, dayLabel, daysBetween, live, type Done } from "./data.ts";
 import { costFields, costOps } from "./forms.ts";
 import { hhWrite, hhWriteThen, reader, today } from "./index.ts";

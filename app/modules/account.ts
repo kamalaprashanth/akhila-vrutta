@@ -12,7 +12,7 @@ import { connectDrive, driveBackups, famDrive, removeFile, type FileRec } from "
 import { FILES } from "../core/store.ts";
 import { appCheckSeen, isOwner } from "../core/ai.ts";
 import { members, space } from "../core/family.ts";
-import { toast } from "./money/ui/kit.ts";
+import { toast } from "../core/ui.ts";
 
 const short = (uid: string): string => (uid.length > 10 ? `${uid.slice(0, 4)}…${uid.slice(-4)}` : uid);
 const err = (e: unknown): string => String((e as { message?: string })?.message ?? e).replace(/^.*?:\s*/, "");

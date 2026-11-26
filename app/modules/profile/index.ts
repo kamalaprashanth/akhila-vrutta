@@ -8,7 +8,7 @@ import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
 import { userName } from "../../core/firebase.ts";
 import { moneyNow, startMoney } from "../money/index.ts";
-import { ensureLayer, toast } from "../money/ui/kit.ts";
+import { ensureLayer, toast } from "../../core/ui.ts";
 import { profileSection } from "../money/views/more.ts";
 import { profForm } from "../money/ui/profform.ts";
 import { members, sharedTags, space } from "../../core/family.ts";

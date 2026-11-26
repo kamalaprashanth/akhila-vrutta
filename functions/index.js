@@ -110,13 +110,51 @@ exports.deleteAccount = onCall({ region: "asia-south1", memory: "512MiB", timeou
   const uid = req.auth.uid, db = getFirestore();
   const homes = await db.collection("homes").where(`members.${uid}`, "in", ["owner", "member"]).get();
   for (const h of homes.docs) {
-    if (h.data().members[uid] === "owner") await db.recursiveDelete(h.ref);
+    const others = Object.keys(h.data().members || {}).filter((u) => u !== uid);
+    // a family space with others in it isn't deleted with its owner: the next member becomes its owner (review #2)
+    if (h.data().members[uid] === "owner" && others.length) await h.ref.update({ [`members.${uid}`]: FieldValue.delete(), [`members.${others.sort()[0]}`]: "owner" });
+    else if (h.data().members[uid] === "owner") await db.recursiveDelete(h.ref);
     else { await h.ref.collection("keys").doc(uid).delete().catch(() => {}); await h.ref.update({ [`members.${uid}`]: FieldValue.delete() }); }
   }
   for (const c of ["users", "aiAccess", "aiUsage", "priceWatch", "seen"]) await db.doc(`${c}/${uid}`).delete().catch(() => {});
   await getAuth().deleteUser(uid).catch(() => {});
   return { ok: true, homes: homes.size };
 });
+
+/* A family space's owner, alone in it, leaving: the space and everything in it go (review #10). */
+exports.deleteFamilySpace = onCall({ region: "asia-south1", memory: "256MiB", timeoutSeconds: 120, maxInstances: 2 }, async (req) => {
+  if (!req.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  genuine(req);
+  const home = req.data && req.data.home;
+  if (typeof home !== "string" || !/^[A-Za-z0-9]{10,40}$/.test(home)) throw new HttpsError("invalid-argument", "That isn't a family space.");
+  const db = getFirestore(), ref = db.doc(`homes/${home}`), d = (await ref.get()).data();
+  const m = (d && d.members) || {};
+  if (m[req.auth.uid] !== "owner" || Object.keys(m).length !== 1) throw new HttpsError("permission-denied", "Only its owner, alone in it, can delete a family space.");
+  // never someone's own home (the one their account points to)
+  const u = (await db.doc(`users/${req.auth.uid}`).get()).data();
+  if (u && u.home === home) throw new HttpsError("permission-denied", "That's your own home, not a family space.");
+  await db.recursiveDelete(ref);
+  return { ok: true };
+});
+
+/* Storage cap (review #6): once a day each home's records are counted; a home over the cap (other than the
+   app owner's) can't add more until it's back under it. Rules read homes/{home}.full. */
+const CAP = defineInt("RECORD_CAP", { default: 50000, description: "Most records a home may keep (the owner's homes are exempt)" });
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+async function homeSize(ref) {
+  let n = 0;
+  for (const c of await ref.listCollections()) n += (await c.count().get()).data().count;
+  return n;
+}
+exports.capHomes = onSchedule({ schedule: "40 3 * * *", timeZone: "Asia/Kolkata", region: "asia-south1", memory: "512MiB", timeoutSeconds: 540, maxInstances: 1 }, async () => {
+  const db = getFirestore();
+  for (const h of (await db.collection("homes").get()).docs) {
+    if ((h.data().members || {})[OWNER_UID.value()]) continue;
+    const full = (await homeSize(h.ref)) > CAP.value();
+    if (!!h.data().full !== full) await h.ref.update({ full });
+  }
+});
+exports._cap = { homeSize };
 
 exports.askClaude = onCall(
   { region: "asia-south1", secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 300, memory: "256MiB", maxInstances: 2, concurrency: 4 },

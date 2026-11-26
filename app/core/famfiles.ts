@@ -72,6 +72,8 @@ const handler = {
       catch { famWrite([{ c: "famCopies", id: mine.id, r: null }]); }   // gone or damaged: ask again below
     }
     if (r.fam) return f.openWith(seal(await relayGet(r)), aad(r.id));
+    // it's in your Drive, but this visit hasn't been allowed to use Drive yet (the website): ask, don't re-send
+    if (mine && !famDrive.ready()) throw Object.assign(new Error("It's in your Google Drive: allow Drive access (Profile › Family › Save to Drive), then open it again."), { code: "drive-needed" });
     famWrite([{ c: "famNeeds", id: `${r.id}_${myUid()}`, r: { id: `${r.id}_${myUid()}`, file: r.id, uid: myUid() } }]);
     const by = famOwn<Copy>("famCopies").find((c) => c.file === r.id && c.uid !== myUid())?.uid;
     throw new Error(`This file isn't on this phone yet. ${by ? `${memberName(by)}'s` : "The other"} app will send it the next time it opens.`);

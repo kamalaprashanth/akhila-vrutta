@@ -9,7 +9,7 @@ import { ctx } from "../../core/app.ts";
 import type { Rec } from "../../core/store.ts";
 import { formatINR } from "../../core/money.ts";
 import { addTxn, moneyNow, startMoney } from "../money/index.ts";
-import { ensureLayer } from "../money/ui/kit.ts";
+import { ensureLayer } from "../../core/ui.ts";
 import { obligations } from "../money/calc/reserve.ts";
 import { dueRows } from "../household/data.ts";
 import { vehicleDue } from "../household/vehicles.ts";
@@ -86,11 +86,20 @@ export function items(r: Reader, t: Day): Item[] {
   return out.sort((a, b) => a.date.localeCompare(b.date) || Number(!!b.late) - Number(!!a.late) || (a.time ?? "99").localeCompare(b.time ?? "99") || a.title.localeCompare(b.title));
 }
 
+/** Today's list, worked out once per change (the side menu's count and the page share it; review #11). */
+let memo: { key: string; list: Item[] } | null = null;
+function itemsNow(t: Day): Item[] {
+  const rv = (ctx.store as { rev?: number } | null)?.rev;
+  if (rv === undefined) return items(reader(), t);   // a store without a change counter (test stand-ins)
+  const key = `${rv}|${t}`;
+  if (memo?.key !== key) memo = { key, list: items(reader(), t) };
+  return memo.list;
+}
 /** How many things today still need you (for the side menu). */
 export function todayCount(): number {
   if (!ctx.store) return 0;
   const t = dayOf(new Date());
-  return items(reader(), t).filter((x) => x.date === t && !x.tick?.on).length;
+  return itemsNow(t).filter((x) => x.date === t && !x.tick?.on).length;
 }
 
 let showAll = false;
@@ -108,7 +117,7 @@ function draw(root: HTMLElement): void {
   const greet = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
   const date = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
   if (!ctx.store) { root.innerHTML = html`<div class="tdy"><p class="tddate">${date}</p><h1 class="tdh">${greet}</h1></div>`; return; }
-  const all = items(reader(), t), today = all.filter((x) => x.date === t), week = all.filter((x) => x.date > t);
+  const all = itemsNow(t), today = all.filter((x) => x.date === t), week = all.filter((x) => x.date > t);
   const left = today.filter((x) => !x.tick?.on).length;
   const wk = showAll ? week : week.slice(0, 5);
   root.innerHTML = html`<div class="tdy">

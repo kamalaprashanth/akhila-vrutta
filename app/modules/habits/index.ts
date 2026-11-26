@@ -9,7 +9,7 @@ import { ctx } from "../../core/app.ts";
 import type { Rec } from "../../core/store.ts";
 import { isNative } from "../../core/native.ts";
 import { setReminderSource, scheduleReminders } from "../../core/reminders.ts";
-import { ensureLayer, toast } from "../money/ui/kit.ts";
+import { ensureLayer, toast } from "../../core/ui.ts";
 import {
   active, addDays, best, dayLabel, dayOf, dayShare, daysLabel, DN, doneOn, dueOn, goalState, habitNotes, habitsOf, heat, last30, logId, logsOf, monthName,
   nudgeTime, streak, todayCount, valueOn, weekCount, weekScore, weekStart, LOG, HABITS, type Day, type Habit, type Logs, type Reader,

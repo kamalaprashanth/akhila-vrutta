@@ -106,6 +106,8 @@ service cloud.firestore {
       match /{coll}/{id} {
         allow read: if member(home) && coll != 'keys';
         allow create, update: if member(home) && coll != 'keys'
+          // a home over the storage cap can only remove things (the daily job sets 'full')
+          && (homeDoc(home).data.get('full', false) != true || request.resource.data.get('del', false) == true)
           && coll in ['accounts', 'categories', 'txns', 'recurring', 'loans', 'holdings', 'payers',
                       'snaps', 'goals', 'views', 'trades', 'props', 'propItems', 'settings', 'meta',
                       'hhHomes', 'hhJobs', 'hhDone', 'hhAppliances', 'hhItems', 'hhVehicles', 'hhFuel', 'files',

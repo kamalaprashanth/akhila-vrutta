@@ -131,6 +131,11 @@ async function boot(): Promise<void> {
     return;
   }
   ctx.session = session;
+  // a save the cloud refused stays on this device only until the app closes: say so
+  ctx.store.onWriteError((e) => {
+    const code = (e as { code?: string })?.code ?? "";
+    toast(code === "permission-denied" ? "Couldn't save your last change to the cloud (not allowed). Reload the app and try again; it will be lost when the app closes." : `Couldn't save your last change to the cloud${code ? ` (${code})` : ""}. Check your connection and try again.`);
+  });
   let queued = false;
   ctx.store.subscribe(() => {
     if (queued || document.body.dataset.mod === "money") return; // the planner redraws itself

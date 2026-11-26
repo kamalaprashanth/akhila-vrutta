@@ -579,6 +579,18 @@ try {
   let left = false;
   for (let i = 0; i < 20 && !left; i++) { await X.page.waitForTimeout(500); left = !(await api(`${FS}/homes/${famHome}`)).body?.fields?.members?.mapValue?.fields?.["intruder-uid"]; }
   check(left && (await api(`${FS}/homes/${famHome}`, {}, intr)).status === 403, "a member can leave, and then can't read the family space");
+  // The family owner, alone again, leaves: the empty space is removed (no leftovers)
+  await A.page.goto(`${BASE}/#/family`);
+  await A.page.waitForSelector("#fmLeave", { timeout: 20000 });
+  await A.page.click("#fmLeave"); await A.page.click("#mvLayer #cy");
+  let gone = false;
+  for (let i = 0; i < 30 && !gone; i++) { await A.page.waitForTimeout(1000); gone = (await api(`${FS}/homes/${famHome}`)).status === 404; }
+  check(gone, "the owner, alone in the family space, leaves and the space is deleted");
+  // Storage cap: a home marked full by the daily job can't add records, only remove them
+  await api(`${FS}/homes/${xHome}?updateMask.fieldPaths=full`, { method: "PATCH", body: JSON.stringify({ fields: { full: { booleanValue: true } } }) });
+  const rec = { fields: { iv: { stringValue: "AAAAAAAAAAAAAAAA" }, ct: { stringValue: "abc" }, by: { stringValue: "intruder-uid" }, at: { timestampValue: new Date().toISOString() } } };
+  await denied("a home over the storage cap can't add records", api(`${FS}/homes/${xHome}/txns?documentId=capx`, { method: "POST", body: JSON.stringify(rec) }, intr));
+  await api(`${FS}/homes/${xHome}?updateMask.fieldPaths=full`, { method: "PATCH", body: JSON.stringify({ fields: { full: { booleanValue: false } } }) });
   // Deleting an account removes everything of theirs, and nothing of anyone else's
   const del0 = await fnAs("deleteAccount", intr, {});
   check(del0.status === 400 || del0.body?.error?.status === "INVALID_ARGUMENT", "deleting an account needs the typed confirmation");

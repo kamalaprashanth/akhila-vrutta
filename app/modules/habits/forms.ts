@@ -1,7 +1,7 @@
 /** Habits' sheets (Money's sheet kit, so they look and work the same). */
 import { html, raw } from "../../core/dom.ts";
 import { isNative } from "../../core/native.ts";
-import { askConfirm, closeModal, field, openSheet, toast, val } from "../money/ui/kit.ts";
+import { askConfirm, closeModal, field, openSheet, toast, val } from "../../core/ui.ts";
 import { dayLabel, DN, habitsOf, HABITS, ICONS, LOG, logsOf, nudgeTime, PREFS, STARTERS, valueOn, type Day, type Habit, type Kind } from "./data.ts";
 import { hbWrite, reader, setValue, timeLabel, today } from "./index.ts";
 

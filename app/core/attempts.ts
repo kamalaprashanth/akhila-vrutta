@@ -1,7 +1,7 @@
 /**
  * Wrong passphrases on this device: after 5 in a row, a wait before the next try (30 s, then doubling up to
  * an hour). It slows guessing through the app only; someone with a stolen copy of the data guesses offline,
- * where only the passphrase's strength (and the 600,000 rounds) count.
+ * where only the passphrase's strength (Argon2id, 128 MB, and the Secret Key) counts.
  */
 const KEY = "av.attempts";
 interface State { fails: number; until: number }

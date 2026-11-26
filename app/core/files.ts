@@ -97,7 +97,8 @@ const drive: Backend = {
     return ((await (await call(`${API}?q=${q}&fields=files(id)&pageSize=1000&spaces=drive`)).json()) as { files: { id: string }[] }).files.map((f) => f.id);
   },
   async download(id) { return new Uint8Array(await (await call(`${API}/${encodeURIComponent(id)}?alt=media`)).arrayBuffer()); },
-  async remove(id) { await call(`${API}/${encodeURIComponent(id)}`, { method: "DELETE" }).catch((e) => { if (!/404/.test(String(e))) throw e; }); },
+  // to Drive's Trash, not deleted outright: Google keeps it 30 days (review #8)
+  async remove(id) { await call(`${API}/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }) }).catch((e) => { if (!/404/.test(String(e))) throw e; }); },
 };
 /** The local test servers (emulators): a stand-in Drive kept in this tab's memory (each tab = one person's Drive). */
 const testDrive = (): Backend => {

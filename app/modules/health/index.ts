@@ -10,7 +10,7 @@ import { ctx } from "../../core/app.ts";
 import type { Rec } from "../../core/store.ts";
 import { filesOf } from "../../core/files.ts";
 import { setReminderSource, scheduleReminders } from "../../core/reminders.ts";
-import { ensureLayer } from "../money/ui/kit.ts";
+import { ensureLayer } from "../../core/ui.ts";
 import { startMoney } from "../money/index.ts";
 import { ownerForm } from "../documents/forms.ts";
 import {

@@ -5,7 +5,7 @@
  */
 import { html, raw } from "../../core/dom.ts";
 import { addFile, connectDrive, fileSize, filesOf, isPopupBlocked, needsDriveTap, type FileRec } from "../../core/files.ts";
-import { toast } from "../money/ui/kit.ts";
+import { toast } from "../../core/ui.ts";
 
 export interface Tiles { added: FileRec[]; picked: File[]; refresh(): void }
 

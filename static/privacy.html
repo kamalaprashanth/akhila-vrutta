@@ -24,8 +24,10 @@
     <p>A private place for your money, home, health records, documents and habits. Anyone can use it with a Google account; each account's data is kept apart and encrypted.</p>
     <h2>Your data is encrypted before it leaves your device</h2>
     <p>Everything you enter is encrypted on your device (AES-256-GCM) with a key made from your passphrase (Argon2id) and, if you turn it on, a Secret Key. Google Cloud (Firebase), where it is stored, holds only the encrypted form. Nobody else, including the developer, Google or Anthropic, can read it, and nobody can reset your passphrase for you.</p>
+    <p>What the encrypted form still shows: how many records of each kind an account has (for example, how many medicine records), when they were changed, and their size. Never what they say.</p>
     <h2>Files</h2>
     <p>Bills, reports, warranty cards and photos you add are encrypted on your device and kept in a folder named "Akhila Vrutta" in your own Google Drive, with your encrypted backups. The app asks Google Drive only for access to the files it created itself; it cannot see anything else in your Drive.</p>
+    <p>If you share with a family space, what you share is encrypted with the family's own key. Each member keeps their own encrypted copy of shared files in their own Drive (a folder named "Family"), and the family space carries a file across, encrypted, until every member has a copy.</p>
     <h2>Sign-in</h2>
     <p>You sign in with your Google account through Google. The app uses it only to recognise you; it shows your first name and never your email address. To keep the service working, the app notes when an account was last used (a date, nothing else).</p>
     <h2>Claude (the Advisor and "Read with Claude")</h2>

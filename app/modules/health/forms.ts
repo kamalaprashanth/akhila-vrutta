@@ -4,7 +4,7 @@ import { html, raw } from "../../core/dom.ts";
 import type { Rec } from "../../core/store.ts";
 import { filesOf, readFile, removeFile, type FileRec } from "../../core/files.ts";
 import { callable } from "../../core/firebase.ts";
-import { askConfirm, closeModal, field, openSheet, toast, val } from "../money/ui/kit.ts";
+import { askConfirm, closeModal, field, openSheet, toast, val } from "../../core/ui.ts";
 import { pdfLines } from "../money/ui/pdf.ts";
 import { viewFile } from "../household/forms.ts";
 import { costFields, costOps } from "../household/forms.ts";
