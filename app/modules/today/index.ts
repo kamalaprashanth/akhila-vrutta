@@ -130,6 +130,15 @@ export const today: Module = {
   id: "today",
   label: "Today",
   icon: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4",
+  // Today's bottom bar: the main sections, and the side menu for the rest
+  subs: () => [
+    { id: "today", label: "Today", icon: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4", href: "#/today" },
+    { id: "money", label: "Money", icon: "M3 6h18v14H3zM3 10h18M16 15h2", href: "#/money" },
+    { id: "household", label: "Home", icon: "M4 11l8-7 8 7v9H4zM10 20v-5h4v5", href: "#/household" },
+    { id: "health", label: "Health", icon: "M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z", href: "#/health" },
+    { id: "menu", label: "Menu", icon: "M4 7h16M4 12h16M4 17h10", href: "#menu" },
+  ],
+  sub: () => "today",
   render(root) {
     if (rootEl !== root) { rootEl = root; root.addEventListener("click", onTap); }
     draw(root);

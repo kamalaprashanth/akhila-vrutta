@@ -42,7 +42,9 @@ function renderDrawer(mod: Module): string {
 /** The open section's own tabs, at the bottom of a phone. */
 function renderNav(mod: Module): string {
   const subs = mod.subs?.() ?? [], cur = mod.sub?.() ?? "";
-  return subs.map((x) => html`<a href="${x.href}" data-sub="${mod.id}:${x.id}" class="tab${x.id === cur ? " on" : ""}" ${raw(x.id === cur ? 'aria-current="page"' : "")}><span class="ti">${raw(svg(x.icon))}</span><span>${x.label}</span></a>`).join("");
+  return subs.map((x) => x.href === "#menu"
+    ? html`<button type="button" class="tab" id="navMenu" aria-controls="drawer"><span class="ti">${raw(svg(x.icon))}</span><span>${x.label}</span></button>`
+    : html`<a href="${x.href}" data-sub="${mod.id}:${x.id}" class="tab${x.id === cur ? " on" : ""}" ${raw(x.id === cur ? 'aria-current="page"' : "")}><span class="ti">${raw(svg(x.icon))}</span><span>${x.label}</span></a>`).join("");
 }
 
 function setDrawer(open: boolean): void {
@@ -78,6 +80,7 @@ function render(): void {
 
 function installShell(): void {
   $("#menuBtn")?.addEventListener("click", () => setDrawer(!drawerOpen()));
+  $("#nav")?.addEventListener("click", (e) => { if ((e.target as HTMLElement).closest("#navMenu")) setDrawer(true); });
   $("#scrim")?.addEventListener("click", () => setDrawer(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && drawerOpen()) setDrawer(false); });
   $("#drawer")?.addEventListener("click", (e) => {

@@ -55,6 +55,11 @@ for (const [name, vp, touch] of [["phone", { width: 390, height: 844 }, true], [
   ok(/\d/.test(await p.innerText("#drawer .dit.on i").catch(() => "")), "the side menu shows how many things today still needs");
 
   if (touch) {
+    const tb = await p.$$eval("#nav .tab", (l) => l.map((a) => a.textContent.trim()));
+    ok(tb.join(",") === "Today,Money,Home,Health,Menu", `Today's bottom bar has the main sections and the menu (${tb.join(", ")})`);
+    await p.click("#navMenu"); await p.waitForTimeout(300);
+    ok(await p.evaluate(() => document.body.classList.contains("dopen")), "…Menu there opens the side menu");
+    await p.keyboard.press("Escape"); await p.waitForTimeout(300);
     ok(!(await p.evaluate(() => document.body.classList.contains("dopen"))), "on a phone the side menu starts closed");
     await p.click("#menuBtn"); await p.waitForTimeout(300);
     ok(await p.evaluate(() => document.body.classList.contains("dopen")), "the menu button opens it");

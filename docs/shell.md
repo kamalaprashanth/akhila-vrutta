@@ -5,7 +5,7 @@
   Today shows how many things today still needs. On a phone it opens from ☰ or a swipe in from the left edge,
   and closes on a tap outside, Escape, Android Back, or opening a page. From 900 px wide it's always open.
 - **Section tabs** (`#nav`): the open section's own tabs at the bottom of a phone (a module's `subs()`; the open
-  one from `sub()`). Sections without tabs have no bottom bar.
+  one from `sub()`). Today's bar has the main sections (Today, Money, Home, Health) and Menu; Health, Habits, Documents and Settings have no bottom bar.
 - **Today** (`app/modules/today`): what's due today and in the next 7 days from every section (bills and EMIs,
   medicines and check-ups, habits, home jobs, warranties, vehicle renewals, papers). Medicines and daily habits
   are ticked in place.
