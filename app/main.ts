@@ -17,6 +17,7 @@ import { startDocs } from "./modules/documents/index.ts";
 import { startHealth } from "./modules/health/index.ts";
 import { startCalendar } from "./modules/calendar/index.ts";
 import { startFamily } from "./core/family.ts";
+import { startFamilyFiles } from "./core/famfiles.ts";
 import { userName } from "./core/firebase.ts";
 import { startBackups } from "./core/backup-auto.ts";
 
@@ -154,6 +155,7 @@ async function boot(): Promise<void> {
   startCalendar();
   startBackups();
   // the family space, if this account is in one: its shared items join yours
+  startFamilyFiles();
   void userName().then((n) => startFamily(ctx.store!, n ?? "")).catch((e) => console.warn("family", e));
 
   // The Android app: Back, and locking after a minute away (choosing a file also leaves the app for a moment).

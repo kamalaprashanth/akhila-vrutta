@@ -17,7 +17,6 @@
 import { aesKey, argon2Raw, fromB64, open, rnd, seal, TD, TE, toB64 } from "./crypto.ts";
 import { initFirebase, type Fb } from "./firebase.ts";
 import { FAMILY, FAMILY_COLLECTIONS, Store, type Overlay, type Rec, type WriteOp } from "./store.ts";
-import { setFamFiles } from "./files.ts";
 
 export interface Space extends Rec { home: string; key: string; role: "owner" | "member" }
 export interface Member extends Rec { name: string }
@@ -155,19 +154,29 @@ export async function startFamily(store: Store, name: string, given?: Space): Pr
   const sp = given ?? space();
   if (!sp || fam) return;
   current = sp;
+  // who you are in it now (an owner can hand over), or that you were taken out of it
+  try {
+    const { fs, db } = await fb();
+    const hd = await fs.getDoc!(fs.doc!(db, "homes", sp.home));
+    const role = (hd.data() as { members?: Record<string, string> } | undefined)?.members?.[me];
+    if (role === "owner" || role === "member") current = { ...sp, role };
+  } catch (e) {
+    if ((e as { code?: string }).code === "permission-denied") { await hooks.removed?.().catch(() => {}); current = null; store.writeMany([{ c: FAMILY, id: "space", r: null }]); changed(); return; }
+  }
   try {
     const key = await aesKey(fromB64(sp.key));
     fam = await Store.open(sp.home, me, key, undefined, FAMILY_COLLECTIONS);
   } catch (e) { console.warn("family", e); fam = null; return; }
   fam.subscribe((ch) => { if (!ch.local && ch.keys.some((k) => k.c === "famRules")) localRules = null; mine?.overlayChanged(ch.keys); changed(); });
   store.attach(overlay);
-  const f = fam;
-  setFamFiles({ owns: ownerShared, seal: (p, a) => f.sealWith(p, a), open: (x, a) => f.openWith(x, a), put: (id, x) => f.putPiece("famBlobs", id, x), get: (id) => f.getPiece("famBlobs", id), drop: (id) => f.dropPiece("famBlobs", id) });
   if (myName && members().find((m) => m.id === me)?.name !== myName) fam.writeMany([{ c: "famMembers", id: me, r: { id: me, name: myName } }]);
   await moveForTags();   // a switch the other member changed: your own records follow it
   changed();
 }
-function stopFamily(): void { setFamFiles(null); fam?.close(); fam = null; current = null; localRules = null; mine?.attach(null); changed(); }
+/** What the files side does when you leave or were taken out (deletes your Family folder in Drive). */
+const hooks: { removed?: () => Promise<void>; leaving?: () => Promise<void> } = {};
+export const setFamilyHooks = (h: typeof hooks): void => { Object.assign(hooks, h); };
+function stopFamily(): void { fam?.close(); fam = null; current = null; localRules = null; mine?.attach(null); changed(); }
 export const setMyName = (n: string): void => { myName = n; };
 
 /** Starts a family space with you as its owner. */
@@ -230,6 +239,8 @@ export async function joinFamily(code: string): Promise<void> {
 export async function leaveFamily(): Promise<void> {
   const sp = space(); if (!sp || !mine) return;
   const { fs, db } = await fb();
+  if (sp.role === "owner" && members().length > 1) throw new Error("You own the family space: hand it over to another member first.");
+  await hooks.leaving?.().catch((e) => console.warn("family files", e));   // your copies in your Drive go
   if (sp.role === "member") await fs.updateDoc!(fs.doc!(db, "homes", sp.home), { [`members.${me}`]: fs.deleteField!() });
   stopFamily();
   mine.writeMany([{ c: FAMILY, id: "space", r: null }]);
@@ -239,6 +250,16 @@ export async function removeMember(uid: string): Promise<void> {
   const { fs, db } = await fb();
   await fs.updateDoc!(fs.doc!(db, "homes", sp.home), { [`members.${uid}`]: fs.deleteField!() });
   fam?.writeMany([{ c: "famMembers", id: uid, r: null }]);
+}
+
+/** The owner hands the family space to another member (and becomes a member). */
+export async function handOver(uid: string): Promise<void> {
+  const sp = space(); if (!sp || sp.role !== "owner" || uid === me) return;
+  const { fs, db } = await fb();
+  await fs.updateDoc!(fs.doc!(db, "homes", sp.home), { [`members.${uid}`]: "owner", [`members.${me}`]: "member" });
+  current = { ...sp, role: "member" };
+  mine?.writeMany([{ c: FAMILY, id: "space", r: { ...sp, role: "member" } }]);
+  changed();
 }
 
 /** Which tags are shared; your transactions move in or out to match. */

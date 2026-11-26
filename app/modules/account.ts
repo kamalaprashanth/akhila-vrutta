@@ -8,9 +8,10 @@ import { ctx } from "../core/app.ts";
 import { appCheckError, callable, signOutNow, userName } from "../core/firebase.ts";
 import { isNative } from "../core/native.ts";
 import { forgetDevice } from "../core/vault.ts";
-import { connectDrive, driveBackups, removeFile, type FileRec } from "../core/files.ts";
+import { connectDrive, driveBackups, famDrive, removeFile, type FileRec } from "../core/files.ts";
 import { FILES } from "../core/store.ts";
 import { appCheckSeen, isOwner } from "../core/ai.ts";
+import { members, space } from "../core/family.ts";
 import { toast } from "./money/ui/kit.ts";
 
 const short = (uid: string): string => (uid.length > 10 ? `${uid.slice(0, 4)}…${uid.slice(-4)}` : uid);
@@ -37,6 +38,9 @@ export function wireAccount(root: HTMLElement): void {
   void userName().then((n) => { if (!n) return; const a = root.querySelector("#acName"), v = root.querySelector("#acAv"); if (a) a.textContent = n; if (v) v.textContent = n[0]!.toUpperCase(); });
   root.querySelector("#acDel")?.addEventListener("click", () => {
     const area = root.querySelector<HTMLElement>("#acDelArea")!;
+    // the owner of a family space with others in it hands it over first (or it would go for everyone)
+    const sp = space();
+    if (sp?.role === "owner" && members().length > 1) { area.innerHTML = html`<p class="note err">You own your family space. Make another member its owner (Profile › Family), or remove them, before deleting your account.</p>`; return; }
     area.innerHTML = html`<div class="confirm"><p><b>This deletes all your data for good.</b> Type <b>DELETE</b> to confirm.</p>
       <input class="skin" id="acDelIn" autocomplete="off" aria-label="Type DELETE to confirm"><div class="btns"><button class="btn danger" type="button" id="acDelGo">Delete everything</button><button class="btn" type="button" id="acDelNo">Cancel</button></div><p class="note" id="acDelSt"></p></div>`;
     area.querySelector("#acDelNo")!.addEventListener("click", () => { area.innerHTML = ""; });
@@ -48,6 +52,8 @@ export function wireAccount(root: HTMLElement): void {
         // 1. the encrypted files and backups in their Google Drive (the app made them, so it can delete them)
         const files = (ctx.store?.own<FileRec>(FILES) ?? []).filter((f) => !f.deleted);   // your own only, never the family's
         if (files.length) { st.textContent = `Deleting ${files.length} files from your Google Drive…`; await connectDrive(); for (const f of files) await removeFile(f).catch(() => {}); }
+        // your copies of family files (the family keeps its own)
+        try { if (famDrive.ready() || files.length) { for (const id of await famDrive.list()) await famDrive.remove(id).catch(() => {}); } } catch { /* no Family folder */ }
         try { st.textContent = "Deleting your backups…"; for (const b of await driveBackups.list()) await driveBackups.remove(b.id).catch(() => {}); } catch { /* no backups folder */ }
         // 2. everything in the cloud, and the sign-in
         st.textContent = "Deleting your data in the cloud…";

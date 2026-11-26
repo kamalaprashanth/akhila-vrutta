@@ -1,11 +1,12 @@
 /**
  * Sharing one item with the family (Documents › an owner's page › Share with family): the item, its papers and
- * their files move into the family space (files resealed with the family key), and back again when it's turned
+ * their files move into the family space (files resealed with the family key: a copy in each member's Drive), and back again when it's turned
  * off. Properties, accounts and loans stay in your Money: only a name card (famOwners) and their papers move.
  * Only the person who shared an item can stop sharing it.
  */
 import { FILES, type Rec, type WriteOp } from "./store.ts";
-import { dropBytes, moveFile, type FileRec } from "./files.ts";
+import type { FileRec } from "./files.ts";
+import { dropOwn, intoFamily, outOfFamily } from "./famfiles.ts";
 import { famOwn, famWrite, myStore, myUid, sharerOf } from "./family.ts";
 
 type Owner = { c: string; id: string };
@@ -31,10 +32,10 @@ export async function shareItem(o: Owner, card: { name: string; kind: string; su
   const files = mine.own<FileRec>(FILES).filter((f) => !f.deleted && (same(f.owner, o) || (f.owner?.c === "docs" && ids.has(f.owner.id))));
   for (const [i, f] of files.entries()) {
     progress?.(`Moving ${i + 1} of ${files.length} files…`);
-    const next = await moveFile(f, true);
+    const next = await intoFamily(f);
     famWrite([{ c: FILES, id: f.id, r: { ...next, sharer: me } }]);
     mine.writeOwn([{ c: FILES, id: f.id, r: null }]);
-    await dropBytes(f);
+    await dropOwn(f);
   }
 }
 
@@ -49,10 +50,9 @@ export async function unshareItem(o: Owner, progress?: (m: string) => void): Pro
   const files = famOwn<FileRec>(FILES).filter((f) => same(f.owner, o) || (f.owner?.c === "docs" && ids.has(f.owner.id)));
   for (const [i, f] of files.entries()) {
     progress?.(`Moving ${i + 1} of ${files.length} files back to your Drive…`);
-    const next = await moveFile(f, false);
+    const next = await outOfFamily(f);
     mine.writeOwn([{ c: FILES, id: f.id, r: strip(next) }]);
     famWrite([{ c: FILES, id: f.id, r: null }]);
-    await dropBytes(f);
   }
   const ops: WriteOp[] = docs.map((d) => ({ c: "docs", id: d.id, r: strip(d) }));
   if (MOVES.has(o.c)) { const rec = famOwn(o.c).find((x) => x.id === o.id); if (rec) ops.push({ c: o.c, id: o.id, r: strip(rec) }); }

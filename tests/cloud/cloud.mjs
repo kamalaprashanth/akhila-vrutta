@@ -565,6 +565,15 @@ try {
   for (let i = 0; i < 30 && !blobs.length; i++) { await X.page.waitForTimeout(500); blobs = (await api(`${FS}/homes/${famHome}/famBlobs?pageSize=20`)).body.documents ?? []; }
   const fFiles = (await api(`${FS}/homes/${famHome}/files?pageSize=20`)).body.documents ?? [];
   check(blobs.length >= 1 && fFiles.length >= 1 && blobs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))) && !blobs.some((d) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes("PNG")), `…and adds a file to it: kept in the family space, encrypted (${blobs.length} piece, ${fFiles.length} record)`);
+  // a copy in each member's Drive: the member's own copy note is there; the owner's app copies it from the relay
+  // into their Drive, and once both have a copy the relay is emptied
+  let notes = [], relayLeft = 1;
+  for (let i = 0; i < 60 && (notes.length < 2 || relayLeft); i++) {
+    await A.page.waitForTimeout(1000);
+    notes = ((await api(`${FS}/homes/${famHome}/famCopies?pageSize=20`)).body.documents ?? []).filter((d) => !d.fields.del);
+    relayLeft = ((await api(`${FS}/homes/${famHome}/famBlobs?pageSize=50`)).body.documents ?? []).filter((d) => !d.fields.del).length;
+  }
+  check(notes.length >= 2 && relayLeft === 0, `…both members end up with their own Drive copy and the relay is emptied (${notes.length} copies, ${relayLeft} pieces left)`);
   await X.page.goto(`${BASE}/#/family`); await X.page.waitForSelector("#fmLeave", { timeout: 20000 });
   await X.page.click("#fmLeave"); await X.page.click("#mvLayer #cy");
   let left = false;

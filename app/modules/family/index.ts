@@ -6,7 +6,9 @@ import type { Module } from "../types.ts";
 import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
 import { formatINR } from "../../core/money.ts";
-import { cancelInvite, createFamily, familyOpen, setShared, shares, joinFamily, leaveFamily, makeInvite, members, myUid, onFamily, removeMember, setSharedTags, sharedTags, space, togetherThisMonth } from "../../core/family.ts";
+import { connectDrive, famDrive } from "../../core/files.ts";
+import { notInMyDrive, syncFamilyFiles } from "../../core/famfiles.ts";
+import { cancelInvite, createFamily, familyOpen, handOver, setShared, shares, joinFamily, leaveFamily, makeInvite, members, myUid, onFamily, removeMember, setSharedTags, sharedTags, space, togetherThisMonth } from "../../core/family.ts";
 import { askConfirm, closeModal, ensureLayer, openSheet, toast } from "../money/ui/kit.ts";
 
 const ICON = "M8 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM16 8a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM2 20c.8-3.5 11.2-3.5 12 0M13 20c.6-2.6 7.4-2.6 8 0";
@@ -33,8 +35,9 @@ function draw(root: HTMLElement): void {
     <p class="note">A shared space for your family. What you share is end-to-end encrypted with the family's own key; everything else stays private to each of you.</p>
     ${raw(familyOpen() ? "" : html`<p class="note err">The family space couldn't be opened just now. Check your connection.</p>`)}
     <h2>Members</h2>
-    <div class="list">${raw(ms.map((m) => html`<div class="row"><span class="acav" aria-hidden="true">${(m.name || "?")[0]!.toUpperCase()}</span><div class="main"><div class="t">${m.id === me ? `${m.name || "You"} (you)` : m.name || "Member"}</div></div>${raw(owner && m.id !== me ? html`<button type="button" class="btn sm ghost" data-rm="${m.id}">Remove</button>` : "")}</div>`).join("") || html`<div class="empty">Only you so far.</div>`)}</div>
+    <div class="list">${raw(ms.map((m) => html`<div class="row"><span class="acav" aria-hidden="true">${(m.name || "?")[0]!.toUpperCase()}</span><div class="main"><div class="t">${m.id === me ? `${m.name || "You"} (you)` : m.name || "Member"}</div></div>${raw(owner && m.id !== me ? html`<button type="button" class="btn sm ghost" data-own="${m.id}">Make owner</button><button type="button" class="btn sm ghost" data-rm="${m.id}">Remove</button>` : "")}</div>`).join("") || html`<div class="empty">Only you so far.</div>`)}</div>
     ${raw(owner ? html`<button type="button" class="btn pri fmwide" id="fmInvite" ${busy ? "disabled" : ""}>Invite someone</button>` : "")}
+    ${raw(notInMyDrive() ? html`<div class="list"><div class="row"><div class="main"><div class="t">${String(notInMyDrive())} family file${notInMyDrive() === 1 ? "" : "s"} not in your Drive yet</div><div class="s">${famDrive.ready() ? "Copying now; they open meanwhile. If it stays, your Google Drive may be full." : "They open meanwhile; tap to let this device save them to your Drive."}</div></div>${raw(famDrive.ready() ? "" : html`<button type="button" class="btn sm" id="fmDrive">Save to Drive</button>`)}</div></div>` : "")}
     <h2>Shared in Money</h2>
     <p class="note">Transactions with these tags are shared as soon as either of you saves them. Both of you can see and change them, and both count them as household spending; only the payer's balance changes.</p>
     <div class="fmtags" role="group" aria-label="Shared tags">${raw(allTags().map((g) => html`<button type="button" data-tag="${g}" class="${tg.includes(g) ? "on" : ""}" aria-pressed="${String(tg.includes(g))}">${g}</button>`).join(""))}</div>
@@ -46,7 +49,7 @@ function draw(root: HTMLElement): void {
       <label class="row dchk"><div class="main"><div class="t">Groceries and to-do lists</div><div class="s">Household › Lists, one list for both of you</div></div><input type="checkbox" id="fmLists" ${shares("lists") ? "checked" : ""} aria-label="Share the lists"></label>
     </div>
     <p class="note">Documents, appliances, vehicles and properties: share each one from its own page (in the next update).</p>
-    <div class="btns" style="margin-top:12px">${raw(owner ? "" : html`<button type="button" class="btn danger" id="fmLeave">Leave the family space</button>`)}</div>
+    <div class="btns" style="margin-top:12px">${raw(owner && ms.length > 1 ? "" : html`<button type="button" class="btn danger" id="fmLeave">Leave the family space</button>`)}</div>
   </div></div>`;
 }
 
@@ -77,13 +80,15 @@ function joinSheet(): void {
 
 function onTap(e: Event): void {
   if (document.body.dataset.mod !== "family" || busy) return;
-  const el = (e.target as HTMLElement).closest<HTMLElement>("#fmNew,#fmJoin,#fmInvite,#fmLeave,[data-tag],[data-rm]");
+  const el = (e.target as HTMLElement).closest<HTMLElement>("#fmNew,#fmJoin,#fmInvite,#fmLeave,#fmDrive,[data-tag],[data-rm],[data-own]");
   if (!el || !rootEl?.contains(el)) return;
   const run = (fn: () => Promise<void>, ok?: string): void => { busy = true; void fn().then(() => { if (ok) toast(ok); }, (x) => toast(err(x))).finally(() => { busy = false; if (rootEl) draw(rootEl); }); };
   if (el.id === "fmNew") return run(createFamily, "Family space started");
   if (el.id === "fmJoin") return joinSheet();
+  if (el.id === "fmDrive") return run(async () => { await connectDrive(); await syncFamilyFiles(); }, "Saving family files to your Drive");
+  if (el.dataset.own) return askConfirm("Make them the owner of the family space? You stay a member; they can invite and remove people.", "Make owner", () => run(() => handOver(el.dataset.own!), "Ownership handed over"));
   if (el.id === "fmInvite") { busy = true; void makeInvite().then(({ code, id }) => inviteSheet(code, id), (x) => toast(err(x))).finally(() => { busy = false; }); return; }
-  if (el.id === "fmLeave") return askConfirm("Leave the family space? Shared transactions stay with the family; you won't see them any more.", "Leave", () => run(leaveFamily, "You've left the family space"));
+  if (el.id === "fmLeave") return askConfirm("Leave the family space? What's shared stays with the family; you won't see it any more, and its files are deleted from your Drive.", "Leave", () => run(leaveFamily, "You've left the family space"));
   if (el.dataset.rm) return askConfirm("Remove them from the family space? They won't see new shared items; what they already saw can't be taken back.", "Remove", () => run(() => removeMember(el.dataset.rm!), "Removed"));
   if (el.dataset.tag) { const t = el.dataset.tag, cur = sharedTags(); return run(() => setSharedTags(cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]), cur.includes(t) ? `${t} is no longer shared` : `${t} is shared`); }
 }

@@ -72,8 +72,8 @@ service cloud.firestore {
         && request.resource.data.created == request.time;
       allow update: if owner(home)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'schema'])
-        // the owner stays the owner
-        && request.resource.data.members[request.auth.uid] == 'owner';
+        // there is always an owner (the owner may hand over to a member)
+        && request.resource.data.members.values().hasAny(['owner']);
       // Joining a family space: you add only yourself, as a member, with a live invite for this home.
       allow update: if allowed() && !(request.auth.uid in resource.data.members)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'invite'])
@@ -110,7 +110,7 @@ service cloud.firestore {
                       'snaps', 'goals', 'views', 'trades', 'props', 'propItems', 'settings', 'meta',
                       'hhHomes', 'hhJobs', 'hhDone', 'hhAppliances', 'hhItems', 'hhVehicles', 'hhFuel', 'files',
                       'habits', 'habitLog', 'habitPrefs', 'backupLog', 'docs', 'docOwners', 'docPrefs', 'famDays',
-                      'family', 'famMembers', 'famRules', 'famOwners', 'famBlobs',
+                      'family', 'famMembers', 'famRules', 'famOwners', 'famBlobs', 'famCopies', 'famNeeds',
                       'hlProfiles', 'hlReadings', 'hlLabs', 'hlMeds', 'hlMedLog', 'hlVisits', 'hlCheckups']
           && request.resource.data.keys().hasOnly(['iv', 'ct', 'z', 'at', 'by', 'del'])
           && sealed(request.resource.data)
