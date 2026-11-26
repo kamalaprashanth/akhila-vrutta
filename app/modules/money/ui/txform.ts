@@ -44,7 +44,7 @@ export function fundsOf(t: Tx): Fund[] {
   return [];
 }
 const fundLoanOpts = (d: MoneyData): [string, string][] => [["", "No, my own money"], ...d.live<Loan & { name?: string; lender?: string }>("loans").filter((l) => kindOf(l) !== "cardemi").map((l) => [l.id, loanLbl(l)] as [string, string])];
-export const fundsBox = (): string => `<div class="f" id="w_funds"><label>Money from loans</label><div class="fundList"></div><button type="button" class="btn sm fundAdd">+ Add a loan</button><div class="note fundOwn" style="margin:6px 0 0"></div><div class="hint">For borrowed money (from Dad, LP, Monisha…) that came into your account and paid for this.</div></div>`;
+export const fundsBox = (): string => `<div class="f" id="w_funds"><label>Money from loans</label><div class="fundList"></div><button type="button" class="btn sm fundAdd">+ Add a loan</button><div class="note fundOwn" style="margin:6px 0 0"></div><div class="hint">For borrowed money (from family, a friend or a lender) that came into your account and paid for this.</div></div>`;
 /** The "Money from loans" rows. Amounts typed in rupees; `get` returns paise. */
 export function fundsUI(d: MoneyData, host: HTMLElement, init: Fund[], totalFn: () => number) {
   const L = fundLoanOpts(d).slice(1);

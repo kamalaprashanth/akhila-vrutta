@@ -16,7 +16,7 @@ const server = createServer(async (req, res) => {
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
-const TABS = [["today", "Good"], ["money", "Money"], ["household", "Household"], ["health", "Health"], ["docs", "Documents"], ["settings", "About this build"]];
+const TABS = [["today", "Good"], ["money", "Money"], ["household", "Household"], ["health", "Health"], ["docs", "Documents"], ["settings", "Help and feedback"]];
 const browser = await chromium.launch();
 let failed = 0;
 for (const vp of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {

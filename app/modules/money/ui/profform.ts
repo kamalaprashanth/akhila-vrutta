@@ -35,7 +35,7 @@ export function profForm(k: string): void {
     openSheet("About me", `<div class="grid2">${field(["pdob", "Your date of birth", "date", { value: P.dob || "" }])}<div class="f"><label>Age</label><div class="pfv" style="padding:12px 0;font-weight:700" data-agefor="f_pdob">${P.dob ? ageL(P.dob) : "—"}</div></div></div>
     ${field(["pr", "Plan to retire at (age)", "number", { value: P.retire || "" }])}
     <div class="pfsec" style="padding-left:0">Family</div>
-    <div class="fam"><div class="r">${txt("sn", "Spouse", (P.spouse || {}).name, "", "e.g. Wife")}${field(["sd", "Date of birth", "date", { value: (P.spouse || {}).dob || "" }])}<span class="agep" data-agefor="f_sd">${ageL((P.spouse || {}).dob)}</span></div></div>
+    <div class="fam"><div class="r">${txt("sn", "Spouse or partner", (P.spouse || {}).name, "", "e.g. Partner")}${field(["sd", "Date of birth", "date", { value: (P.spouse || {}).dob || "" }])}<span class="agep" data-agefor="f_sd">${ageL((P.spouse || {}).dob)}</span></div></div>
     <div id="kidRows">${kids.map(kidRow).join("")}</div>${kids.length ? "" : '<p class="note" style="margin:4px 0 8px">No children added.</p>'}<button class="btn sm" type="button" id="addKid">+ Add child</button>
     <div class="f" style="margin-top:12px"><label>Others who depend on you</label><div class="chk"><label><input type="checkbox" id="dpf" ${dp.father ? "checked" : ""}> Father</label><label><input type="checkbox" id="dpm" ${dp.mother ? "checked" : ""}> Mother</label><label><input type="checkbox" id="dpo" ${dp.other ? "checked" : ""}> Other</label></div></div>
     ${txt("pd", "Anything else about dependents", P.deps, "", "e.g. parents depend on me partly")}
@@ -62,10 +62,10 @@ export function profForm(k: string): void {
     openSheet("Income & tax", `${field(["ps", "Take-home salary a month (₹)", "number", { value: P.salary || (sal ? Math.round(num(sal.amount) / 100) : ""), hint: sal ? `Your Salary regular item says ${money(num(sal.amount))}` : "" }])}
     ${txt("pb", "Bonus or other income", P.bonus, "", "e.g. ₹1.5 lakh, usually in April")}
     ${sel("pg", "Tax regime", ["Old", "New", "Not sure"], P.regime, "Decides whether 80C, 80D and home-loan interest help you")}
-    ${field(["pw", "Money from wife is recorded under", "select", { value: S_(P.wifeCat) || "__new", options: [["", "Not recorded separately"], ["__new", "+ Create a \"From wife\" income category"], ...cats.map((c) => [c.id, catName(d, c.id)] as [string, string])], hint: "Treated as occasional: the advisor never counts on it" }])}${save()}`,
+    ${field(["pw", "Money from your spouse or partner is recorded under", "select", { value: S_(P.wifeCat) || "__new", options: [["", "Not recorded separately"], ["__new", "+ Create a \"From spouse or partner\" income category"], ...cats.map((c) => [c.id, catName(d, c.id)] as [string, string])], hint: "Treated as occasional: the advisor never counts on it" }])}${save()}`,
     (s) => done(s, () => {
       let w = val("pw"); const more: { c: string; r: Rec }[] = [];
-      if (w === "__new") { const ex = d.live<Rec & { kind?: string; name?: string }>("categories").find((c) => c.kind === "income" && /^from wife$/i.test(String(c.name))); if (ex) w = ex.id; else { w = uid(); more.push({ c: "categories", r: { id: w, name: "From wife", kind: "income", updatedAt: Date.now() } as Rec }); } }
+      if (w === "__new") { const ex = d.live<Rec & { kind?: string; name?: string }>("categories").find((c) => c.kind === "income" && /^from (wife|spouse|spouse or partner)$/i.test(String(c.name))); if (ex) w = ex.id; else { w = uid(); more.push({ c: "categories", r: { id: w, name: "From spouse or partner", kind: "income", updatedAt: Date.now() } as Rec }); } }
       return [{ salary: val("ps"), bonus: val("pb"), regime: val("pg"), wifeCat: w || "" }, more];
     }));
     return;

@@ -80,7 +80,7 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.evaluate(() => { location.hash = "#/profile/again"; }); await settle();   // the app redraws on a save; this harness on a new address
   ok(/retire at 57/.test(await p.innerText(P)), "…and the profile line shows it");
   await p.evaluate(() => { location.hash = "#/money/more"; }); await settle();
-  for (const [id, re, what] of [["dlJson", /^KP_Money_Planner_data_.*\.json$/, "Download data"], ["xlsx", /^KP Money Planner .*\.xlsx$/, "Download Excel"]]) {
+  for (const [id, re, what] of [["dlJson", /^Akhila_Vrutta_Money_.*\.json$/, "Download data"], ["xlsx", /^Akhila Vrutta Money .*\.xlsx$/, "Download Excel"]]) {
     const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 8000 }).catch(() => null), p.click(`${V} #${id}`)]);
     if (!dl) { ok(false, `${what}: no file`); continue; }
     const buf = await readFile(await dl.path());

@@ -58,6 +58,6 @@ const webCheck = process.env.APP_CHECK_SITE_KEY ? { appCheck: { siteKey: process
 const mobile = process.env.AV_MOBILE === "1" ? { sdkBase: "/firebase", googleClientId: process.env.GOOGLE_WEB_CLIENT_ID || "", ...androidCheck }
   // AV_SELF_SDK=1: the site carries the SDK too (scripts/firebase-sdk.mjs copies it in), so no outside scripts load
   : process.env.AV_SELF_SDK === "1" ? { sdkBase: "/firebase", ...webCheck } : { ...webCheck };
-const cfg = { firebase, build: sha.slice(0, 7) || "local", ...mobile, ...(emulators ? { emulators } : {}) };
+const cfg = { firebase, build: sha.slice(0, 7) || "local", built: new Date().toISOString().slice(0, 10), ...mobile, ...(emulators ? { emulators } : {}) };
 writeFileSync(`${out}/config.js`, `window.AV_CONFIG=${JSON.stringify(cfg)};\n`);
 console.log(firebase ? `config: project ${firebase.projectId}` : "config: no Firebase (local build)");

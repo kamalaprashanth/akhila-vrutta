@@ -76,10 +76,10 @@ export async function saveFile(filename: string, bytes: BlobPart, mime: string):
   const url = URL.createObjectURL(blob), a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); toast("Downloaded " + filename);
 }
 export function exportExcel(): void {
-  try { const bytes = XL.book(excelSheets(E().data())); void saveFile(`KP Money Planner ${E().data().today}.xlsx`, bytes as BlobPart, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); }
+  try { const bytes = XL.book(excelSheets(E().data())); void saveFile(`Akhila Vrutta Money ${E().data().today}.xlsx`, bytes as BlobPart, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); }
   catch (e) { toast("Couldn't build the Excel file (" + ((e as Error).message || "error") + ")."); }
 }
-export const dlJson = (): void => { const d = E().data(); void saveFile(`KP_Money_Planner_data_${d.today}.json`, JSON.stringify({ app: "KP Money Planner", exported: new Date().toISOString(), data: plannerData(d) }), "application/json"); };
+export const dlJson = (): void => { const d = E().data(); void saveFile(`Akhila_Vrutta_Money_${d.today}.json`, JSON.stringify({ app: "KP Money Planner", exported: new Date().toISOString(), data: plannerData(d) }), "application/json"); };
 export function copyJson(): void {
   const j = JSON.stringify(plannerData(E().data()), null, 1);
   (navigator.clipboard ? navigator.clipboard.writeText(j) : Promise.reject()).then(() => toast("Copied. Paste it into a note to keep a backup."), () => openSheet("Your data", `<div class="f"><label for="f_dump">Select all and copy</label><textarea id="f_dump" readonly>${esc(j)}</textarea></div><button class="btn" id="cx" type="button">Close</button>`, (s) => { s.querySelector<HTMLElement>("#cx")!.onclick = closeModal; }));
@@ -134,9 +134,9 @@ export function restoreSheet(): void {
 /* ---------- reminders ---------- */
 export function icsText(d: MoneyData, stamp = new Date()): string {
   const Rm = reminderItems(d), st = stamp.toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
-  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//KP Money Planner//EN", ...Rm.flatMap((x, i) => ["BEGIN:VEVENT", `UID:kpmp-${i}-${x.d}@kp`, `DTSTAMP:${st}`, `DTSTART;VALUE=DATE:${x.d.replace(/-/g, "")}`, `SUMMARY:${x.t.replace(/[,;]/g, " ")}`, `DESCRIPTION:${x.s.replace(/[,;]/g, " ")}`, `RRULE:${x.rr}`, "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Reminder", "TRIGGER:-P1D", "END:VALARM", "END:VEVENT"]), "END:VCALENDAR"].join("\r\n");
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Akhila Vrutta//EN", ...Rm.flatMap((x, i) => ["BEGIN:VEVENT", `UID:kpmp-${i}-${x.d}@kp`, `DTSTAMP:${st}`, `DTSTART;VALUE=DATE:${x.d.replace(/-/g, "")}`, `SUMMARY:${x.t.replace(/[,;]/g, " ")}`, `DESCRIPTION:${x.s.replace(/[,;]/g, " ")}`, `RRULE:${x.rr}`, "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Reminder", "TRIGGER:-P1D", "END:VALARM", "END:VEVENT"]), "END:VCALENDAR"].join("\r\n");
 }
-export const icsAll = (): void => { void saveFile("KP bills.ics", icsText(E().data()), "text/calendar"); };
+export const icsAll = (): void => { void saveFile("Akhila Vrutta bills.ics", icsText(E().data()), "text/calendar"); };
 export async function notifyToggle(): Promise<void> {
   if (prefGet("notify", false)) { prefSet("notify", false); toast("Notifications off on this device"); E().refresh(); return; }
   if (!("Notification" in window)) { toast("This browser can't show notifications."); return; }

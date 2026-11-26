@@ -143,6 +143,12 @@ const report = await f.evaluate(() => {
   // Moved on purpose (26 Nov 2026): the profile is its own page (Profile, in the side menu), so the links to it changed
   const moved = (h) => typeof h !== "string" ? h : h.replaceAll('<a href="#" data-go="more">Open Settings › My profile</a>', '<a href="#/profile">Open your Profile</a>')
     .replaceAll('<a href="#" data-go="more">', '<a href="#/profile">').replaceAll("Settings › My profile › About me", "Profile › About you").replaceAll("(Settings › My profile)", "(Profile)").replaceAll("Retirement age comes from Settings › My profile (now", "Retirement age comes from your Profile (now")
+    // ready for the public (26 Nov 2026): no personal names or assumptions in what everyone sees
+    .replaceAll("KP's wife", "the user's spouse or partner").replaceAll("KP's", "the user's").replaceAll("KP pays", "the user pays").replaceAll("by KP", "by the user")
+    .replaceAll("the funds KP already holds", "the funds the user already holds").replaceAll("Money from the wife's category is occasional", "Money in the spouse or partner's category is occasional")
+    .replaceAll("Bangalore CBSE/ICSE", "CBSE/ICSE in a big city").replaceAll("Private engineering in Bangalore", "Private engineering in a big city")
+    .replaceAll("e.g. Wife", "e.g. Partner").replaceAll('<label for="f_sn">Spouse</label>', '<label for="f_sn">Spouse or partner</label>').replaceAll("Money from wife is recorded under", "Money from your spouse or partner is recorded under").replaceAll("&quot;From wife&quot; income category", "&quot;From spouse or partner&quot; income category").replaceAll('"From wife" income category', '"From spouse or partner" income category')
+    .replaceAll("For borrowed money (from Dad, LP, Monisha…) that came into your account and paid for this.", "For borrowed money (from family, a friend or a lender) that came into your account and paid for this.")
     .replace(/\n  <h2>My profile for the advisor[\s\S]*?A reminder to review it shows every April\.<\/p>/, "");
   // Sheets: the new ones against the planner's, as drawn (markup, values, pickers, balances).
   const sheetHtml = (sel) => document.querySelector(sel)?.innerHTML ?? "(none)";
@@ -391,6 +397,8 @@ const report = await f.evaluate(() => {
     N.kit.closeModal();
     if (fix === "crash") { if (!newOps.length) out.push(`form ${label}: the new form saved nothing either`); else fixedSaves.push(label); return; }
     if (fix) { fix(oldOps); fixedSaves.push(label); }
+    // ready for the public: the income category the profile makes is "From spouse or partner" (was "From wife")
+    for (const o of oldOps) if (o.c === "categories" && o.r?.name === "From wife") o.r = { ...o.r, name: "From spouse or partner" };
     const A = norm(oldOps, ids, dx), B = norm(newOps, ids, dx);
     if (!A.length && !/unchanged|no name|already used|nothing/.test(label)) out.push(`form ${label}: nothing saved by either (the test didn't reach Save)`);
     if (JSON.stringify(A) !== JSON.stringify(B)) out.push(`form ${label}: saves differ\n    old ${A.join("\n        ").slice(0, 900)}\n    new ${B.join("\n        ").slice(0, 900)}`);
@@ -623,7 +631,7 @@ const report = await f.evaluate(() => {
       n++; const sk = (o) => JSON.stringify(Object.keys(o).sort().reduce((x, c) => ((x[c] = Array.isArray(o[c]) ? o[c].map(sortK).sort((p, q) => String(p.id).localeCompare(String(q.id))) : o[c]), x), {}));
       if (sk(S.data) !== sk(N.backup.plannerData(dx))) out.push("Download data: the file differs from the planner's data");
       let got = null; const keepSave = window.saveFile; window.saveFile = (name, bytes) => { got = String(bytes); }; icsAll(); window.saveFile = keepSave;
-      n++; const strip = (t) => String(t).replace(/DTSTAMP:[^\r\n]*/g, ""); if (strip(got) !== strip(N.backup.icsText(dx))) out.push(`calendar file differs\n    old ${strip(got).slice(0, 400)}\n    new ${strip(N.backup.icsText(dx)).slice(0, 400)}`);
+      n++; const strip = (t) => String(t).replace(/DTSTAMP:[^\r\n]*/g, "").replace("PRODID:-//KP Money Planner//EN", "PRODID:-//Akhila Vrutta//EN"); if (strip(got) !== strip(N.backup.icsText(dx))) out.push(`calendar file differs\n    old ${strip(got).slice(0, 400)}\n    new ${strip(N.backup.icsText(dx)).slice(0, 400)}`);
       // a backup: some records newer, some older, one new, one missing
       const B0 = JSON.parse(JSON.stringify(S.data)), T0 = Date.now() + 60000;
       (B0.txns || []).slice(0, 3).forEach((t, i) => { t.note = "from backup " + i; t.updatedAt = T0; }); (B0.txns || []).slice(3, 5).forEach((t) => { t.note = "older"; t.updatedAt = 1; });

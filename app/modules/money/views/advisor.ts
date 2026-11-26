@@ -43,11 +43,11 @@ const scrub = (s: unknown): string => String(s || "").replace(/\d{6,}/g, "…").
 export function advContext(d: MoneyData, nextLbl: (r: Recurring) => string = (r) => recNextLbl(d, r)): string {
   const P = prof(d) as Profile & Record<string, unknown>, now = ymOf(d.today), td = d.today, r0 = (p: unknown): number => Math.round(num(p) / 100), L: string[] = [], wc = P.wifeCat;
   const from = addM(now, -23) + "-01";
-  L.push(`TODAY ${td}. All amounts in ₹. Only KP's own finances are planned. ${wc ? `Income in category "${catName(d, wc)}" is money KP's wife sends occasionally: treat it as a bonus, never rely on it.` : ""}`);
+  L.push(`TODAY ${td}. All amounts in ₹. Only the user's own finances are planned. ${wc ? `Income in category "${catName(d, wc)}" is money the user's spouse or partner sends occasionally: treat it as a bonus, never rely on it.` : ""}`);
   const g = (k: string, l: string): string | null => { const v = P[k]; if (v == null || v === "" || (Array.isArray(v) && !v.length)) return null; return `${l}: ${/^(termCover|termPrem|healthSum|healthPrem|topup|empHealth|accident|groupTerm)$/.test(k) && +(v as string) > 0 ? money(Math.round(+(v as string) * 100)) : Array.isArray(v) ? v.join(", ") : v}`; };
   const fam = family(d);
   L.push("Family: " + fam.map((m) => `${m.n}${m.age != null ? ` (${m.age})` : ""}`).join(", ") + "; health cover includes: " + ((P.covered ?? []).map((k) => (fam.find((m) => m.k === k) || ({} as { n?: string })).n).filter(Boolean).join(", ") || "not said"));
-  L.push("", "PROFILE (as filled in by KP; blank = unknown, ask if it matters):", ...[g("age", "Age"), g("dob", "Date of birth"), g("retire", "Plans to retire at"), g("deps", "Dependents"), g("job", "Job stability"), g("risk", "Risk appetite"), g("salary", "Take-home salary per month"), g("bonus", "Bonus"), g("regime", "Tax regime"),
+  L.push("", "PROFILE (as filled in by the user; blank = unknown, ask if it matters):", ...[g("age", "Age"), g("dob", "Date of birth"), g("retire", "Plans to retire at"), g("deps", "Dependents"), g("job", "Job stability"), g("risk", "Risk appetite"), g("salary", "Take-home salary per month"), g("bonus", "Bonus"), g("regime", "Tax regime"),
     g("termCover", "Term cover"), g("termUntil", "Term cover until age"), g("termPrem", "Term premium"), g("healthSum", "Health sum insured"), g("healthType", "Health cover type"), g("healthPrem", "Health premium a year"), g("topup", "Health top-up"), g("empHealth", "Employer health cover"), g("parents", "Parents have health cover"), g("accident", "Personal accident cover"), g("groupTerm", "Employer group term"),
     g("assets", "Assets outside the app"), g("nominees", "Nominees updated"), g("will", "Has a will"), g("estateNote", "Estate note")].filter((x): x is string => !!x));
   { const GL = d.live<Rec & { pri?: number; name?: string; kind?: string }>("goals").slice().sort((a, b) => (num(a.pri) || 99) - (num(b.pri) || 99)); if (GL.length) { L.push("GOALS (priority order, with the app's own working):"); GL.forEach((x, i) => { const r = smartGoal(d, x); L.push(`${i + 1}. ${x.name} [${GOAL_KINDS[x.kind || "custom"]}]: ${r.sub}; ${r.rows.map(([a, b]) => a + " " + b).join(", ")}; ${r.msg}`); }); } }
@@ -79,8 +79,8 @@ export function advContext(d: MoneyData, nextLbl: (r: Recurring) => string = (r)
     const c = propCalc(d, p) as unknown as Record<string, unknown>, nums = Object.entries(c).filter(([, v]) => typeof v === "number" && Math.abs(v) > 50).slice(0, 14).map(([k, v]) => `${k} ${r0(v)}`).join(", ");
     L.push("", `PROPERTY ${p.name} (${p.status || ""}${p.value ? `, agreement value ${r0(p.value)}` : ""}): ${nums}`);
     const due = (p.plan ?? []).filter((r) => !r.done);
-    if (due.length) L.push("Still to pay: " + due.map((r) => `${r.name} ${r0(r.amt)}${r.when ? ` (${r.when})` : ""}${r.who && r.who !== "split" ? ` [${r.who === "bank" ? "bank pays" : "KP pays"}]` : ""}`).join("; "));
-    if (p.fund) L.push(`Funding plan: bank lends ${p.fund.ltv}%${p.fund.by ? `, KP's share ready by ${p.fund.by}` : ""}`);
+    if (due.length) L.push("Still to pay: " + due.map((r) => `${r.name} ${r0(r.amt)}${r.when ? ` (${r.when})` : ""}${r.who && r.who !== "split" ? ` [${r.who === "bank" ? "bank pays" : "the user pays"}]` : ""}`).join("; "));
+    if (p.fund) L.push(`Funding plan: bank lends ${p.fund.ltv}%${p.fund.by ? `, the user's share ready by ${p.fund.by}` : ""}`);
   }
   L.push("", "REGULAR ITEMS (name: amount type freq, next due):");
   for (const r of d.live<Recurring & { auto?: boolean }>("recurring").filter((r) => !r.end || r.end >= now)) L.push(`${r.name}: ${r0(r.amount)} ${r.type}${r.budget ? " budget" : ""} ${r.freq}${r.auto ? " auto" : ""}${(FREQ[String(r.freq)] || 1) >= 2 ? `, next ${nextLbl(r)}` : ""}`);
@@ -94,9 +94,9 @@ export function advContext(d: MoneyData, nextLbl: (r: Recurring) => string = (r)
   }
   return L.join("\n");
 }
-export const ADV_RULES = (ctx: string): string => `You are KP's personal financial planner in India. Think like a careful, independent (fee-only) certified planner and check every angle that matters for the question:
+export const ADV_RULES = (ctx: string): string => `You are the user's personal financial planner in India. Think like a careful, independent (fee-only) certified planner and check every angle that matters for the question:
 cash flow and readiness for upcoming payments; emergency fund; debt (interest rates, prepay vs invest, family loans that are interest-free); insurance adequacy (term cover vs income, dependents and loans; health cover incl. super top-up and parents; accident); investments (asset mix vs risk appetite and goals, concentration, leveraged ETFs, costs, overlap; US assets need Schedule FA in the ITR and LRS/TCS rules); tax (old vs new regime, 80C, 80D, 80CCD(1B), 24(b), using the ₹1.25 lakh yearly LTCG exemption, capital gains); property commitments; goals (retirement, child education, closing loans); estate (nominees, will).
-Rules: use ONLY the data below and say when you assume something (default assumptions unless the profile says otherwise: inflation 6%, equity 11%, debt 7%). If something important is missing, say exactly what and ask at most 2 questions. Show the numbers behind each point. Money from the wife's category is occasional: never rely on it. Don't push new products for their own sake; you may compare fund types and the funds KP already holds. Use Indian formats (₹, lakh, crore). Never mention that you are an AI or add disclaimers.
+Rules: use ONLY the data below and say when you assume something (default assumptions unless the profile says otherwise: inflation 6%, equity 11%, debt 7%). If something important is missing, say exactly what and ask at most 2 questions. Show the numbers behind each point. Money in the spouse or partner's category is occasional: never rely on it. Don't push new products for their own sake; you may compare fund types and the funds the user already holds. Use Indian formats (₹, lakh, crore). Never mention that you are an AI or add disclaimers.
 
 DATA:
 ${ctx}`;

@@ -1,6 +1,9 @@
 import { accountCard, adminCard, wireAccount, wireAdmin } from "./account.ts";
 import { privacyCard } from "./privacy.ts";
 import type { Module } from "./types.ts";
+import { isOwner } from "../core/ai.ts";
+import { dlJson, exportExcel } from "./money/ui/dataio.ts";
+import { startMoney } from "./money/index.ts";
 import { html, raw, toast } from "../core/dom.ts";
 import { config, signOutNow } from "../core/firebase.ts";
 import { ctx } from "../core/app.ts";
@@ -23,6 +26,9 @@ const LABELS: Record<string, string> = {
 const n = (x: number) => x.toLocaleString("en-IN");
 const when = (iso: unknown) => typeof iso === "string" ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
 
+/** "26 Nov 2026 · f238961": the day it was built and its code (the same on the website and the phone). */
+const version = (cfg: { build: string; built?: string }): string => `${cfg.built ? new Date(`${cfg.built}T00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) + " · " : ""}${cfg.build}`;
+
 function dataCard(): string {
   const s = ctx.store;
   if (!s) return "";
@@ -30,10 +36,10 @@ function dataCard(): string {
   const main = ["txns", "accounts", "holdings", "categories"].map((c) => `${n(s.count(c))} ${LABELS[c]}`).join(" · ");
   return html`<section class="card" id="dataCard">
     <h2>Your data</h2>
-    ${raw(meta ? html`<p>${main}</p><p class="note">Imported ${when(meta.imported)}${meta.exported ? `, from an export made ${when(meta.exported)}` : ""}.</p>` : html`<p>Nothing here yet. Import your KP Money Planner data to start.</p>`)}
+    ${raw(meta ? html`<p>${main}</p>${raw(isOwner() ? html`<p class="note">${meta.source === "Fresh start" ? "Set up" : "Imported"} ${when(meta.imported)}${meta.exported ? `, from an export made ${when(meta.exported)}` : ""}.</p>` : "")}` : html`<p>Nothing in Money yet. Open Money to set it up.</p>`)}
     <p class="note">${s.pending ? `Saving ${n(s.pending)} change${s.pending === 1 ? "" : "s"}…` : "Everything is saved, encrypted, in your cloud."}</p>
-    <div class="btns"><label class="btn ${meta ? "" : "pri"}" for="impFile">Import from KP Money Planner</label>
-    <input id="impFile" type="file" accept=".json,application/json" hidden></div>
+    <div class="btns">${raw(meta ? html`<button type="button" class="btn" id="dlMine">Download my data</button><button type="button" class="btn" id="dlMineX">Excel</button>` : "")}${raw(isOwner() ? html`<label class="btn ${meta ? "" : "pri"}" for="impFile">Import from KP Money Planner</label>
+    <input id="impFile" type="file" accept=".json,application/json" hidden>` : "")}</div>
     <div id="impArea"></div>
   </section>`;
 }
@@ -177,14 +183,17 @@ export const settings: Module = {
   render(root) {
     const cfg = config();
     root.innerHTML = html`${raw(privacyCard())}${raw(accountCard())}${raw(adminCard())}${raw(backupCard())}${raw(dataCard())}${raw(securityCard())}${raw(skCard())}
-      <section class="card">
-        <h2>About this build</h2>
+      <section class="card" id="aboutCard">
+        <h2>About</h2>
         <dl class="kv">
-          <dt>Firebase project</dt><dd>${cfg.firebase?.projectId ?? "not configured (local or test run)"}</dd>
-          ${raw(ctx.session ? html`<dt>Your user ID</dt><dd><code>${ctx.session.uid}</code></dd>` : "")}
-          <dt>Build</dt><dd>${cfg.build}</dd>
+          <dt>Version</dt><dd>${version(cfg)}</dd>
+          <dt>Privacy and terms</dt><dd><a href="/privacy" target="_blank" rel="noopener">Privacy policy</a> · <a href="/terms" target="_blank" rel="noopener">Terms</a></dd>
+          <dt>Help and feedback</dt><dd>kamalaprashanth2@gmail.com</dd>
         </dl>
       </section>`;
+    // Download my data: the Money data as JSON, or as Excel (the planner's own exports)
+    root.querySelector("#dlMine")?.addEventListener("click", () => { startMoney(); dlJson(); });
+    root.querySelector("#dlMineX")?.addEventListener("click", () => { startMoney(); exportExcel(); });
     void wireImport(root);
     wireBackup(root);
     wireSk(root);

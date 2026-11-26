@@ -23,6 +23,8 @@ export interface AppConfig {
   firebase: FirebaseWebConfig | null;
   /** Commit the build came from, shown in Settings. */
   build: string;
+  /** The day this build was made (YYYY-MM-DD), shown as the version. */
+  built?: string;
   /** The Android app: where its own copy of the Firebase SDK is, and the web OAuth client for Google sign-in. */
   sdkBase?: string;
   googleClientId?: string;

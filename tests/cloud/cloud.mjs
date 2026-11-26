@@ -451,7 +451,16 @@ try {
   await X.page.waitForSelector(".tdy", { timeout: 30000 });
   ok("another Google account sets up its own home and opens Today");
   await shot(X.page, "second-account");
-  const intr = await idToken("intruder");
+  // a new user's Money: set up with the main account and the starting categories (no planner import)
+  await X.page.goto(`${BASE}/#/money`);
+  await X.page.waitForSelector("#frStart", { timeout: 30000 });
+  check(!(await X.page.$("text=Import from KP Money Planner")), "a new user isn't offered the KP Money Planner import");
+  await X.page.click("#frStart");
+  await X.page.fill("#frName", "Test Savings"); await X.page.fill("#frBal", "45,000.50");
+  await X.page.click("#frDone");
+  await X.page.waitForSelector("#moneyView", { timeout: 30000 });
+  check(/45,000\.50|45,001/.test(await X.page.innerText("body")), "…Money opens on the new account's balance (₹45,000.50)");
+
   const xUser = await api(`${FS}/users/intruder-uid`, {}, intr), xHome = xUser.body?.fields?.home?.stringValue;
   check(xUser.status === 200 && !!xHome && xHome !== home, `…its own home, not the owner's (${xHome})`);
   check((await api(`${FS}/homes/${xHome}`, {}, intr)).status === 200 && (await api(`${FS}/homes/${xHome}`, {}, owner)).status === 403, "…which it can read, and the owner can't");
