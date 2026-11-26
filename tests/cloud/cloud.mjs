@@ -451,6 +451,10 @@ try {
   check(a1.status === 403 || a1.body?.error?.status === "PERMISSION_DENIED", `functions: another account can't ask Claude (HTTP ${a1.status} ${a1.body?.error?.status ?? ""})`);
   const a2 = await fnAs("refreshPricesNow", intr, {});
   check(a2.status === 403 || a2.body?.error?.status === "PERMISSION_DENIED", `functions: another account can't refresh prices (HTTP ${a2.status} ${a2.body?.error?.status ?? ""})`);
+  // Claude is on for the owner only (a public release: off unless switched on by hand in aiAccess/{uid})
+  const s1 = await fnAs("aiStatus", owner, {}), s2 = await fnAs("aiStatus", intr, {});
+  check(s1.body?.result?.on === true && s2.body?.result?.on === false, `functions: Claude is on for the owner and off for another account (${JSON.stringify(s1.body?.result)} / ${JSON.stringify(s2.body?.result)})`);
+  await denied("an account can't switch Claude on for itself", api(`${FS}/aiAccess/intruder-uid`, { method: "PATCH", body: JSON.stringify({ fields: { on: { booleanValue: true } } }) }, intr));
   const ownRead = await api(`${FS}/homes/${home}`, {}, owner);
   check(ownRead.status === 200, `rules: the owner can read their home (HTTP ${ownRead.status})`);
 

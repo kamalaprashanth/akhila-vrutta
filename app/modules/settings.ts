@@ -1,3 +1,4 @@
+import { privacyCard } from "./privacy.ts";
 import type { Module } from "./types.ts";
 import { html, raw, toast } from "../core/dom.ts";
 import { config, signOutNow } from "../core/firebase.ts";
@@ -174,7 +175,7 @@ export const settings: Module = {
   icon: ICON,
   render(root) {
     const cfg = config();
-    root.innerHTML = html`${raw(backupCard())}${raw(dataCard())}${raw(securityCard())}${raw(skCard())}
+    root.innerHTML = html`${raw(privacyCard())}${raw(backupCard())}${raw(dataCard())}${raw(securityCard())}${raw(skCard())}
       <section class="card">
         <h2>About this build</h2>
         <dl class="kv">

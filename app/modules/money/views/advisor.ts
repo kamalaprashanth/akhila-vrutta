@@ -3,6 +3,7 @@
  * (through Akhila Vrutta's askClaude function), and the monthly check-up. What Claude sees is built here,
  * from the stored data, in rupees (the same text the planner sent).
  */
+import { aiOn } from "../../../core/ai.ts";
 import { esc } from "../../../core/dom.ts";
 import { addM, dLabel, mLabel, ymOf } from "../calc/dates.ts";
 import { num, type Loan, type MoneyData, type Paise, type Rec } from "../calc/data.ts";
@@ -202,7 +203,7 @@ export function advAuto(h: PageHost): void {
   window.setTimeout(() => { const d = h.data(); void advRunCheck(d, () => E().refresh(), () => advContext(h.data()), false, () => (h.state() as unknown as { view: string }).view === "advisor"); }, 2500);
 }
 export const advisorPage: Page = {
-  html(d, h) { return advisorHtml(d, h.state() as unknown as AdvState, !!ask); },
+  html(d, h) { return aiOn() ? advisorHtml(d, h.state() as unknown as AdvState, !!ask) : '<div class="card" style="margin-top:16px"><h2 style="margin-top:0">Advisor</h2><p style="margin:0">The advisor isn\'t switched on for this account.</p></div>'; },
   act(el, h, redraw) {
     const S = h.state() as unknown as AdvState, x = el.dataset, d = h.data(), ctxText = (): string => advContext(d);
     if (x.advq !== undefined) { const [l, q] = ADV_Q[+x.advq]!; S.advChat = []; void advAsk(S, redraw, ctxText, q, l); return; }

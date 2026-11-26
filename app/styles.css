@@ -220,3 +220,17 @@ body[data-mod="money"] main{padding:0}
 .mvsw a{height:38px;padding:0 16px;border-radius:19px;display:flex;align-items:center;font:700 14px var(--sans);color:var(--muted);text-decoration:none;border:1px solid var(--line);background:var(--surface)}
 .mvsw a.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 #moneyView .cols>div:first-child>.hero:first-child{margin-top:14px}
+
+/* Settings › Privacy & security */
+.pv h2{font-size:21px!important}
+.pv h3{margin:16px 0 4px;font:700 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pvbadges{display:flex;gap:6px;flex-wrap:wrap}
+.pvbadges span{font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:8px;padding:5px 9px}
+.pvrow{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+.pvrow:last-of-type{border-bottom:0}
+.pvrow>span:last-child{display:grid;gap:2px}
+.pvrow b{font-size:14px}
+.pvrow span span{font-size:13px;color:var(--muted)}
+.pvic{width:32px;height:32px;border-radius:10px;background:var(--accent-soft);display:grid;place-items:center;flex:none}
+.pvic svg{width:17px;height:17px;fill:none;stroke:var(--accent);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.pvp{font-size:13.5px;color:var(--muted)}

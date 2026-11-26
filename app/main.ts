@@ -1,4 +1,5 @@
 /** The shell: unlock, then header, tab bar and routing between modules. */
+import { refreshAi } from "./core/ai.ts";
 import { MODULES } from "./modules/pages.ts";
 import type { Module } from "./modules/types.ts";
 import { todayCount } from "./modules/today/index.ts";
@@ -124,6 +125,8 @@ async function boot(): Promise<void> {
   });
   render();
   closeLock();
+  // Claude (Advisor, Read with Claude): on for this account? Redraw if that changed.
+  void refreshAi().then((changed) => { if (changed) render(); });
   // Phone reminders from Money, Household, Habits, Documents and Health, whichever tab is open
   startMoney();
   startHousehold();

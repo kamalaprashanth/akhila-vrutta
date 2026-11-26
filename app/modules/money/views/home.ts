@@ -3,6 +3,7 @@
  * month-end, what needs confirming, this month so far, insights, and recent entries. As in KP Money
  * Planner, built from the stored data (paise).
  */
+import { aiOn } from "../../../core/ai.ts";
 import { esc } from "../../../core/dom.ts";
 import { addDays, addM, dayDiff, dayIn, dLabel, lastDay, mLabel, MN, mShort, ymOf, type Day, type YM } from "../calc/dates.ts";
 import { num, type Loan, type MoneyData, type Paise, type Rec } from "../calc/data.ts";
@@ -231,7 +232,7 @@ export function homeParts(d: MoneyData, st: HomeState, h: PageHost): Record<"fir
   void expenseTree; void CC; void short;
   return {
     first: first ? `<div class="banner" style="margin-top:6px"><b>Start here.</b> Add your bank accounts and cards in Accounts › Banks &amp; cards, your salary, SIPs and bills in Plan › Regular, loans in Accounts › Loans, then record spending with Add.</div>` : "",
-    adv: advButton(d), pay: payTueCard(d, st), short: shortAlert(d), invest: investCard(d), renew: renewalsSoon(d), hero, needs, ins: insightCards(d, st, h), recent: recentH,
+    adv: aiOn() ? advButton(d) : "", pay: payTueCard(d, st), short: shortAlert(d), invest: investCard(d), renew: renewalsSoon(d), hero, needs, ins: insightCards(d, st, h), recent: recentH,
   };
 }
 /** The Overview (Calm): the balance first, then what to pay, move and put aside this week, what needs you, this

@@ -4,6 +4,7 @@
  * or card is open) lives here too. Writes go straight to the store, then the automatic entries are made
  * and the page is drawn again; other devices' changes redraw it as well.
  */
+import { aiOn } from "../../core/ai.ts";
 import type { Module } from "../types.ts";
 import { html, raw } from "../../core/dom.ts";
 import { ctx } from "../../core/app.ts";
@@ -216,7 +217,7 @@ export const money: Module = {
   label: "Money",
   icon: ICON,
   subs: () => SUBTABS.map(sub),
-  more: () => ([["advisor", "Advisor"], ["more", "Money settings"]] as [string, string][]).map(sub),
+  more: () => ([...(aiOn() ? [["advisor", "Advisor"]] : []), ["more", "Money settings"]] as [string, string][]).map(sub),
   sub: () => tabOf(S.view),
   render(root) {
     const s = ctx.store;

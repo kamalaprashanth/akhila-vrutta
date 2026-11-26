@@ -52,3 +52,10 @@ What protects the data, and what was decided (25 Nov 2026, with the owner).
 ## Next
 - A professional penetration test once the app holds documents.
 - Parked by the owner: an Authenticator (TOTP) or passkey check before a new device may read the data.
+
+## Claude (Advisor, Read with Claude)
+
+The only places where data leaves the device readable, and only when the person asks. Switched on for the
+owner (OWNER_UID) and for accounts given `aiAccess/{uid}` = `{ on: true }` by hand in the Firebase console;
+the app can't write that collection. `aiStatus` tells the app; it shows the Advisor and "Read with Claude"
+only then, and askClaude refuses everyone else. Settings › Privacy & security mentions Claude only when it's on.

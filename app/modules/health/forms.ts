@@ -1,4 +1,5 @@
 /** Health's sheets: readings, lab reports (values read by Claude or typed), medicines, check-ups, visits. */
+import { aiOn } from "../../core/ai.ts";
 import { html, raw } from "../../core/dom.ts";
 import type { Rec } from "../../core/store.ts";
 import { filesOf, readFile, removeFile, type FileRec } from "../../core/files.ts";
@@ -88,8 +89,8 @@ export function labForm(person: string, id?: string, again?: LabDraft): void {
   openSheet(isNew ? "Add lab report" : `Lab report · ${dayLabel(lab.date, t)}`, html`<div class="grid2">${raw(field(["lperson", "Whose", "select", { value: lab.person, options: personOpts() }]))}${raw(field(["ldate", "Date", "date", { value: lab.date }]))}</div>
     ${raw(field(["llab", "Lab (optional)", "text", { value: lab.lab, ph: "e.g. the diagnostics centre" }]))}
     <div class="f"><label>Report (PDF or photos) <span class="hhenc">encrypted, in your Google Drive</span></label><div class="hhfiles" id="lFiles"></div></div>
-    <div class="btns"><button class="btn" type="button" id="lread">✨ Read values with Claude</button><button class="btn" type="button" id="ltype">✎ Type values</button></div>
-    <p class="note">Read with Claude: the report's text is sent to Claude (through the app's own server) to pick out the values. It isn't kept or used for training. Check every value before saving.</p>
+    ${raw(aiOn() ? html`<div class="btns"><button class="btn" type="button" id="lread">✨ Read values with Claude</button><button class="btn" type="button" id="ltype">✎ Type values</button></div>
+    <p class="note">Read with Claude: the report's text is sent to Claude (through the app's own server) to pick out the values. It isn't kept or used for training. Check every value before saving.</p>` : html`<div class="btns"><button class="btn" type="button" id="ltype">✎ Type values</button></div>`)}
     <div id="lvals"></div>
     ${raw(btns(isNew))}`, (s) => {
     const added: FileRec[] = again?.added ?? [];
@@ -119,7 +120,8 @@ export function labForm(person: string, id?: string, again?: LabDraft): void {
     }
     if (values.length) editor();
     $(s, "ltype").onclick = () => { if (!values.length) values.push({ name: "", value: "" }); editor(); };
-    $(s, "lread").onclick = async () => {
+    const lr = s.querySelector<HTMLButtonElement>("#lread");
+    if (lr) lr.onclick = async () => {
       const b = $<HTMLButtonElement>(s, "lread");
       const pdfs = [...tiles.picked.filter((f) => f.type === "application/pdf")];
       try {

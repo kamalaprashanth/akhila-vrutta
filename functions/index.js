@@ -41,11 +41,25 @@ async function countToday(uid, limit) {
   });
 }
 
+/* Who may use Claude: the owner, and accounts switched on by hand in aiAccess/{uid} ({ on: true }; written only
+   from the Firebase console, never by the app). For a public release everyone else is off. */
+async function aiAllowed(uid) {
+  if (!uid) return false;
+  if (uid === OWNER_UID.value()) return true;
+  const s = await getFirestore().doc(`aiAccess/${uid}`).get();
+  return s.exists && s.data().on === true;
+}
+
+/* Is Claude switched on for the signed-in account (the app shows the Advisor and "Read with Claude" only then). */
+exports.aiStatus = onCall({ region: "asia-south1", memory: "256MiB", maxInstances: 2 }, async (req) => {
+  if (!req.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+  return { on: await aiAllowed(req.auth.uid) };
+});
+
 exports.askClaude = onCall(
   { region: "asia-south1", secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 300, memory: "256MiB", maxInstances: 2, concurrency: 4 },
   async (req) => {
-    const owner = OWNER_UID.value();
-    if (!req.auth || !owner || req.auth.uid !== owner) throw new HttpsError("permission-denied", "This Google account isn't allowed to ask Claude.");
+    if (!req.auth || !(await aiAllowed(req.auth.uid))) throw new HttpsError("permission-denied", "This Google account isn't allowed to ask Claude.");
     const messages = req.data && req.data.messages;
     const bad = checkMessages(messages);
     if (bad) throw new HttpsError("invalid-argument", bad);
