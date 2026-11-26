@@ -296,3 +296,4 @@ body[data-mod="money"] main{padding:0}
 .lockpt svg{width:15px;height:15px;fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .btn.lockg{gap:10px;background:#fff;color:#1e2420;border-color:var(--line)}
 .btn.lockg svg{width:20px;height:20px}
+main>*{min-width:0}
