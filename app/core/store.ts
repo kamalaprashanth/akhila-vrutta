@@ -275,6 +275,9 @@ export class Store {
   async getPiece(c: string, id: string): Promise<Sealed | null> { const { fs, db } = this.fb; const d = await fs.getDoc!(fs.doc!(db, "homes", this.home, c, id)); return d.exists() ? (d.data() as Sealed) : null; }
   async dropPiece(c: string, id: string): Promise<void> { const { fs, db } = this.fb; await fs.updateDoc!(fs.doc!(db, "homes", this.home, c, id), { del: true, at: fs.serverTimestamp!(), by: this.uid }).catch(() => {}); }
 
+  /** Writes here and waits until the cloud has it (when something else must come after it). */
+  async writeNow(ops: WriteOp[]): Promise<void> { await this.commit(ops.filter((op) => op.r || this.data.get(op.c)!.has(op.id))); }
+
   writeMany(ops0: WriteOp[]): void {
     for (const op of ops0) if (!this.data.has(op.c)) throw new Error(`Unknown collection ${op.c}`);
     // a trashed record that is only in the attached store has nothing to trash here
