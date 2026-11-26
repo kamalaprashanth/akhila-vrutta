@@ -322,7 +322,11 @@ public class AkhilaNativePlugin extends Plugin {
 
     private FirebaseApp appCheckApp(String appId, String apiKey, String projectId) {
         for (FirebaseApp a : FirebaseApp.getApps(getContext())) if ("appcheck".equals(a.getName())) return a;
-        FirebaseOptions o = new FirebaseOptions.Builder().setApplicationId(appId).setApiKey(apiKey).setProjectId(projectId).build();
+        // Play Integrity needs the Cloud project number, which Firebase reads from the sender id: the
+        // number in the app id "1:<project number>:android:…" (without it: "Cannot parse null string").
+        String[] parts = appId.split(":");
+        FirebaseOptions o = new FirebaseOptions.Builder().setApplicationId(appId).setApiKey(apiKey).setProjectId(projectId)
+            .setGcmSenderId(parts.length > 1 ? parts[1] : null).build();
         FirebaseApp app = FirebaseApp.initializeApp(getContext(), o, "appcheck");
         FirebaseAppCheck.getInstance(app).installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance());
         return app;
