@@ -253,8 +253,14 @@ jobs:
       - name: Deploy to a preview address
         id: deploy
         run: |
-          CH="ci-${{ github.run_number }}"
-          ls dist | head -20; test -f dist/index.html || { echo "::error::dist has no index.html"; exit 1; }
+          # Firebase allows only a few preview channels per site: every release reuses one, and the
+          # numbered ones older releases made are deleted.
+          $FT hosting:channel:list --site "$SITE" --project "$PROJECT" --json > ch.json || true
+          node -e 'try{for(const c of require("./ch.json").result?.channels??[]){const id=c.name.split("/").pop();if(/^ci-\d+$/.test(id))console.log(id)}}catch{}' | while read -r old; do
+            $FT hosting:channel:delete "$old" --site "$SITE" --project "$PROJECT" --force || true
+          done
+          CH="ci-preview"
+          test -f dist/index.html || { echo "::error::dist has no index.html"; exit 1; }
           $FT hosting:channel:deploy "$CH" --only "$SITE" --project "$PROJECT" --expires 3d --json > deploy.json || { cat deploy.json; exit 1; }
           URL=$(node -e "const j=require('./deploy.json'); console.log(Object.values(j.result)[0].url)")
           echo "Preview: $URL"

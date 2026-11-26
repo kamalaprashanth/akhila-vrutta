@@ -28,7 +28,7 @@ function needHome(): boolean {
 /* ---------- homes ---------- */
 export function homeForm(id?: string): void {
   const h = id ? reader().get<Rec & { name: string }>("hhHomes", id) : undefined;
-  openSheet(h ? h.name : "Add a home", html`${raw(field(["hname", "Name", "text", { value: h?.name, ph: "e.g. Zen Indraprastha (where we live)" }]))}
+  openSheet(h ? h.name : "Add a home", html`${raw(field(["hname", "Name", "text", { value: h?.name, ph: "e.g. Our flat (where we live)" }]))}
     <p class="note">Your properties in Money appear here by themselves. Add the homes that aren't there, like the one you live in.</p>${raw(btns(!h))}`, (s) => {
     $(s, "cx").onclick = closeModal;
     $(s, "sv").onclick = () => { const name = val("hname"); if (!name) return toast("Give it a name."); closeModal(); hhWrite([{ c: "hhHomes", r: { ...(h ?? { id: uid() }), name } }]); toast(h ? "Saved" : "Home added"); };

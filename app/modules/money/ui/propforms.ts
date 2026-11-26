@@ -38,7 +38,7 @@ export function propForm(p0?: Partial<P>): void {
   const d = E().data(), isNew = !p0 || !p0.id, p: Partial<P> = p0 || { kind: "plot", status: "registered" };
   const loans = d.live<Rec & { name?: string; lender?: string }>("loans").filter((l) => bankOf(l as never));
   openSheet(isNew ? "Add a property" : "Edit property", `
-    ${field(["pn", "Name", "text", { value: p.name || "", ph: "e.g. Upkar Galaxy" }])}
+    ${field(["pn", "Name", "text", { value: p.name || "", ph: "e.g. Green Meadows flat" }])}
     <div class="grid2">${field(["pk", "Type", "select", { value: p.kind, options: Object.entries(PROP_KIND) }])}${field(["ps", "Status", "select", { value: p.status, options: Object.entries(PROP_ST) }])}</div>
     ${field(["pp", "Where", "text", { value: p.place || "", ph: "e.g. Plot 21, Chunchaguppe" }])}
     <div class="grid2">${field(["pd", "Booked / registered on", "date", { value: p.since || "" }])}${field(["pv", "Agreement value (₹)", "text", { value: inr(p.value), ph: "e.g. 2,14,02,419", hint: "Optional · shows how much of the price is paid" }])}</div>
