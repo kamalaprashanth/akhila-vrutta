@@ -497,7 +497,7 @@ try {
   await A.page.goto(`${BASE}/#/family`);
   await A.page.waitForSelector("#fmNew", { timeout: 20000 });
   await A.page.click("#fmNew");
-  await A.page.waitForSelector("#fmInvite", { timeout: 30000 });
+  await A.page.waitForSelector("#fmInvite", { timeout: 45000 }).catch(async (e) => { throw new Error(`no Invite button after starting a family space | toast: ${await A.page.innerText("#toast").catch(() => "")} | page: ${(await A.page.innerText("main").catch(() => "")).replace(/\s+/g, " ").slice(0, 300)} | ${e.message.split("\n")[0]}`); });
   await A.page.click("#fmInvite");
   await A.page.waitForSelector("#mvLayer .fmcode span", { timeout: 30000 });
   const code = (await A.page.$$eval("#mvLayer .fmcode span", (l) => l.map((x) => x.textContent.trim()))).join(" ");
