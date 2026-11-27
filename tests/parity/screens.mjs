@@ -141,9 +141,12 @@ const report = await f.evaluate(() => {
     ["search dinner", blank({ q: "dinner" }), nowM], ["search 400.5", blank({ q: "400.5", period: "all" }), nowM], ["investments", blank({ type: "investment" }), nowM]]) run2(l, f, m);
   run2("selecting", blank(), nowM, { selOn: true, sel: ["x1", "x5"] });
   // Moved on purpose (26 Nov 2026): the profile is its own page (Profile, in the side menu), so the links to it changed
+  // Help (27 Nov 2026): words you can tap are buttons around the same words
+  const unterm = (h) => typeof h !== "string" ? h : h.replace(/<button type="button" class="term" data-term="[a-z]+">([^<]*)<\/button>/g, "$1");
   const moved = (h) => typeof h !== "string" ? h : h.replaceAll('<a href="#" data-go="more">Open Settings › My profile</a>', '<a href="#/profile">Open your Profile</a>')
     .replaceAll('<a href="#" data-go="more">', '<a href="#/profile">').replaceAll("Settings › My profile › About me", "Profile › About you").replaceAll("(Settings › My profile)", "(Profile)").replaceAll("Retirement age comes from Settings › My profile (now", "Retirement age comes from your Profile (now")
     // ready for the public (26 Nov 2026): no personal names or assumptions in what everyone sees
+    .replaceAll("(for example Slice)", "(for example a separate savings account)").replaceAll("(e.g. Slice)", "(e.g. a separate savings account)")
     .replaceAll("KP's wife", "the user's spouse or partner").replaceAll("KP's", "the user's").replaceAll("KP pays", "the user pays").replaceAll("by KP", "by the user")
     .replaceAll("the funds KP already holds", "the funds the user already holds").replaceAll("Money from the wife's category is occasional", "Money in the spouse or partner's category is occasional")
     .replaceAll("Bangalore CBSE/ICSE", "CBSE/ICSE in a big city").replaceAll("Private engineering in Bangalore", "Private engineering in a big city")
@@ -190,7 +193,7 @@ const report = await f.evaluate(() => {
     for (const k in CH) delete CH[k]; chSeq = 0; N.charts.resetCharts(); MEMO = new Map();
     let a, b;
     try { a = moved(oldFn()); } catch (e) { a = "old threw: " + e.message; }
-    try { b = newFn(); } catch (e) { b = "new threw: " + e.message; }
+    try { b = unterm(newFn()); } catch (e) { b = "new threw: " + e.message; }
     if (a !== b && sameButEstimates(a, b)) { estRounding++; return; }
     if (a.startsWith("old threw") && !b.includes("threw")) { fixedCrash.push(label); return; }
     if (a !== b) { let i = 0; while (i < a.length && a[i] === b[i]) i++; out.push(`${label}: differs at ${i} ${JSON.stringify([a.slice(i - 5, i + 30), b.slice(i - 5, i + 30)])}\n    old …${a.slice(Math.max(0, i - 100), i + 140)}\n    new …${b.slice(Math.max(0, i - 100), i + 140)}`); }

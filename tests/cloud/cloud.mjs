@@ -450,6 +450,8 @@ try {
   await signInAndSetup(X.page, { create: true, pass: "lantern ochre walrus fifteen quilt", newSk: true });
   await X.page.waitForSelector(".tdy", { timeout: 30000 });
   ok("another Google account sets up its own home and opens Today");
+  // Help: a new account's pages explain themselves (the note on top), until hidden
+  check(/Today\s+gathers what needs you/.test(await X.page.innerText(".avtip").catch(() => "")), "a new account sees the note on top of Today");
   await shot(X.page, "second-account");
   // a new user's Money: set up with the main account and the starting categories (no planner import)
   await X.page.goto(`${BASE}/#/money`);
@@ -460,9 +462,16 @@ try {
   await X.page.click("#frDone");
   await X.page.waitForSelector("#moneyView", { timeout: 30000 });
   check(/45,000\.50|45,001/.test(await X.page.innerText("body")), "…Money opens on the new account's balance (₹45,000.50)");
+  await X.page.waitForSelector("#getStarted", { timeout: 15000 }).catch(() => {});
+  check(/Get started · 1 of 5 done/.test(await X.page.innerText("#getStarted").catch(() => "")) && /Overview\s+is your money at a glance/.test(await X.page.innerText("#moneyView .avtip").catch(() => "")), "…with the Get started list (1 of 5 done) and the page's note");
+  await X.page.click("#moneyView .avtip [data-tiphide]"); await X.page.waitForTimeout(3000);
+  await X.page.reload(); await unlockWithPass(X.page, "lantern ochre walrus fifteen quilt"); await X.page.waitForSelector("#lock", { state: "detached", timeout: 30000 });
+  await X.page.waitForSelector("#getStarted", { timeout: 30000 });
+  check(!(await X.page.$("#moneyView .avtip")), "…a hidden note stays hidden after a reload (saved to the cloud, encrypted)");
   const intr = await idToken("intruder");
 
   const xUser = await api(`${FS}/users/intruder-uid`, {}, intr), xHome = xUser.body?.fields?.home?.stringValue;
+  { const h = await api(`${FS}/homes/${xHome}/settings/help`, {}, intr); check(h.status === 200 && !!h.body?.fields?.ct && !h.body?.fields?.tips, "…its Help settings are saved encrypted, like every record"); }
   check(xUser.status === 200 && !!xHome && xHome !== home, `…its own home, not the owner's (${xHome})`);
   check((await api(`${FS}/homes/${xHome}`, {}, intr)).status === 200 && (await api(`${FS}/homes/${xHome}`, {}, owner)).status === 403, "…which it can read, and the owner can't");
   check((await api(`${FS}/homes/${xHome}/keys/intruder-uid`)).body?.fields?.sk?.integerValue === "1", "…and its key needs the Secret Key from the start");

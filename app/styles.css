@@ -299,3 +299,58 @@ body[data-mod="money"] main{padding:0}
 .btn.lockg{gap:10px;background:#fff;color:#1e2420;border-color:var(--line)}
 .btn.lockg svg{width:20px;height:20px}
 main>*{min-width:0}
+
+/* Help (approved design, 27 Nov 2026): a new user's note on top of a page, words you can tap, the Help pages */
+.avtip{display:flex;gap:10px;align-items:flex-start;background:var(--accent-soft);color:var(--ink);border-radius:14px;padding:12px 12px 12px 14px;margin:12px 0 4px;font-size:13.5px;line-height:1.5}
+.avtip>svg{width:18px;height:18px;flex:none;margin-top:1px;fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.avtipt{flex:1;min-width:0}
+.avtip a{color:var(--accent);font-weight:700;text-decoration:none;white-space:nowrap}
+.avtipx{flex:none;border:0;background:none;color:var(--muted);font:700 12px var(--sans);cursor:pointer;padding:2px 4px;min-height:28px}
+.term{border:0;background:none;padding:0;margin:0;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;cursor:help;border-bottom:1.5px dotted var(--accent)}
+.term:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hlph{font:600 24px/1.25 var(--serif);margin:6px 4px 4px}
+.hlpback{display:inline-block;margin:12px 4px 0;font:700 13px var(--sans);color:var(--accent);text-decoration:none}
+.hlpsub{color:var(--muted);margin:0 4px 8px;font-size:14px}
+.hlpp{margin:12px 4px;font-size:15px;line-height:1.6}
+.hlpul{margin:8px 4px 8px 22px;padding:0;font-size:15px;line-height:1.55}
+.hlpul li{margin:6px 0}
+.hlpeg{background:var(--surface);border-left:3px solid var(--accent);border-radius:10px;padding:10px 14px;margin:14px 4px;font-size:14px}
+.hlpeg b{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.hlpeg p{margin:4px 0 0;line-height:1.55}
+.hlpflow{display:flex;align-items:stretch;gap:6px;margin:14px 4px}
+.hlpflow>div{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 8px;font-size:12.5px;line-height:1.4;text-align:center;color:var(--muted)}
+.hlpflow b{display:block;font-size:14px;color:var(--accent);margin-bottom:3px}
+.hlpflow>i{align-self:center;font-style:normal;font-weight:800;color:var(--accent)}
+.hlpq{background:var(--surface);border-radius:14px;margin:8px 0;padding:0 16px}
+.hlpq summary{cursor:pointer;font-weight:600;font-size:15px;padding:14px 0;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.hlpq summary::-webkit-details-marker{display:none}
+.hlpq summary::after{content:"+";color:var(--accent);font-weight:800}
+.hlpq[open] summary::after{content:"−"}
+.hlpq p{margin:0 0 10px;color:var(--ink);font-size:14px;line-height:1.55}
+.hlpmore{display:inline-block;margin:0 0 14px;font:700 13px var(--sans);color:var(--accent);text-decoration:none}
+.hlpgo{color:var(--muted);font-size:20px}
+a.row{text-decoration:none;color:inherit}
+button.row.hlpw{width:100%;border:0;background:none;text-align:left;font:inherit;color:inherit}
+.hlpf{margin:12px 0 0}
+.hlps{width:100%;box-sizing:border-box}
+.hlptg input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.hlpst{display:flex;flex-wrap:wrap;gap:8px;margin:0 4px}
+.mv .hlpchip{font-size:13px;padding:8px 12px;background:var(--surface);color:var(--accent);border:1px dashed var(--accent)}
+/* Money's Get started list */
+.gs{margin:12px 0 4px}
+.gsh{display:flex;align-items:center;justify-content:space-between;background:var(--accent);color:var(--on-accent);border-radius:16px 16px 0 0;padding:12px 16px 6px;font-weight:700;font-size:14px}
+.gsx{border:0;background:none;color:inherit;opacity:.8;font:700 12px var(--sans);cursor:pointer;min-height:28px}
+.gsbar{background:var(--accent);padding:4px 16px 14px;border-radius:0 0 16px 16px;margin-bottom:8px}
+.gsbar i{display:block;height:6px;border-radius:3px;background:var(--on-accent);min-width:6px}
+.gsck{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);flex:none;display:grid;place-items:center;box-sizing:border-box}
+.gsrow.ok .gsck{background:var(--accent);border-color:var(--accent)}
+.gsck svg{width:14px;height:14px;fill:none;stroke:var(--on-accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.gsrow.ok .t{color:var(--muted)}
+.gsgo{flex:none;white-space:nowrap}
+/* the website's help.html */
+body.hlppub{padding:0}
+.hlptop{display:flex;align-items:center;gap:12px;max-width:720px;margin:0 auto;padding:14px max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
+.hlpbrand{display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);font:600 18px var(--serif)}
+.hlptitle{flex:1;color:var(--muted);font-weight:700}
+.hlpfoot{margin:32px 4px 0}
+.mv .wrap h2.hlph{font:600 24px/1.25 var(--serif);text-transform:none;letter-spacing:normal;color:var(--ink);margin:6px 4px 4px}

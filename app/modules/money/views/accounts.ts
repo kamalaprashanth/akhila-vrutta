@@ -2,6 +2,7 @@
  * The Accounts page: net worth on top, then one section at a time (Overview · Banks & cards ·
  * Investments · Loans · Property). Same page as KP Money Planner's, built from the stored data (paise).
  */
+import { term } from "../../../core/helpview.ts";
 import { esc } from "../../../core/dom.ts";
 import { addM, dLabel, lastDay, mLabel, MN, mShort, ymOf, type Day, type YM } from "../calc/dates.ts";
 import { num, type Loan, type MoneyData, type Paise, type Rec } from "../calc/data.ts";
@@ -81,7 +82,7 @@ function cardCharts(d: MoneyData, bal: Map<string, Paise>): string {
   }), legendHtml(ser) + tableHtml(M.map(mLabel), ser, fmtMoney, true)) : "";
   const lim = cards.filter((a) => num(a.limit) > 0).map((a) => { const o = Math.max(0, -(bal.get(a.id) || 0)); return { a, o, l: num(a.limit), p: o / num(a.limit) * 100 }; }).sort((x, y) => y.p - x.p);
   const tl = lim.reduce((s, x) => s + x.l, 0), to = lim.reduce((s, x) => s + x.o, 0);
-  const util = lim.length ? `<div class="sh"><h3>Credit used</h3><span class="note" style="margin:0">${(to / tl * 100).toFixed(0)}% of ${short(tl)} across ${lim.length} card${lim.length === 1 ? "" : "s"}</span></div>
+  const util = lim.length ? `<div class="sh"><h3>${term("credit")}</h3><span class="note" style="margin:0">${(to / tl * 100).toFixed(0)}% of ${short(tl)} across ${lim.length} card${lim.length === 1 ? "" : "s"}</span></div>
     <div class="list">${lim.map((x) => { const s2 = x.p >= 75 ? "bad" : x.p >= 30 ? "warn" : ""; return `<div class="row tap" data-card="${esc(x.a.id)}" role="button" tabindex="0"><div class="main"><div class="t">${esc(x.a.name)}</div><div class="s">${money(x.o)} of ${money(x.l)} · ${money(Math.max(0, x.l - x.o))} available${s2 === "bad" ? " · high" : ""}</div><div class="pbar ${s2}"><i style="width:${Math.min(100, x.p).toFixed(1)}%"></i><span class="mk" style="left:30%" title="30%"></span></div></div><div class="amt">${x.p.toFixed(0)}%</div></div>`; }).join("")}</div>
     <p class="note">Keeping each card under 30% (the mark on each bar) is generally better for your credit score.</p>` : `<p class="note">Add each card's credit limit (Edit card) to see how much of it you're using.</p>`;
   return spend + util;
@@ -143,7 +144,7 @@ function nwChart(d: MoneyData, st: AccState): string {
   const tip = (i: number): string => { const p = P[i]!; return tipRows([{ n: "Banks", v: money(p.banks) }, { n: "Investments", v: money(p.inv) }, ...(p.prop > 50 ? [{ n: "Property", v: money(p.prop) }] : []), { n: "Card bills", v: "−" + money(p.cards) }, { n: "Loans", v: "−" + money(p.loans) }, { n: "Net worth", v: `<span style="font-weight:800">${money(p.total)}</span>` }], mLabel(p.ym) + (p.live ? " (month-end)" : ""), p.est ? "Estimated from your entries" : p.live ? "Live: this month's projected month-end" : "Saved snapshot"); };
   const sel = `<div class="chsel"><div class="pills" role="group" aria-label="Range">${([[12, "1 year"], [24, "2 years"], ["all", "All"]] as [number | "all", string][]).map(([v, l]) => `<button type="button" data-nwn="${v}" aria-pressed="${N === v}">${l}</button>`).join("")}</div></div>`;
   const ser = [{ name: "Net worth", color: "var(--v1)", values: P.map((p) => R(p.total)), dashTo: dashTo > 0 ? dashTo : null, width: 2.5 }];
-  return `<div class="sh"><h3>Net worth over time</h3><span class="note" style="margin:0">${prev ? `${ch >= 0 ? "+" : "−"}${money(Math.abs(ch))} vs ${MN[+prev.ym.slice(5) - 1]}` : ""}</span></div>` +
+  return `<div class="sh"><h3>${term("networth")} over time</h3><span class="note" style="margin:0">${prev ? `${ch >= 0 ? "+" : "−"}${money(Math.abs(ch))} vs ${MN[+prev.ym.slice(5) - 1]}` : ""}</span></div>` +
     chartCard("", "", sel + lineChart({ labels: lbl, ticks: mTicks(P.map((p) => p.ym)), series: ser, area: 0, h: 200, zero: false, tip, aria: `Net worth by month, now ${money(last.total)}` }),
       `${dashTo > 0 ? `<div class="legend"><span><i class="dash"></i>Estimated</span><span><i style="background:var(--v1)"></i>Saved each month from now on</span></div>` : ""}<p class="cnote">Saved automatically once a day; each month keeps its last figure. Earlier months are worked back from your entries: bank and card balances exactly, investments roughly (scaled from what you'd invested then), and loans from their schedules or as owed when you added them. Treat them as a guide.</p>` +
       tableHtml(P.map((p) => mLabel(p.ym) + (p.est ? " (est.)" : "")), [{ name: "Banks", values: P.map((p) => R(p.banks)) }, { name: "Investments", values: P.map((p) => R(p.inv)) }, ...(P.some((p) => p.prop > 50) ? [{ name: "Property", values: P.map((p) => R(p.prop || 0)) }] : []), { name: "Card bills", values: P.map((p) => R(p.cards)) }, { name: "Loans", values: P.map((p) => R(p.loans)) }, { name: "Net worth", values: P.map((p) => R(p.total)) }]));

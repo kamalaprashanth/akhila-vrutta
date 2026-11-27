@@ -12,7 +12,7 @@ mkdirSync(out, { recursive: true });
 cpSync("static", out, { recursive: true });
 
 await build({
-  entryPoints: { app: "app/main.ts" },
+  entryPoints: { app: "app/main.ts", help: "app/help-public.ts" },
   bundle: true, format: "esm", target: "es2022", minify: true, sourcemap: true,
   outdir: out, logLevel: "info",
 });

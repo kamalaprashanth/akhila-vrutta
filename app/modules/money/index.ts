@@ -39,6 +39,9 @@ import { prefGet, prefSet, setEnv, uid, type WriteOp as MoneyWrite } from "./ui/
 import { txnForm } from "./ui/txform.ts";
 import { mainAcc } from "./calc/forecast.ts";
 import { freshPage } from "./fresh.ts";
+import { addTip, hideStart, markSeen, setHelpGo } from "../../core/helptips.ts";
+import { recForm } from "./ui/planforms.ts";
+import { starterRec } from "./views/plan.ts";
 
 /** Every money page. */
 const PAGES = { home: homePage, activity: txPage, accounts: accountsPage, plan: planPage, insights: insightsPage, advisor: advisorPage, more: morePage, card: cardPage, loan: loanPage, epf: epfPage, ppf: ppfPage, nps: npsPage, prop: propPage };
@@ -111,6 +114,11 @@ function ensureBox(): HTMLElement {
     plannerHtml: (name) => (name === "pxLine" ? pxLine(currentData()) : ""),
     go,
     toast: kitToast,
+    decorate: (v) => {
+      const plan = S.view === "plan" ? String(S.planTab || "month") : "";
+      addTip(v, `money:${S.view}${plan ? `:${plan === "ready" ? "cashflow" : plan}` : ""}`);
+      if (plan === "cashflow" || plan === "ready") markSeen("cashflow");
+    },
   });
   return box;
 }
@@ -196,6 +204,14 @@ function start(): void {
   // Today's official prices onto the linked holdings (at most every 3 hours), and today's due reminders on this device.
   if (ctx.session) window.setTimeout(() => { void pxRefresh(); void maybeNotify(); }, 1500);
   onSheet((open) => { document.body.classList.toggle("msheet", open); });
+  // Help's buttons in Money: the Get started list and Regular's starters
+  setHelpGo((k) => {
+    if (k === "add") return addTxn();
+    if (k === "hidestart") { hideStart(); document.getElementById("getStarted")?.remove(); return; }
+    if (k === "regular" || k === "cashflow") { S.planTab = k; return go("plan"); }
+    if (k === "accounts") { S.accTab = "banks"; return go("accounts"); }
+    if (k.startsWith("rec:")) return recForm(starterRec(currentData(), +k.slice(4)));
+  });
   // The Android app: Back closes an open sheet first; bills, EMIs and card dues as phone notifications.
   onBackClose(() => { if (!sheetOpen()) return false; closeModal(); return true; });
   setReminderSource("money", () => phoneReminders(dueItems()));

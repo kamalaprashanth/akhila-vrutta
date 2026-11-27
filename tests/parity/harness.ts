@@ -6,6 +6,7 @@ import { parseOldExport } from "../../app/modules/money/import.ts";
 import type { Changes, Rec, WriteOp } from "../../app/core/store.ts";
 import { installNative } from "../../app/core/native.ts";
 import { toast } from "../../app/core/dom.ts";
+import { installHelp } from "../../app/core/helptips.ts";
 
 class FakeStore {
   data = new Map<string, Map<string, Rec>>();
@@ -34,6 +35,7 @@ for (const [c, list] of Object.entries(p.records)) fake.data.set(c, new Map(list
 (window as unknown as { AV_TEST: boolean }).AV_TEST = true;   // the planner's names (S, go, upsert…) as test hooks
 // #/profile shows the Profile page (About you moved there from Money settings); everything else is Money
 const render = () => { const m = location.hash.startsWith("#/profile") ? profile : money; document.body.dataset.mod = m.id; m.render(document.getElementById("main")!); };
+installHelp();   // as the real shell does: words you can tap
 window.addEventListener("hashchange", render);
 render();
 // in the Android test app: Back, and "locking" (a reload) after a minute away, as the real app does

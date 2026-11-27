@@ -190,7 +190,7 @@ async function setup(): Promise<Session> {
     ${raw(pt("M3 5h18v16H3zM3 10h18", "One place for everything.", "Bills and budgets, home jobs and warranties, health records, papers, habits."))}
     ${raw(pt("M7 3h7l4 4v14H7zM14 3v4h4", "Your files stay in your Google Drive,", "encrypted. Sign in with Google so the app can keep them there."))}</div>
     <div class="lockopts"><button class="btn pri lockg" type="button" id="lk_g" data-lbl="Continue with Google"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.2z" fill="#4285F4"/><path d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z" fill="#34A853"/><path d="M6.4 14a6 6 0 0 1 0-4V7.4H3.1a10 10 0 0 0 0 9.2z" fill="#FBBC05"/><path d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.4L6.4 10c.8-2.4 3-4.1 5.6-4.1z" fill="#EA4335"/></svg>Continue with Google</button></div>
-    <p class="lockm small">By continuing you agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and the <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>.</p>
+    <p class="lockm small">By continuing you agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and the <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>. New here? <a href="/help" target="_blank" rel="noopener">How it works</a>.</p>
     <p class="lockm err" id="lk_e" hidden></p>`);
   const err = (t: string) => { const x = e.querySelector<HTMLElement>("#lk_e"); if (x) { x.hidden = false; x.textContent = t; } };
   // Listen for the tap straight away: a tap while Firebase is still loading must not be lost.
@@ -217,6 +217,7 @@ async function setup(): Promise<Session> {
     return new Promise(() => {});
   }
   let dekRaw: Uint8Array<ArrayBuffer>;
+  const fresh = !home;
   if (home) {
     const h = home;
     dekRaw = await askPassphrase("Passphrase", "Welcome back. Enter your Akhila Vrutta passphrase to set up this device.", { check: (p, sk) => unlockPass({ uid, home: h }, p, sk) });
@@ -236,7 +237,7 @@ async function setup(): Promise<Session> {
   const dek = await aesKey(dekRaw);
   dekRaw.fill(0);
   toast("This device is set up");
-  return { uid, home, dek, mode: dev.mode };
+  return { uid, home, dek, mode: dev.mode, ...(fresh ? { fresh: true } : {}) };
 }
 
 /** Setup step 2: the Secret Key and its Emergency Kit. Can't be skipped: the kit is how a new phone gets in. */

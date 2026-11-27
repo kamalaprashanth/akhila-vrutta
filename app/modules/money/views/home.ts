@@ -19,6 +19,25 @@ import { CC, lastMonths, nwHistory, rs0, short } from "./accounts.ts";
 import { dFull, findRepeats, goalSum } from "./plan.ts";
 import type { Page, PageHost } from "./pages.ts";
 import { advAuto } from "./advisor.ts";
+import { startShown, wasSeen } from "../../../core/helptips.ts";
+
+/** A new user's Get started list (approved design, 27 Nov 2026): five steps, each opening its page; gone when all are done. */
+function startList(d: MoneyData): string {
+  const tx = d.live<Tx>("txns").filter((t) => t.type !== "carry");
+  const steps: [boolean, string, string, string, string][] = [
+    [!!mainAcc(d), "Your main account", "Where your salary lands", "", ""],
+    [tx.some((t) => t.type === "expense"), "Record one spend", "The + button, any time", "add", "Add"],
+    [d.live("recurring").length > 0, "Add what repeats", "Salary, rent, EMIs, SIPs. This is what makes the planning work.", "regular", "Add"],
+    [d.live<Rec & { type?: string }>("accounts").some((a) => a.type === "card") || d.live("loans").length > 0, "Add your cards and loans", "For bill reminders and what's left to pay", "accounts", "Add"],
+    [wasSeen("cashflow"), "Look ahead", "Plan › Cash flow shows if you'll have enough", "cashflow", "See"],
+  ];
+  const done = steps.filter((x) => x[0]).length;
+  if (done === steps.length) return "";
+  const tick = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
+  return `<div class="gs" id="getStarted"><div class="gsh"><span>Get started · ${done} of ${steps.length} done</span><button type="button" class="gsx" data-hgo="hidestart">Hide</button></div>
+    <div class="gsbar" aria-hidden="true"><i style="width:${done / steps.length * 100}%"></i></div>
+    <div class="list">${steps.map(([ok, t, sub, k, lbl]) => `<div class="row gsrow${ok ? " ok" : ""}"><span class="gsck">${ok ? tick : ""}</span><div class="main"><div class="t">${t}</div><div class="s">${sub}</div></div>${!ok && k ? `<button type="button" class="lnk gsgo" data-hgo="${k}">${lbl} ›</button>` : ""}</div>`).join("")}</div></div>`;
+}
 
 export interface HomeState { ptNext?: boolean; insOpen?: boolean }
 const wd = (d: Day): string => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(d + "T00:00").getDay()]!;
@@ -231,7 +250,7 @@ export function homeParts(d: MoneyData, st: HomeState, h: PageHost): Record<"fir
     <div class="list">${recent.length ? recent.map((t) => txLine(d, t, { f: { type: "all", cat: "", acc: "", tag: "", period: "month", from: "", to: "", q: "" }, month: now })).join("") : '<div class="empty">No transactions yet. Tap Add to record one.</div>'}</div>`;
   void expenseTree; void CC; void short;
   return {
-    first: first ? `<div class="banner" style="margin-top:6px"><b>Start here.</b> Add your bank accounts and cards in Accounts › Banks &amp; cards, your salary, SIPs and bills in Plan › Regular, loans in Accounts › Loans, then record spending with Add.</div>` : "",
+    first: startShown() ? startList(d) : first ? `<div class="banner" style="margin-top:6px"><b>Start here.</b> Add your bank accounts and cards in Accounts › Banks &amp; cards, your salary, SIPs and bills in Plan › Regular, loans in Accounts › Loans, then record spending with Add.</div>` : "",
     adv: aiOn() ? advButton(d) : "", pay: payTueCard(d, st), short: shortAlert(d), invest: investCard(d), renew: renewalsSoon(d), hero, needs, ins: insightCards(d, st, h), recent: recentH,
   };
 }

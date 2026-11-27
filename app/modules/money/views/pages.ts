@@ -18,6 +18,8 @@ export interface PageHost {
   /** Goes to another money page. */
   go(view: string): void;
   toast(t: string): void;
+  /** Adds what goes on top of every page (a new user's note). */
+  decorate?(root: HTMLElement): void;
 }
 export interface Page {
   html(d: MoneyData, h: PageHost): string;
@@ -46,6 +48,7 @@ export function mountPages(box: HTMLElement, pages: Record<string, Page>, host: 
     const before = same ? new Set([...v.querySelectorAll(KEYS)].map(keyOf)) : null;
     resetCharts();
     v.innerHTML = dress(page.html(host.data(), host));
+    host.decorate?.(v);
     if (before && before.size) v.querySelectorAll(KEYS).forEach((e) => { if (!before.has(keyOf(e))) e.classList.add("enter"); });
     if (!same) { v.classList.remove("swap"); void v.offsetWidth; v.classList.add("swap"); window.setTimeout(() => v.classList.remove("swap"), 600); box.scrollTop = 0; }
     shownView = S.view;

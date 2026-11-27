@@ -37,6 +37,8 @@ export interface Session {
   home: string;
   dek: CryptoKey;
   mode: UnlockMode;
+  /** Set up just now, on a new account (Help's page notes start on). */
+  fresh?: boolean;
 }
 
 /* ---------- cloud documents ---------- */

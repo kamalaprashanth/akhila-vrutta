@@ -18,6 +18,24 @@ import { kindOf, loanSum } from "../calc/loans.ts";
 import { money } from "./txlist.ts";
 import { AX, barChart, chartCard, legendHtml, lineChart, mTick, tableHtml, tipRows } from "./charts.ts";
 import { short } from "./accounts.ts";
+import { term } from "../../../core/helpview.ts";
+
+/** Regular's one-tap starters for a new plan: the form opens with the name, kind and how often filled in. */
+export const STARTERS: { name: string; type: string; freq: string; cat?: string }[] = [
+  { name: "Salary", type: "income", freq: "monthly", cat: "Salary" },
+  { name: "Rent", type: "expense", freq: "monthly", cat: "Rent" },
+  { name: "Electricity", type: "expense", freq: "monthly", cat: "Electricity" },
+  { name: "Phone & internet", type: "expense", freq: "monthly", cat: "Internet & mobile" },
+  { name: "SIP", type: "investment", freq: "monthly" },
+  { name: "Insurance", type: "expense", freq: "yearly", cat: "Insurance" },
+  { name: "School fees", type: "expense", freq: "yearly", cat: "Education" },
+];
+/** A starter as a new regular item, with your category of that name if you have one. */
+export function starterRec(d: MoneyData, i: number): { name: string; type: string; freq: string; categoryId?: string } {
+  const s = STARTERS[i] ?? STARTERS[0]!, c = s.cat ? d.live<Rec & { name?: string; kind?: string }>("categories").find((x) => x.name === s.cat && x.kind === (s.type === "income" ? "income" : "expense")) : undefined;
+  return { name: s.name, type: s.type, freq: s.freq, ...(c ? { categoryId: c.id } : {}) };
+}
+const startersHtml = (): string => `<div class="sh"><h3>Start with these</h3></div><div class="hlpst">${STARTERS.map((s, i) => `<button type="button" class="chip chipbtn hlpchip" data-hgo="rec:${i}">+ ${esc(s.name)}${s.freq === "yearly" ? " (yearly)" : ""}</button>`).join("")}</div><p class="note">Tap one: the form opens with the name and how often filled in. You type the amount and the day.</p>`;
 import type { Page, PageHost } from "./pages.ts";
 
 export const FREQ_LBL: Record<string, string> = { monthly: "Monthly", quarterly: "Every 3 months", halfyearly: "Every 6 months", yearly: "Yearly", biennial: "Every 2 years", triennial: "Every 3 years", once: "One time" };
@@ -155,15 +173,15 @@ function forecastPanel(d: MoneyData, st: PlanState, h: PageHost): string {
 function readyTab(d: MoneyData, st: PlanState, h: PageHost): string {
   const Rd = readiness(d, 45), rst = reserveState(d), m0 = mainAcc(d);
   const acc = (a: unknown): Rec & { name: string; minBal?: Paise; emTarget?: Paise } => a as Rec & { name: string; minBal?: Paise; emTarget?: Paise };
-  const rd = `<div class="sh"><h3>Readiness · next 45 days</h3></div>
+  const rd = `<div class="sh"><h3>${term("readiness")} · next 45 days</h3></div>
     <div class="list">${Rd.length ? Rd.map((s) => `<div class="row"><div class="main"><div class="t">⚠ ${esc(s.acc.name)} runs short on ${dShort(s.date)}</div><div class="s">${esc(s.item.name)} ${money(num(s.item.amount))} · it would have ${money(s.bal)}${num(acc(s.acc).minBal) ? ` (minimum ${money(num(acc(s.acc).minBal))})` : ""}${s.from ? ` · move ${money(s.need)} from ${esc(s.from.name)} by ${dShort(s.by!)}` : " · no account has enough spare"}</div></div>${s.from ? `<button class="btn sm pri" type="button" data-ptmove="${esc(s.acc.id)}|${esc(s.from.id)}|${R(s.need)}|${esc(s.item.name)}">Move</button>` : ""}</div>`).join("")
       : `<div class="row"><div class="main"><div class="t">✓ Every account has enough for the next 45 days</div><div class="s">Lowest points: ${Rd.lows.filter((x) => Math.abs(x.low) > 50 || x.acc.id === (m0 || { id: undefined }).id).slice(0, 4).map((x) => `${esc(x.acc.name)} ${money(x.low)} on ${dLabel(x.lowD)}`).join(" · ")}</div></div></div>`}</div>
     <p class="note">Looks at each account's balance today, then adds what's coming in (salary on the 1st) and takes off bills, EMIs, SIPs and card bills on their dates. Set an optional minimum to keep in an account by editing it.</p>`;
   let rs: string;
-  if (!rst.a) rs = `<div class="sh"><h3>Big-bills reserve</h3></div><div class="list"><div class="empty">Choose the account that holds your reserve and emergency fund: edit the account (for example Slice) and tick "Holds my big-bills reserve and emergency fund".</div></div>`;
+  if (!rst.a) rs = `<div class="sh"><h3>${term("reserve")}</h3></div><div class="list"><div class="empty">Choose the account that holds your reserve and emergency fund: edit the account (for example a separate savings account) and tick "Holds my big-bills reserve and emergency fund".</div></div>`;
   else {
     const a = acc(rst.a), pct = rst.target > 0 ? Math.min(100, rst.held / rst.target * 100) : 100;
-    rs = `<div class="sh"><h3>Big-bills reserve · in ${esc(a.name)}</h3></div>
+    rs = `<div class="sh"><h3>${term("reserve")} · in ${esc(a.name)}</h3></div>
     <div class="card"><div class="kv" style="margin-top:0"><span>Put aside this month</span><b>${money(rst.monthly)}</b>
       ${rst.thisIn > 50 ? `<span>Added this month</span><b>${money(rst.thisIn)}</b>` : ""}
       <span class="tot">${rst.doneThis ? "This month" : "Still to put aside"}</span><b class="tot">${rst.doneThis ? "✓ Done" : money(rst.setAside)}</b>
@@ -174,7 +192,7 @@ function readyTab(d: MoneyData, st: PlanState, h: PageHost): string {
     <div class="list" style="margin-top:12px">${rst.B.map((x) => { const r = x.r as Recurring & { provider?: string }; return `<div class="row tap" data-rec="${esc(r.id)}" role="button" tabindex="0"><div class="main"><div class="t">${esc(r.name)}${r.provider ? ` <span class="chip mute">${esc(r.provider)}</span>` : ""}</div><div class="s">${money(x.amt)} due ${dFull(itemDate({ day: r.day || 1 }, x.next)!)} · ${num(x.have) >= x.amt - 50 ? "fully set aside ✓" : `${money(num(x.have))} set aside`}${num(x.ask) > 50 ? ` · ${x.months} month${x.months === 1 ? "" : "s"} to go` : ""}</div></div><div class="amt">${num(x.ask) > 50 ? `${money(num(x.ask))}<div class="s mut" style="font-size:12px;font-weight:400">a month</div>` : "✓"}</div></div>`; }).join("") || '<div class="empty">No bills every 3 months or longer yet. Add them in Regular, with how often they come.</div>'}</div>
     <p class="note">Each bill's amount is spread over the months left before it's due, counting from when you start. If you skip a month, the gap is spread over the months that remain. Extra money goes to the bills due soonest and lowers what's asked in later months. Pay big bills from ${esc(a.name)} with "Paid from the big-bills reserve" ticked.</p>
     ${rst.funds.map((f) => `<div class="sh"><h3>${esc(f.p.name)} fund</h3></div><div class="card"><div class="kv" style="margin-top:0"><span>Needed by ${mLabel(f.by)}</span><b>${money(f.need)}</b><span>Set aside so far</span><b>${money(f.have)}</b><span class="tot">Each month</span><b class="tot">${money(f.monthly)}</b></div><p class="cnote">Your share of the price still to pay, the TDS, loan charges and registration costs from the property's Expected tab. Change the date in the property's Expected tab.</p></div>`).join("")}
-    <div class="sh"><h3>Emergency fund · in ${esc(a.name)}</h3></div>
+    <div class="sh"><h3>${term("emergency")} · in ${esc(a.name)}</h3></div>
     <div class="card"><div class="kv" style="margin-top:0"><span>${esc(a.name)} balance</span><b>${money(rst.bal)}</b><span>Less the reserve${rst.funds.length ? " and funds" : ""}</span><b>−${money(rst.bal - rst.emergency)}</b><span class="tot">Emergency fund</span><b class="tot ${rst.emergency < 0 ? "neg" : ""}">${money(rst.emergency)}</b>
       <span>Target${num(a.emTarget) > 0 ? " (yours)" : ` (${emMonths(d)} months)`}</span><b>${money(rst.emTarget)}</b></div>
       <div class="pmini" aria-hidden="true"><i style="width:${rst.emTarget > 0 ? Math.max(0, Math.min(100, rst.emergency / rst.emTarget * 100)).toFixed(1) : 0}%"></i></div>
@@ -332,13 +350,13 @@ export function planHtml(d: MoneyData, st: PlanState, h: PageHost): string {
   const groups: [string, string, Recurring[]][] = [
     ["Income", "Salary and other money coming in", active.filter((r) => r.type === "income")],
     ["Bills & payments", "Fixed amounts you pay", active.filter((r) => r.type === "expense" && !r.budget)],
-    ["Budgets", "Amounts set aside; spends you tag reduce them", active.filter((r) => r.type === "expense" && r.budget)],
+    [term("budget", "Budgets"), "Amounts set aside; spends you tag reduce them", active.filter((r) => r.type === "expense" && r.budget)],
     ["SIPs & investments", "Money you invest on a schedule", active.filter((r) => r.type === "investment")],
   ];
   return `${seg}
   <div class="btns" style="margin-top:12px"><button class="btn pri" type="button" id="addRec">+ Add regular item</button></div><input class="lsearch" type="search" data-lsearch placeholder="Search by name" aria-label="Search this list" autocomplete="off">
   <p class="note">Set these up once. Each one appears in Plan › Month on its schedule, in Cash flow, and in Insights.</p>
-  ${repeatsSection(d, h)}
+  ${active.length ? "" : startersHtml()}${repeatsSection(d, h)}
   ${groups.map(([ttl, hint, list]) => `<div class="sh"><h3>${ttl}</h3>${list.reduce((x, r) => x + monthly(r), 0) > 50 ? `<span class="note" style="margin:0">${money(list.reduce((x, r) => x + monthly(r), 0))} a month</span>` : ""}</div>
     <div class="list">${list.length ? list.sort((a, b) => num(b.amount) - num(a.amount)).map(rline).join("") : `<div class="empty" style="padding:12px 14px">${hint}. None yet.</div>`}</div>`).join("")}
   ${past.length ? `<details class="fm" style="margin-top:20px"><summary><span class="mn">Ended</span><span class="sub" style="text-align:right">${past.length}</span></summary><div class="list" style="border-radius:0">${past.map(rline).join("")}</div></details>` : ""}`;

@@ -20,6 +20,7 @@ import { startFamily } from "./core/family.ts";
 import { startFamilyFiles } from "./core/famfiles.ts";
 import { userName } from "./core/firebase.ts";
 import { startBackups } from "./core/backup-auto.ts";
+import { addTip, installHelp, newAccountTips } from "./core/helptips.ts";
 
 const AUTO_LOCK_MS = 2 * 60 * 1000;
 
@@ -84,6 +85,8 @@ function render(): void {
   const sb = $("#searchBtn"); if (sb) sb.hidden = mod.id === "search";
   if (main) {
     mod.render(main);
+    // a new user's note on top of the page (Money puts its own)
+    if (mod.id !== "money") addTip(main, [mod.id, mod.sub?.()].filter(Boolean).join(":"));
     main.focus({ preventScroll: true });
   }
   // after the page: a section may pick its tab while rendering (Money, Home)
@@ -120,6 +123,7 @@ function installShell(): void {
 async function boot(): Promise<void> {
   ctx.rerender = render;
   installShell();
+  installHelp();
   window.addEventListener("hashchange", render);
   if (!config().firebase) { render(); return; } // local and test builds run without the cloud
   const session = await unlock();
@@ -131,6 +135,7 @@ async function boot(): Promise<void> {
     return;
   }
   ctx.session = session;
+  if (session.fresh) newAccountTips();
   // a save the cloud refused stays on this device only until the app closes: say so
   ctx.store.onWriteError((e) => {
     const code = (e as { code?: string })?.code ?? "";
