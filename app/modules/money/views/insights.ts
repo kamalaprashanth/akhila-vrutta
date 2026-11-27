@@ -8,7 +8,7 @@ import { addM, dLabel, diffM, mLabel, MN, mShort, pad, ymOf, type Day, type YM }
 import { num, type Loan, type MoneyData, type Paise, type Rec } from "../calc/data.ts";
 import { accName, catName, catTop, fmtD, paidMap, planned, recurs, rateTxt, type Recurring } from "../calc/plan.ts";
 import { catLbl, invNet, monthFigures, offBook, type MonthFigures } from "../calc/insights.ts";
-import { reserveHeld, reserveState, resvOn } from "../calc/reserve.ts";
+import { potMoves, reserveHeld, reserveState, resvOn } from "../calc/reserve.ts";
 import { reserveAcc } from "../calc/properties.ts";
 import { epfCalc, fyOf, invTypeOf, type Holding } from "../calc/invest.ts";
 import { isEmiLike, kindOf, schedule } from "../calc/loans.ts";
@@ -107,9 +107,15 @@ function resvHist(d: MoneyData) {
   if (!a) return null;
   type P = Tx & { pot?: string };
   const tx = d.live<P>("txns").filter((t) => t.pot === "reserve");
-  const inM = (ym: YM): Paise => tx.filter((t) => t.type === "transfer" && t.toAccountId === a.id && ymOf(t.date ?? "") === ym).reduce((s, t) => s + num(t.amount), 0);
+  const mv = potMoves(d).filter((m) => m.pot === "reserve");   // set-asides, including the reserve's part of a combined one
+  const inM = (ym: YM): Paise => mv.filter((m) => m.to === a.id && ymOf(m.date) === ym).reduce((s, m) => s + m.amt, 0);
   const outL = (ym: YM): P[] => tx.filter((t) => ymOf(t.date ?? "") === ym && (t.type === "expense" || (t.type === "transfer" && t.accountId === a.id)));
-  const before = (ym: YM): Paise => { let h = num(a.reserveStart); for (const t of tx) { if (ymOf(t.date ?? "") >= ym) continue; if (t.type === "transfer") { if (t.toAccountId === a.id) h += num(t.amount); if (t.accountId === a.id) h -= num(t.amount); } else if (t.type === "expense") h -= num(t.amount); } return h; };
+  const before = (ym: YM): Paise => {
+    let h = num(a.reserveStart);
+    for (const t of tx) if (t.type === "expense" && ymOf(t.date ?? "") < ym) h -= num(t.amount);
+    for (const m of mv) if (ymOf(m.date) < ym) { if (m.to === a.id) h += m.amt; if (m.from === a.id) h -= m.amt; }
+    return h;
+  };
   return { a, inM, outL, before };
 }
 function resvMonthCard(d: MoneyData, ym: YM): string {

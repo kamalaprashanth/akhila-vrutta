@@ -8,7 +8,8 @@ import { balances, countsAcc, dueOf, stmtFor, type Account } from "./accounts.ts
 import { kindOf } from "./loans.ts";
 import { FREQ, paidMap, type PlanItem, type Recurring } from "./plan.ts";
 import { forecast, mainAcc, type ForecastRow } from "./forecast.ts";
-import { propFundHeld, propFundNeed, propList, propPlanDue, reserveAcc, type Property } from "./properties.ts";
+import { potMoves, propFundHeld, propFundNeed, propList, propPlanDue, reserveAcc, type Property } from "./properties.ts";
+export { potMoves, type PotMove, type MovePart } from "./properties.ts";
 import { emBase, emMonths } from "./insights.ts";
 
 interface PotTxn extends Txn { pot?: string; toAccountId?: string }
@@ -88,10 +89,11 @@ export function reserveHeld(d: MoneyData): Paise {
     const a = reserveAcc(d);
     if (!a) return 0;
     let h = num(a.reserveStart);
-    for (const t of d.live<PotTxn>("txns")) {
-      if (t.pot !== "reserve") continue;
-      if (t.type === "transfer") { if (t.toAccountId === a.id) h += num(t.amount); if (t.accountId === a.id) h -= num(t.amount); }
-      else if (t.type === "expense") h -= num(t.amount);
+    for (const t of d.live<PotTxn>("txns")) if (t.pot === "reserve" && t.type === "expense") h -= num(t.amount);
+    for (const m of potMoves(d)) {
+      if (m.pot !== "reserve") continue;
+      if (m.to === a.id) h += m.amt;
+      if (m.from === a.id) h -= m.amt;
     }
     return h;
   });
@@ -109,8 +111,7 @@ export function reserveState(d: MoneyData): ReserveState {
   return d.memo("rstate", () => {
     const B = bigBills(d), a = reserveAcc(d), held = reserveHeld(d), now = ymOf(d.today), target = B.reduce((s, x) => s + x.amt, 0);
     // What went into the reserve this month (the set-aside and extra money alike).
-    const thisIn = a ? d.live<PotTxn>("txns").filter((t) => t.pot === "reserve" && t.type === "transfer" && t.toAccountId === a.id && ymOf(t.date ?? "") === now)
-      .reduce((s, t) => s + num(t.amount), 0) : 0;
+    const thisIn = a ? potMoves(d).filter((m) => m.pot === "reserve" && m.to === a.id && ymOf(m.date) === now).reduce((x, m) => x + m.amt, 0) : 0;
     // This month's ask comes from what the reserve held when the month began, shared out to the soonest bills first;
     // what each still needs is spread over its months left.
     let pool = Math.max(0, held - thisIn), pool2 = Math.max(0, held);
@@ -146,7 +147,7 @@ export function reserveState(d: MoneyData): ReserveState {
     const funds: PropFund[] = propList(d).filter((p) => p.fund && p.fund.by).map((p) => {
       const need = propFundNeed(d, p), have = propFundHeld(d, p), months = Math.max(1, diffM(now, p.fund!.by!));
       const monthlyP = Math.ceil(Math.max(0, need - have) / months / 100) * 100;
-      const done = d.live<PotTxn>("txns").some((t) => t.pot === `prop:${p.id}` && t.type === "transfer" && ymOf(t.date ?? "") === now);
+      const done = potMoves(d).some((m) => m.pot === `prop:${p.id}` && ymOf(m.date) === now);
       return { p, need, have, by: p.fund!.by!, monthly: monthlyP, done };
     });
     const emergency = bal - held - funds.reduce((s, f) => s + f.have, 0);
@@ -166,8 +167,7 @@ export function setAsideOf(d: MoneyData, ym: YM): Paise {
   const a = reserveAcc(d);
   if (!a) return 0;
   const now = ymOf(d.today);
-  const got = d.live<PotTxn>("txns").filter((t) => t.pot === "reserve" && t.type === "transfer" && t.toAccountId === a.id && ymOf(t.date ?? "") === ym)
-    .reduce((s, t) => s + num(t.amount), 0);
+  const got = potMoves(d).filter((m) => m.pot === "reserve" && m.to === a.id && ymOf(m.date) === ym).reduce((x, m) => x + m.amt, 0);
   if (ym < now) return got;
   const st = reserveState(d);
   return ym === now ? got + st.setAside : st.monthly;
@@ -247,8 +247,8 @@ export function readiness(d: MoneyData, days = 45): Shortfall[] & { lows: Low[] 
 export interface BackItem { id: string; name: string; date: Day; amt: Paise }
 export interface BackGroup { acc: string; due: Day; amt: Paise; items: BackItem[] }
 export interface ReserveBack { from: Account; to: Account; amt: Paise; groups: BackGroup[] }
-export function reserveBack(d: MoneyData, until: Day): ReserveBack[] {
-  return d.memo(`rback:${until}`, () => {
+export function reserveBack(d: MoneyData, until: Day, held: Paise = 0): ReserveBack[] {
+  return d.memo(`rback:${until}:${held}`, () => {
     const from = reserveAcc(d);
     if (!from) return [];
     const accs = new Map(d.live<Account>("accounts").map((a) => [a.id, a])), main = mainAcc(d);
@@ -268,7 +268,8 @@ export function reserveBack(d: MoneyData, until: Day): ReserveBack[] {
     }
     // what's been moved back already settles the oldest first
     for (const [toId, L] of owed) {
-      let moved = d.live<PotTxn & { back?: string }>("txns").filter((t) => t.type === "transfer" && t.back === "reserve" && t.accountId === from.id && t.toAccountId === toId).reduce((x, t) => x + num(t.amount), 0);
+      // `held`: what this month's set-aside card is netting off, back to the main account (not moved yet, not shown twice)
+      let moved = potMoves(d).filter((m) => m.back === "reserve" && m.from === from.id && m.to === toId).reduce((x, m) => x + m.amt, 0) + (main && toId === main.id ? held : 0);
       for (const it of L.sort((x, y) => x.due.localeCompare(y.due) || x.date.localeCompare(y.date))) { const k = Math.min(moved, it.left); it.left -= k; moved -= k; }
     }
     const out: ReserveBack[] = [];
@@ -284,5 +285,30 @@ export function reserveBack(d: MoneyData, until: Day): ReserveBack[] {
       out.push({ from, to: accs.get(toId)!, amt: G.reduce((x, g) => x + g.amt, 0), groups: G });
     }
     return out;
+  });
+}
+
+/**
+ * The month's set-aside (approved 27 Nov 2026), shown from the 1st until done: the big-bills reserve's share and the
+ * property funds, from the main account into the reserve's, in one transfer. Reserve money due back to the main account
+ * this month (bills paid by card from the reserve) is netted off the reserve's share; what's left over comes back on its
+ * card bill's Tuesday.
+ */
+export interface MonthSetAside {
+  ym: YM; from: Account; to: Account;
+  share: Paise; capped: boolean; full: Paise; back: ReserveBack | null; netted: Paise; reserve: Paise;
+  funds: PropFund[]; total: Paise; rest: Paise;
+}
+export function monthSetAside(d: MoneyData): MonthSetAside | null {
+  return d.memo("msa", () => {
+    const rst = reserveState(d), a = rst.a, m = rst.spareFrom;
+    if (!a || !m) return null;
+    const share = rst.B.length && !rst.doneThis && rst.setAside > 50 ? rst.setAside : 0;
+    const funds = rst.funds.filter((f) => !f.done && f.monthly > 50);
+    if (!share && !funds.length) return null;
+    const back = share ? reserveBack(d, lastDay(ymOf(d.today))).find((b) => b.to.id === m.id) ?? null : null;
+    const due = back?.amt ?? 0, netted = Math.min(share, due), reserve = share - netted;
+    return { ym: ymOf(d.today), from: m, to: a as Account, share, capped: rst.capped, full: rst.setAsideFull, back, netted, reserve,
+      funds, total: reserve + funds.reduce((x, f) => x + f.monthly, 0), rest: due - netted };
   });
 }

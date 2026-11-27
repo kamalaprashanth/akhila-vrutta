@@ -128,6 +128,7 @@ function moneyCard(): string {
   return html`<a class="dbmoney" href="#/money/home"><div class="dbh"><span>Money</span><span>Open ›</span></div>
     <div class="dbm2"><span>${m.name} today</span><span>Month-end</span></div>
     <div class="dbm2"><b class="dbbig">${formatINR(m.cb)}</b><b>${formatINR(m.end)}</b></div>
+    ${raw(m.sa ? html`<div class="dbm2 dbline"><b>${m.sa.replace(/ · .*/, "")}</b><span>${m.sa.replace(/^[^·]*· /, "")}</span></div>` : "")}
     <div class="dbm2 dbline">${raw(pay)}</div>
     <div class="dbm2"><span>Spent this month</span><b>${formatINR(m.spent)}</b></div></a>`;
 }

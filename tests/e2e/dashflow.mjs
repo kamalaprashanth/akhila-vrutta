@@ -112,6 +112,31 @@ const back = await p.evaluate(() => FAKE.all("txns").find((t) => t.back === "res
 ok(back && back.type === "transfer" && back.accountId === "sav1" && back.amount === 69000, "…saved as a transfer from Savings, marked as back from the reserve");
 ok(!/Savings → Test Bank/.test(await p.innerText(`${V} .ptcard`).catch(() => "")), "…and the line goes away");
 
+console.log("The month's set-aside, from the 1st");
+await p.evaluate(() => {
+  const t = new Date(), d = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  const due = new Date(t.getFullYear(), t.getMonth() + 4, 1), ym = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}`;
+  const card = FAKE.all("accounts").find((a) => a.name === "Test Card");
+  FAKE.writeMany([
+    { c: "recurring", id: "big1", r: { id: "big1", name: "Car insurance", type: "expense", amount: 2400000, freq: "yearly", start: ym, categoryId: CAT } },
+    { c: "txns", id: "rs2", r: { id: "rs2", type: "expense", amount: 150000, date: d, accountId: card.id, categoryId: CAT, pot: "reserve", note: "Netflix year" } },
+  ]);
+  go("home");
+}); await settle();
+const sa = await p.innerText(`${V} #setAside`).catch(() => "");
+ok(/Set aside for/.test(sa) && /Savings → Test Bank|Test Bank → Savings/.test(sa) && /less than usual this month/.test(sa), `a Set aside card, one transfer, less than usual (${sa.replace(/\s+/g, " ").slice(0, 120)})`);
+ok(!/Netflix year/.test(await p.innerText(`${V} .ptcard`).catch(() => "")) && !/Savings → Test Bank/.test(await p.innerText(`${V} .ptcard`).catch(() => "")), "…the card's reserve bill isn't moved back on Tuesday as well");
+if (process.env.SHOT) await p.screenshot({ path: `${process.env.SHOT}/sa1.png` });
+await p.click(`${V} #setAside [data-sainfo]`); await settle();
+if (process.env.SHOT) await p.screenshot({ path: `${process.env.SHOT}/sa2.png` });
+const info = await p.innerText("#mvLayer #modal .sheet").catch(() => "");
+ok(/Big-bills reserve · this month's share/.test(info) && /Car insurance/.test(info) && /Comes back/.test(info) && /Netflix year/.test(info) && /Reserve this month/.test(info), "ⓘ: the share, what's netted off, the reserve this month");
+await p.click("#mvLayer #cx"); await settle();
+await p.click(`${V} #setAside [data-samove]`); await settle();
+const rec = await p.evaluate(() => FAKE.all("txns").find((t) => Array.isArray(t.parts)));
+ok(rec && rec.type === "transfer" && rec.accountId !== "sav1" && rec.toAccountId === "sav1" && rec.parts.some((x) => x.pot === "reserve") && rec.parts.some((x) => x.back === "reserve" && x.amt === 150000), "Move records one transfer with its parts");
+ok(!(await p.$(`${V} #setAside`)), "…and the card goes away for the month");
+
 console.log("Regular");
 await p.evaluate(() => { S.planTab = "regular"; go("plan"); }); await settle();
 ok((await p.$$(`${V} .rgh`)).length >= 4 && !(await p.$eval(`${V} .rgl`, (e) => !e.hidden)), "groups start folded");

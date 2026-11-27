@@ -322,6 +322,8 @@ export function txnForm(t0: TxIn = {}, preset: TxIn = {}): void {
         delete o.categoryId; delete o.toAccountId;
       } else { o.categoryId = val("categoryId"); delete o.toAccountId; delete o.instrument; }
       if (el<HTMLInputElement>("f_hist").checked) o.hist = true; else delete o.hist;
+      // a month's set-aside in one transfer: its parts only hold while the transfer stays as recorded
+      { const x = o as Record<string, unknown>; if (x.parts && (o.type !== "transfer" || Math.round(num(o.amount)) !== Math.round(num(t.amount)) || o.accountId !== t.accountId || o.toAccountId !== t.toAccountId)) delete x.parts; }
       closeModal();
       upsert("txns", o as Rec);
       toast(isNew ? "Added" : "Saved");

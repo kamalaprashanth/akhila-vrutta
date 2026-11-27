@@ -260,15 +260,40 @@ export function propPlanDue(d: MoneyData, p: Property): PropDue[] {
 export const reserveAcc = (d: MoneyData): (Account & { reserveStart?: Paise; emTarget?: Paise }) | null =>
   d.live<Account & { reserve?: boolean }>("accounts").find((a) => a.reserve && !a.hidden) ?? null;
 
+/**
+ * Money moved into or out of a pot (the reserve, a property fund) or back from the reserve. A month's set-aside done in
+ * one transfer (approved 27 Nov 2026) carries its parts: { pot: "reserve" | "prop:<id>", amt } went into the reserve's
+ * account and { back: "reserve", amt } came back out of it; the transfer's amount is what actually moved.
+ */
+export interface PotMove { pot?: string; back?: string; from: string; to: string; amt: Paise; date: Day }
+export interface MovePart { pot?: string; back?: string; amt: Paise }
+export function potMoves(d: MoneyData): PotMove[] {
+  return d.memo("potmoves", () => {
+    const out: PotMove[] = [];
+    for (const t of d.live<Txn & { pot?: string; back?: string; parts?: MovePart[]; toAccountId?: string }>("txns")) {
+      if (t.type !== "transfer" || !t.accountId || !t.toAccountId) continue;
+      const date = String(t.date ?? "");
+      if (t.parts?.length) {
+        for (const x of t.parts) {
+          if (x.pot) out.push({ pot: x.pot, from: t.accountId, to: t.toAccountId, amt: num(x.amt), date });
+          else if (x.back) out.push({ back: x.back, from: t.toAccountId, to: t.accountId, amt: num(x.amt), date });
+        }
+      } else if (t.pot) out.push({ pot: t.pot, from: t.accountId, to: t.toAccountId, amt: num(t.amount), date });
+      else if (t.back) out.push({ back: t.back, from: t.accountId, to: t.toAccountId, amt: num(t.amount), date });
+    }
+    return out;
+  });
+}
+
 /** Money set aside in the reserve account for a property. */
 export function propFundHeld(d: MoneyData, p: Property): Paise {
   const a = reserveAcc(d);
   if (!a) return 0;
   let h = num(p.fund?.start);
-  for (const t of d.live<FundTxn>("txns")) {
-    if (t.pot !== `prop:${p.id}` || t.type !== "transfer") continue;
-    if (t.toAccountId === a.id) h += num(t.amount);
-    if (t.accountId === a.id) h -= num(t.amount);
+  for (const m of potMoves(d)) {
+    if (m.pot !== `prop:${p.id}`) continue;
+    if (m.to === a.id) h += m.amt;
+    if (m.from === a.id) h -= m.amt;
   }
   return h;
 }

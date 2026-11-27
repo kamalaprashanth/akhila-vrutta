@@ -9,12 +9,11 @@ import { num, type MoneyData, type Paise, type Rec, type Txn } from "../calc/dat
 import { balances, cardInfo, type Account } from "../calc/accounts.ts";
 import { accName, catName, fmtD, FREQ, NSE_HOL, paidMap, planned, type PlanItem, type Recurring } from "../calc/plan.ts";
 import { forecast, mainAcc } from "../calc/forecast.ts";
-import { isAutoItem, isBigItem, obligations, payTue, reserveBack } from "../calc/reserve.ts";
+import { isAutoItem, isBigItem, monthSetAside, obligations, payTue, reserveBack, reserveState } from "../calc/reserve.ts";
 import { reserveAcc } from "../calc/properties.ts";
 import { holdingSum, type Holding } from "../calc/invest.ts";
 import { loanSum } from "../calc/loans.ts";
 import { emExcluded, emMonths, retireBase } from "../calc/insights.ts";
-import { reserveState } from "../calc/reserve.ts";
 import { money } from "../views/txlist.ts";
 import { rs0 } from "../views/accounts.ts";
 import { findRepeats, FREQ_LBL, GOAL_KINDS } from "../views/plan.ts";
@@ -222,6 +221,36 @@ export function backSheet(toId: string): void {
     s.querySelector<HTMLElement>("#bkMove")!.onclick = () => { closeModal(); txnForm({}, { type: "transfer", amount: b.amt, accountId: b.from.id, toAccountId: b.to.id, note: "Back from the reserve: big bills paid by card", back: "reserve" } as never); };
   });
 }
+/** ⓘ on the month's set-aside (approved 27 Nov 2026): the reserve's share, what's netted off, the property funds, the total. */
+export function saSheet(): void {
+  const d = E().data(), m = monthSetAside(d);
+  if (!m) return;
+  const dt = (x: Day): string => `${+x.slice(8, 10)} ${MN[+x.slice(5, 7) - 1]}`, B = reserveState(d).B.filter((b) => (b.ask ?? 0) > 50);
+  const row = (a: string, b: string, cls = ""): string => `<div class="bkr ${cls}"><span>${a}</span><span>${b}</span></div>`;
+  const res = m.share ? `<div class="bkg"><div class="bkh"><span>Big-bills reserve · this month's share</span><b>${money(m.share)}</b></div>
+      ${B.map((b) => row(`${esc(b.r.name)} · ${MN[+b.next.slice(5) - 1]}`, money(b.ask ?? 0))).join("")}
+      ${m.capped ? `<p class="note" style="margin:4px 0">The full share is ${money(m.full)}; ${esc(m.from.name)} can spare ${money(m.share)} this month, so the rest is spread over the next months.</p>` : ""}
+      ${m.back && m.netted ? m.back.groups.map((g) => `<div class="bkh" style="margin-top:8px"><span>Comes back: ${esc(g.acc)}${g.acc !== m.from.name ? ` bill · due ${dt(g.due)}` : ""}</span><b>− ${money(g.amt)}</b></div>${g.items.map((it) => row(`${esc(it.name)} · ${dt(it.date)}`, money(it.amt))).join("")}`).join("") : ""}
+      ${m.netted ? `<div class="bkh" style="margin-top:8px"><span>Reserve this month</span><b>${money(m.reserve)}</b></div>${m.rest > 50 ? `<p class="note" style="margin:2px 0 0">The other ${money(m.rest)} comes back on Pay by Tuesday, with the card bill.</p>` : ""}` : ""}</div>` : "";
+  const funds = m.funds.map((f) => `<div class="bkg"><div class="bkh"><span>${esc(f.p.name)} fund · ${money(f.need)} by ${MN[+f.by.slice(5) - 1]} ${f.by.slice(0, 4)}</span><b>${money(f.monthly)}</b></div></div>`).join("");
+  openSheet(`Set aside for ${MN[+m.ym.slice(5) - 1]}`, `${res}${funds}
+    <div class="bktot"><b>${m.total > 50 ? `${esc(m.from.name)} → ${esc(m.to.name)}` : "Nothing to move"}</b><b>${money(m.total)}</b></div>
+    ${m.netted ? `<p class="note" style="margin:8px 0 12px;font-size:13.5px;color:var(--ink)">These were paid by card from the reserve, so their money is already in ${esc(m.to.name)}: ${esc(m.from.name)} keeps ${money(m.netted)} for the card bill instead of moving it out and back.</p>` : ""}
+    <div class="btns"><button class="btn pri" type="button" id="saGo">${m.total > 50 ? `Move ${money(m.total)}` : "Done"}</button><button class="btn" type="button" id="cx">Close</button></div>`, (sh) => {
+    sh.querySelector<HTMLElement>("#cx")!.onclick = closeModal;
+    sh.querySelector<HTMLElement>("#saGo")!.onclick = () => { closeModal(); saMove(); };
+  });
+}
+/** Records the month's set-aside as one transfer, with its parts: the reserve's share and each fund in, what's netted off back. */
+export function saMove(): void {
+  const d = E().data(), m = monthSetAside(d);
+  if (!m) return;
+  const parts = [...(m.share ? [{ pot: "reserve", amt: m.share }] : []), ...(m.netted ? [{ back: "reserve", amt: m.netted }] : []), ...m.funds.map((f) => ({ pot: `prop:${f.p.id}`, amt: f.monthly }))];
+  const mon = MN[+m.ym.slice(5) - 1];
+  E().write([{ c: "txns", r: { id: uid(), type: "transfer", date: d.today, accountId: m.from.id, toAccountId: m.to.id, amount: Math.max(0, m.total), parts,
+    note: m.netted ? `Set aside for ${mon} (less ${money(m.netted)} for reserve bills paid by card)` : `Set aside for ${mon}`, updatedAt: Date.now() } as Rec }]);
+  toast(m.total > 50 ? `Recorded: ${m.from.name} → ${m.to.name} ${money(m.total)}` : `${mon}'s set-aside is done`);
+}
 export function ptAside(k: string, amt: string): void {
   const d = E().data(), a = reserveAcc(d), m = mainAcc(d); if (!a) { toast("Mark an account as the reserve first (edit the account)."); return; }
   const extra = amt === "extra";
@@ -299,6 +328,8 @@ export function planAct(d: MoneyData, x: DOMStringMap, id: string): boolean {
   if (x.holi !== undefined) { holidaySheet(); return true; }
   if (x.ptpay !== undefined) return ptPaySheet(x.ptpay);
   if (x.rback !== undefined) { backSheet(x.rback); return true; }
+  if (x.sainfo !== undefined) { saSheet(); return true; }
+  if (x.samove !== undefined) { saMove(); return true; }
   if (x.ptback !== undefined) { const [to, from, n] = x.ptback.split("|") as [string, string, string]; txnForm({}, { type: "transfer", amount: Math.round(+n * 100), accountId: from, toAccountId: to, note: "Back from the reserve: big bills paid by card", back: "reserve" } as never); return true; }
   if (x.ptmove !== undefined) { const [a, f, n, w] = x.ptmove.split("|") as [string, string, string, string]; ptMove(a, f, n, w); return true; }
   if (x.ptaside !== undefined) { const [k, n] = x.ptaside.split("|") as [string, string]; ptAside(k, n); return true; }

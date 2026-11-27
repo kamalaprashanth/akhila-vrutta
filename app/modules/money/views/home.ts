@@ -10,7 +10,7 @@ import { num, type Loan, type MoneyData, type Paise, type Rec } from "../calc/da
 import { balances, cardInfo, countsAcc, dueOf, expMonth, histCovered, openDateOf, stmtFor, type Account } from "../calc/accounts.ts";
 import { accName, catName, catTop, cemiDue, paidMap, planFor } from "../calc/plan.ts";
 import { forecast, mainAcc, type ForecastRow } from "../calc/forecast.ts";
-import { bigBills, isAutoItem, itemDate, obligations, payTue, readiness, reserveBack, reserveState, resvPaid, resvPlanned } from "../calc/reserve.ts";
+import { bigBills, isAutoItem, itemDate, monthSetAside, obligations, payTue, readiness, reserveBack, reserveState, resvPaid, resvPlanned } from "../calc/reserve.ts";
 import { reserveAcc } from "../calc/properties.ts";
 import { catLbl, feeCat, invChg, monthFigures, offBook, type MonthFigures } from "../calc/insights.ts";
 import { kindOf, schedule } from "../calc/loans.ts";
@@ -54,16 +54,29 @@ export function advButton(d: MoneyData): string {
   return `<button type="button" class="advbtn" data-go="advisor"><span class="advic">${ADV_IC}</span><span class="advt"><b>Ask your advisor</b><span>${ready ? `${MN[+now.slice(5) - 1]} check-up ready · ${esc((c.quick!.verdict || "").slice(0, 70))}` : "Checks your whole picture: cash, loans, insurance, investments, tax, goals"}</span></span><span class="raa">›</span></button>`;
 }
 
+/* ---------- the month's set-aside (approved 27 Nov 2026): from the 1st, one transfer, the details in ⓘ ---------- */
+function setAsideCard(d: MoneyData): string {
+  const m = monthSetAside(d);
+  if (!m) return "";
+  const mon = MN[+m.ym.slice(5) - 1]!, what = [m.share ? "reserve" : "", ...m.funds.map((f) => f.p.name + " fund")].filter(Boolean);
+  const note = m.share && m.reserve < 50 && m.netted ? (m.funds.length ? `${m.funds.map((f) => esc(f.p.name) + " fund").join(", ")} only: the reserve is covered this month` : "nothing to move: the reserve is covered this month")
+    : `${esc(what.join(" and ").replace(/^reserve/, "reserve"))}${m.netted ? " · less than usual this month" : m.capped ? " · less than the full share this month" : ""}`;
+  return `<div class="sacard" id="setAside"><div class="sah"><b>Set aside for ${mon}</b><button type="button" class="ii" data-sainfo="1" aria-label="What's in it">${INFO_ICON}</button></div>
+    <div class="sas">${dLabel(m.ym + "-01")} · ${note}</div>
+    <div class="satot"><b>${m.total > 50 ? `${esc(m.from.name)} → ${esc(m.to.name)} · ${rs0(m.total)}` : "Nothing to move"}</b><button class="btn sm pri" type="button" data-samove="1">${m.total > 50 ? "Move" : "Done"}</button></div></div>`;
+}
+
 /* ---------- pay by Tuesday, short balances, invest day, renewals ---------- */
 function payTueCard(d: MoneyData, st: HomeState): string {
   const td = d.today, T = payTue(d), isTue = T === td, end = addDays(T, 6), O = obligations(d, 21), Rd = readiness(d, 45), rst = reserveState(d), dd = dayDiff(td, T);
   const bill = (o: typeof O[number]): boolean => o.type !== "income" && o.type !== "investment" && !o.budget;
   const pay = O.filter((o) => !o.auto && bill(o) && o.date <= end), auto = O.filter((o) => o.auto && bill(o) && o.date >= td && o.date <= end);
   const next = O.filter((o) => !o.auto && bill(o) && o.date > end && o.date <= addDays(end, 7)), nextT = addDays(T, 7), nextSum = next.reduce((x, o) => x + o.amount, 0);
-  const moves = Rd.filter((s) => s.from && s.by! <= end), backs = reserveBack(d, end);
+  // the month's set-aside has its own card from the 1st (27 Nov 2026); what it nets off isn't shown here again
+  const msa = monthSetAside(d), moves = Rd.filter((s) => s.from && s.by! <= end), backs = reserveBack(d, end, msa?.netted ?? 0);
   const asides: { k: string; name: string; amt: Paise; wrap?: boolean; sub: string }[] = [];
-  if (rst.a && rst.B.length && !rst.doneThis && rst.setAside > 50) asides.push({ k: "reserve", name: "Big-bills reserve", amt: rst.setAside, wrap: rst.capped, sub: rst.capped ? `${money(rst.setAsideFull)} due · ${rst.spareFrom!.name} can spare ${money(rst.setAside)} · the rest is spread over the next months` : `${rst.B.length} big bill${rst.B.length === 1 ? "" : "s"} · into ${(rst.a as Account).name}` });
-  for (const f of rst.funds) if (!f.done && f.monthly > 50) asides.push({ k: "prop:" + f.p.id, name: `${f.p.name} fund`, amt: f.monthly, sub: `${short(f.need)} by ${mShort(f.by)}` });
+  if (!rst.spareFrom && rst.a && rst.B.length && !rst.doneThis && rst.setAside > 50) asides.push({ k: "reserve", name: "Big-bills reserve", amt: rst.setAside, wrap: rst.capped, sub: rst.capped ? `${money(rst.setAsideFull)} due · ${rst.spareFrom!.name} can spare ${money(rst.setAside)} · the rest is spread over the next months` : `${rst.B.length} big bill${rst.B.length === 1 ? "" : "s"} · into ${(rst.a as Account).name}` });
+  if (!rst.spareFrom) for (const f of rst.funds) if (!f.done && f.monthly > 50) asides.push({ k: "prop:" + f.p.id, name: `${f.p.name} fund`, amt: f.monthly, sub: `${short(f.need)} by ${mShort(f.by)}` });
   if (!pay.length && !moves.length && !backs.length && !asides.length && !auto.length && !next.length) return "";
   const nextLine = next.length ? `<button type="button" class="ptnext" data-ptnext="1" aria-expanded="${!!st.ptNext}"><span>Next Tue ${dLabel(nextT)} · ${next.length} to pay · ${rs0(nextSum)}</span><span aria-hidden="true">${st.ptNext ? "▴" : "›"}</span></button>
     ${st.ptNext ? `<div class="ptnl">${next.map((o) => `<div><span>${esc(o.name)}</span><b>${rs0(o.amount)}</b></div>`).join("")}</div>` : ""}` : "";
@@ -238,17 +251,19 @@ export function mainFigures(d: MoneyData): { name: string; cb: Paise; inS: Paise
   const cur = forecast(d, 1).months[0]!, bal = balances(d);
   const on = (id?: string | null): boolean => !id || id === m.id, isIn = (r: Row): boolean => r.type === "income" || (r.type === "transfer" && r.toAccountId === m.id);
   const pend = (cur.rows as Row[]).filter((r) => !r.paid && (r.type === "transfer" ? (r.accountId === m.id) !== (r.toAccountId === m.id) && (r.accountId === m.id || r.toAccountId === m.id) : on(r.accountId))), cb = bal.get(m.id) || 0;
-  const ra = reserveAcc(d), sa = ra ? reserveState(d).setAside : 0, saOut = ra && ra.id !== m.id ? sa : 0, saIn = ra && ra.id === m.id ? sa : 0;
+  // the reserve's set-aside this month, less what it nets off (that money stays in the main account for the card bills)
+  const ra = reserveAcc(d), msa = monthSetAside(d), sa = ra ? (msa && msa.from.id === m.id ? msa.reserve : reserveState(d).setAside) : 0, saOut = ra && ra.id !== m.id ? sa : 0, saIn = ra && ra.id === m.id ? sa : 0;
   const inS = pend.filter(isIn).reduce((x, r) => x + num(r.amount), 0) + saIn, outS = pend.filter((r) => !isIn(r)).reduce((x, r) => x + num(r.amount), 0) + saOut;
   return { name: String(m.name), cb, inS, outS, end: cb + inS - outS };
 }
 /** For the Dashboard: the main account, month-end, what to pay by Tuesday, and this month's spending. */
-export function moneySummary(d: MoneyData): { name: string; cb: Paise; end: Paise; tue: Day; isTue: boolean; n: number; tot: Paise; spent: Paise } | null {
+export function moneySummary(d: MoneyData): { name: string; cb: Paise; end: Paise; tue: Day; isTue: boolean; n: number; tot: Paise; spent: Paise; sa: string } | null {
   const f = mainFigures(d);
   if (!f) return null;
   const td = d.today, T = payTue(d), end = addDays(T, 6);
   const pay = obligations(d, 21).filter((o) => !o.auto && o.type !== "income" && o.type !== "investment" && !o.budget && o.date <= end);
-  return { name: f.name, cb: f.cb, end: f.end, tue: T, isTue: T === td, n: pay.length, tot: pay.reduce((x, o) => x + o.amount, 0), spent: d.live<Tx & { hist?: boolean }>("txns").filter((t) => t.type === "expense" && !t.hist && ymOf(t.date ?? "") === ymOf(td)).reduce((x, t) => x + num(t.amount), 0) };
+  const m = monthSetAside(d), sa = m ? (m.total > 50 ? `Set aside for ${MN[+m.ym.slice(5) - 1]} · ${m.from.name} → ${m.to.name} ${rs0(m.total)}` : `Set aside for ${MN[+m.ym.slice(5) - 1]} · nothing to move, mark it done`) : "";
+  return { sa, name: f.name, cb: f.cb, end: f.end, tue: T, isTue: T === td, n: pay.length, tot: pay.reduce((x, o) => x + o.amount, 0), spent: d.live<Tx & { hist?: boolean }>("txns").filter((t) => t.type === "expense" && !t.hist && ymOf(t.date ?? "") === ymOf(td)).reduce((x, t) => x + num(t.amount), 0) };
 }
 
 /** The whole page. */
@@ -272,7 +287,7 @@ export function homeParts(d: MoneyData, st: HomeState, h: PageHost): Record<"fir
   void expenseTree; void CC; void short;
   return {
     first: startShown() ? startList(d) : first ? `<div class="banner" style="margin-top:6px"><b>Start here.</b> Add your bank accounts and cards in Accounts › Banks &amp; cards, your salary, SIPs and bills in Plan › Regular, loans in Accounts › Loans, then record spending with Add.</div>` : "",
-    adv: aiOn() ? advButton(d) : "", pay: payTueCard(d, st), short: shortAlert(d), invest: investCard(d), renew: renewalsSoon(d), hero, needs, ins: insightCards(d, st, h), recent: recentH,
+    adv: aiOn() ? advButton(d) : "", pay: setAsideCard(d) + payTueCard(d, st), short: shortAlert(d), invest: investCard(d), renew: renewalsSoon(d), hero, needs, ins: insightCards(d, st, h), recent: recentH,
   };
 }
 /** The Overview (Calm): the balance first, then what to pay, move and put aside this week, what needs you, this
