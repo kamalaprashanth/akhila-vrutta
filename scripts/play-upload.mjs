@@ -42,15 +42,27 @@ try {
 }
 const up = await call("POST", `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${PKG}/edits/${edit.id}/bundles?uploadType=media`, readFileSync(aab), "application/octet-stream");
 console.log(`uploaded version ${up.versionCode}`);
+/** Commits the edit. When Play wants changes sent for review by hand (a policy issue or declaration pending),
+ *  it's committed without sending, and Play Console's Publishing overview has "Send changes for review". */
+let held = false;
+async function commit() {
+  try { await call("POST", `${API}/edits/${edit.id}:commit`); }
+  catch (e) {
+    if (!/changesNotSentForReview/.test(e.message)) throw e;
+    await call("POST", `${API}/edits/${edit.id}:commit?changesNotSentForReview=true`);
+    held = true;
+  }
+}
 const release = (status) => JSON.stringify({ track: TRACK, releases: [{ name, versionCodes: [String(up.versionCode)], status }] });
 try {
   await call("PUT", `${API}/edits/${edit.id}/tracks/${TRACK}`, release("completed"));
-  await call("POST", `${API}/edits/${edit.id}:commit`);
-  console.log(`::notice title=Google Play::Version ${up.versionCode} is on the internal testing track.`);
+  await commit();
+  console.log(held ? `::warning title=Google Play::Version ${up.versionCode} is on the internal testing track, waiting: send it for review in Play Console (Publishing overview › Send changes for review).`
+    : `::notice title=Google Play::Version ${up.versionCode} is on the internal testing track.`);
 } catch (e) {
   // an app not yet reviewed and published takes draft releases only
   if (!/draft/i.test(e.message)) throw e;
   await call("PUT", `${API}/edits/${edit.id}/tracks/${TRACK}`, release("draft"));
-  await call("POST", `${API}/edits/${edit.id}:commit`);
+  await commit();
   console.log(`::notice title=Google Play::Version ${up.versionCode} is a draft on the internal testing track: roll it out in Play Console.`);
 }
