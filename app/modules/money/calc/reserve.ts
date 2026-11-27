@@ -236,3 +236,34 @@ export function readiness(d: MoneyData, days = 45): Shortfall[] & { lows: Low[] 
     return r;
   });
 }
+
+/**
+ * Big bills paid from the reserve, but with a card or another account (27 Nov 2026): the money is still in the
+ * reserve's account, so Pay by Tuesday asks to move it back. For a card it goes to the main account (the one that
+ * pays the card bill), otherwise to the account the bill was paid from. A transfer out of the reserve's account
+ * marked back: "reserve" counts against it.
+ */
+export interface ReserveBack { from: Account; to: Account; amt: Paise; names: string[] }
+export function reserveBack(d: MoneyData): ReserveBack[] {
+  return d.memo("rback", () => {
+    const from = reserveAcc(d);
+    if (!from) return [];
+    const accs = new Map(d.live<Account>("accounts").map((a) => [a.id, a])), main = mainAcc(d);
+    const owed = new Map<string, { amt: Paise; names: string[] }>();
+    for (const t of d.live<PotTxn & { hist?: boolean; note?: string; categoryId?: string }>("txns")) {
+      if (t.type !== "expense" || t.pot !== "reserve" || t.hist || !t.accountId || t.accountId === from.id) continue;
+      const a = accs.get(t.accountId);
+      if (!a) continue;
+      const to = a.type === "card" ? (main && main.id !== from.id ? main : null) : a;
+      if (!to) continue;
+      const o = owed.get(to.id) ?? { amt: 0, names: [] };
+      o.amt += num(t.amount);
+      o.names.push(String(t.note || "a big bill"));
+      owed.set(to.id, o);
+    }
+    for (const t of d.live<PotTxn & { back?: string }>("txns")) {
+      if (t.type === "transfer" && t.back === "reserve" && t.accountId === from.id && t.toAccountId && owed.has(t.toAccountId)) owed.get(t.toAccountId)!.amt -= num(t.amount);
+    }
+    return [...owed].filter(([, o]) => o.amt > 50).map(([id, o]) => ({ from, to: accs.get(id)!, amt: o.amt, names: o.names }));
+  });
+}

@@ -285,6 +285,7 @@ export function planAct(d: MoneyData, x: DOMStringMap, id: string): boolean {
   if (x.invall !== undefined) { investAll(); return true; }
   if (x.holi !== undefined) { holidaySheet(); return true; }
   if (x.ptpay !== undefined) return ptPaySheet(x.ptpay);
+  if (x.ptback !== undefined) { const [to, from, n] = x.ptback.split("|") as [string, string, string]; txnForm({}, { type: "transfer", amount: Math.round(+n * 100), accountId: from, toAccountId: to, note: "Back from the reserve: big bills paid by card", back: "reserve" } as never); return true; }
   if (x.ptmove !== undefined) { const [a, f, n, w] = x.ptmove.split("|") as [string, string, string, string]; ptMove(a, f, n, w); return true; }
   if (x.ptaside !== undefined) { const [k, n] = x.ptaside.split("|") as [string, string]; ptAside(k, n); return true; }
   if (x.goal !== undefined) { const g = d.byId<G>("goals", x.goal); goalForm(g ? { ...g } : {}); return true; }

@@ -16,7 +16,7 @@ export interface Tip { text: string; more: string }
 export const AREAS: { id: string; title: string; sub: string }[] = [
   { id: "start", title: "Start here", sub: "" },
   { id: "money", title: "Money", sub: "Overview, Activity, Plan, Accounts, Insights" },
-  { id: "days", title: "Today and Calendar", sub: "What's due, family days" },
+  { id: "days", title: "Dashboard and Calendar", sub: "What's due, family days, bills by date" },
   { id: "things", title: "Documents and Household", sub: "Papers, homes, vehicles, appliances" },
   { id: "body", title: "Health and Habits", sub: "Readings, medicines, streaks" },
   { id: "family", title: "Family", sub: "Invite, what's shared, leaving" },
@@ -25,18 +25,18 @@ export const AREAS: { id: string; title: string; sub: string }[] = [
 export const ARTICLES: Article[] = [
   /* ---------- start here ---------- */
   { id: "how", area: "start", title: "How Akhila Vrutta works", sub: "Your data, the areas, the + button", body: [
-    "Akhila Vrutta keeps the running of a household in one place: money, bills, papers, the home, health, habits and family days. <b>Today</b> gathers what needs you from every area, so most days you only open Today.",
+    "Akhila Vrutta keeps the running of a household in one place: money, bills, papers, the home, health, habits and family days. <b>Dashboard</b> gathers what needs you from every area, so most days you only open the Dashboard.",
     { h: "The areas" },
     { list: [
-      "<b>Today</b>: what's due today and this week, from everywhere.",
+      "<b>Dashboard</b>: what's due today, your money at a glance, today's habits, your to-do list, and what's next.",
       "<b>Money</b>: your accounts, what you spend, and a plan for what's coming.",
-      "<b>Calendar</b>: birthdays, anniversaries and other family days, with reminders.",
+      "<b>Calendar</b>: birthdays, anniversaries and other family days, with reminders, and the bills due in the next 30 days.",
       "<b>Household</b>: home maintenance, appliances, vehicles, and your to-do and grocery lists.",
       "<b>Documents</b>: every paper, linked to what it belongs to, with expiry reminders.",
       "<b>Health</b> and <b>Habits</b>: readings, lab reports, medicines, and the things you do every day.",
     ] },
     { h: "Getting around" },
-    "On a phone, each area's own pages are at the bottom; <b>Menu</b> (always last) opens every area. The <b>+</b> button adds the usual thing for the page you're on: a transaction on Today and in Money, a document in Documents.",
+    "On a phone, each area's own pages are at the bottom; <b>Menu</b> (always last) opens every area. The <b>+</b> button adds the usual thing for the page you're on: a transaction on the Dashboard and in Money, a document in Documents.",
     { h: "Your data" },
     "Everything is encrypted on your device before it's saved, with a key only your passphrase (and Secret Key) can open. Files go to your own Google Drive, also encrypted. See <b>Your passphrase and Secret Key</b>.",
   ] },
@@ -81,22 +81,22 @@ export const ARTICLES: Article[] = [
     ] },
   ] },
   { id: "add", area: "money", title: "Adding transactions", sub: "Spends, income, transfers, investments", body: [
-    "Tap <b>+</b> (on Today or in Money). Choose the kind: <b>Expense</b> (money out), <b>Income</b> (money in), <b>Transfer</b> (between your own accounts, like paying a card bill), or <b>Investment</b>.",
+    "Tap <b>+</b> (on the Dashboard or in Money). Choose the kind: <b>Expense</b> (money out), <b>Income</b> (money in), <b>Transfer</b> (between your own accounts, like paying a card bill), or <b>Investment</b>.",
     "Pick the account it came from and a category. Tags are optional words that group spends across categories, like <b>Home</b> or <b>Trip to Goa</b>.",
     { h: "Paying a bill from the plan" },
     "You don't need + for things in your plan: tap <b>Paid</b> in Plan › Month or <b>Pay</b> on the Overview, and the transaction is recorded for you.",
     { h: "Adding old spends" },
+    "Not sure what an option means? Tap the <b>i</b> beside it. The calculator key beside the amount adds up a bill for you.",
     "When you add a past spend that your bank balance already includes, tick <b>Already in my balances</b>. It counts in Insights but won't take the money off your balance a second time.",
   ] },
-  { id: "plan", area: "money", title: "Plan, explained", sub: "Month, Regular, Cash flow, Calendar, Goals", body: [
+  { id: "plan", area: "money", title: "Plan, explained", sub: "Month, Regular, Cash flow, Goals", body: [
     "Plan answers two questions: <b>what do I have to pay this month</b>, and <b>will I have enough later</b>. It's all built from one list you set up once.",
     { flow: [["Regular", "the things that repeat: salary, rent, EMIs, SIPs"], ["Month", "this month's checklist: tick Paid as each goes"], ["Cash flow", "enough in each account? what to put aside?"]] },
-    { h: "The five tabs" },
+    { h: "The four tabs" },
     { list: [
       "<b>Month</b>: this month's to-do of bills and income. Tap Paid and the spend is recorded for you.",
       "<b>Regular</b>: the repeating items. Set them once; change one when it changes (a new rent, a SIP that ends).",
       "<b>Cash flow</b>: readiness, the big-bills reserve, the emergency fund, renewals, and the months ahead.",
-      "<b>Calendar</b>: the same items on a calendar, by due day.",
       "<b>Goals</b>: things you're saving for, and how much a month gets you there.",
     ] },
     { eg: "Rent ₹25,000 on the 5th, monthly. Add it once in Regular. Every month it shows in Month, a reminder comes before the 5th, and Cash flow checks your account has ₹25,000 by then." },
@@ -112,6 +112,9 @@ export const ARTICLES: Article[] = [
       "<b>Renewals</b> and <b>Big months</b>: what renews in the year ahead, and which months will be heavy.",
     ] },
     "To use the reserve, choose the account that holds it: edit the account (a separate savings account works well) and tick that it holds the big-bills reserve.",
+    { h: "Paying a big bill" },
+    "When a big bill goes out, tick <b>Paid from the big-bills reserve</b> on the spend. If you paid it by card or from another account, the money is still in the reserve's account: <b>Pay by Tuesday</b> then shows a <b>Move money</b> line to bring it back to the account that pays (for a card, the one you pay the card bill from).",
+    "Cash flow starts with Readiness and the reserve open; tap any line to open or minimise it.",
   ] },
   { id: "paytue", area: "money", title: "Pay by Tuesday", sub: "One day a week for bills", body: [
     "Instead of paying bills on many different days, the Overview gathers everything due before next Tuesday into one list: <b>pay</b> these, <b>move money</b> between accounts if one will run short, and <b>set aside</b> this month's share for big bills.",
@@ -130,13 +133,21 @@ export const ARTICLES: Article[] = [
   ] },
 
   /* ---------- today and calendar ---------- */
-  { id: "today", area: "days", title: "Today", sub: "Everything that needs you, on one page", body: [
-    "Today collects what's due from every area: bills and EMIs, medicines and check-ups, habits to tick, home jobs, warranties and vehicle renewals, and papers that are expiring.",
-    "Medicines and daily habits can be ticked right here. Anything else opens in its own area when you tap it. The <b>+</b> button adds a transaction.",
+  { id: "today", area: "days", title: "Dashboard", sub: "Everything that needs you, on one page", body: [
+    "The Dashboard collects what's due from every area: bills and EMIs, medicines and check-ups, habits to tick, home jobs, warranties and vehicle renewals, and papers that are expiring.",
+    { list: [
+      "<b>Today</b>: what's due today. Medicines can be ticked right here; anything else opens in its own area.",
+      "<b>Money</b>: your main account today and at month-end, what to pay by Tuesday, and what you've spent this month.",
+      "<b>Habits</b>: today's habits, ticked here, with their streaks.",
+      "<b>To do</b>: your to-do list from Household › Lists. Tick one when it's done.",
+      "<b>Next up</b>: the next things coming, each with its day, up to two months ahead.",
+    ] },
+    "The <b>+</b> button adds a transaction.",
   ] },
-  { id: "calendar", area: "days", title: "Calendar and family days", sub: "Birthdays, anniversaries, shraddha", body: [
+  { id: "calendar", area: "days", title: "Calendar and family days", sub: "Birthdays, anniversaries, shraddha, bills by date", body: [
     "Add the days that matter: birthdays, anniversaries and any other yearly day, each by its date. You choose how many days before to be reminded.",
     "A <b>shraddha</b> can follow the Telugu calendar instead: give the date it happened, and the app works out the tithi each year.",
+    "Below the family days, <b>Bills and payments</b> lists what's due in Money in the next 30 days, each on its day. Give a regular item a due day (Plan › Regular) to place it.",
   ] },
 
   /* ---------- documents and household ---------- */
@@ -160,7 +171,7 @@ export const ARTICLES: Article[] = [
   ] },
   { id: "habits", area: "body", title: "Habits", sub: "Every day, some days, or towards a target", body: [
     "A habit can be something to do (every day, some days, or a few times a week), an amount towards a daily target (glasses of water), something to avoid, or a practice for a set number of days.",
-    "Tick them on Today or in Habits. Each habit shows its streak and a 6-month calendar.",
+    "Tick them on the Dashboard or in Habits. Each habit shows its streak and a 6-month calendar.",
   ] },
 
   /* ---------- family ---------- */
@@ -188,6 +199,8 @@ export const FAQS: Faq[] = [
   { id: "regvstx", q: "Regular or a transaction: which do I add?", a: "Regular is for what repeats (salary, rent, EMIs, SIPs): add it once in Plan › Regular. A transaction is one thing that happened (₹450 on groceries today): add it with +. When a regular item is paid, tap Paid and the transaction is made for you.", more: "plan" },
   { id: "balance", q: "Why doesn't my balance match the bank?", a: "Usually a spend that wasn't recorded, or one recorded twice. Compare the account's transactions with your statement. If you started with a balance on a date, everything since that date must be in the app. You can also correct the balance by editing the account.", more: "accounts" },
   { id: "hist", q: "What does \"Already in my balances\" mean?", a: "Use it for an old spend you're adding late, when the bank balance you typed in already includes it. It shows in Insights and reports but doesn't change any balance, card bill or loan again.", more: "add" },
+  { id: "rescard", q: "I paid a reserve bill by credit card. What do I do?", a: "Tick “Paid from the big-bills reserve” on the card spend. Pay by Tuesday then asks you to move that amount from the reserve's account to the account you pay the card bill from. Pay the full card bill from there as usual.", more: "cashflow" },
+  { id: "calc", q: "Can I add up a bill while entering it?", a: "Yes. In Add transaction, tap the calculator key beside the amount, work it out (450 + 120, say), then tap Use it.", more: "add" },
   { id: "reserve", q: "What is the big-bills reserve?", a: "A way to pay yearly and quarterly bills without a shock: each one is spread over the months before it's due, so you put a small amount aside every month into an account you choose.", more: "cashflow" },
   { id: "tuesday", q: "Why Tuesday?", a: "One fixed day a week for paying bills means nothing is forgotten and you don't have to think about due dates every day. Anything due before next Tuesday is on this week's list.", more: "paytue" },
   { id: "card", q: "How do I record a credit card spend and paying the card bill?", a: "A spend on the card is an Expense from the card account. Paying the card bill is a Transfer from your bank account to the card. That way the spend is counted once, when it happened.", more: "add" },
@@ -215,6 +228,7 @@ export const WORDS: Record<string, Word> = {
   hist: { word: "Already in my balances", text: "For an old spend you're adding late, when the balance you typed in already includes it. It counts in Insights and reports but doesn't change any balance again.", more: "add" },
   auto: { word: "Auto-debit", text: "Paid for you by the bank, a standing instruction or a card. It isn't on your Pay list, but Cash flow still checks there's enough money on the day.", more: "plan" },
   paytue: { word: "Pay by Tuesday", text: "One day a week for bills: everything due before next Tuesday, in one list to pay, move or set aside.", more: "paytue" },
+  reserveback: { word: "Moving reserve money back", text: "A big bill was paid from the reserve, but with a card or another account, so the money for it is still sitting in the reserve's account. Move it to the account that pays: for a card, the one you pay the card bill from. Then the reserve and your balances both stay right.", eg: "Hotstar ₹2,199 charged to the ICICI card and ticked “Paid from the big-bills reserve”: move ₹2,199 from the reserve account to HDFC before you pay the card bill from HDFC.", more: "cashflow" },
   networth: { word: "Net worth", text: "Everything you have (bank balances, investments, property) minus everything you owe (loans, card dues).", more: "accounts" },
   credit: { word: "Credit used", text: "How much of your cards' total limit you're using now. Keeping it under about 30% is better for your credit score.", more: "accounts" },
   tag: { word: "Tag", text: "A word that groups transactions across categories, like Home or Trip to Goa. In a family space, transactions with a shared tag are seen by both of you.", more: "add" },
@@ -228,15 +242,14 @@ export const TIPS: Record<string, Tip> = {
   "money:plan:month": { text: "<b>Month</b> is this month's checklist of bills and income, made from your regular items. Tap <b>Paid</b> as each one goes.", more: "plan" },
   "money:plan:regular": { text: "<b>Regular</b> is everything that repeats: salary, rent, EMIs, SIPs, subscriptions. Add each one once; the app then builds your month's checklist, reminders and forecast from it.", more: "plan" },
   "money:plan:cashflow": { text: "<b>Cash flow</b> looks ahead: will each account have enough when bills are due, and how much to put aside each month for the big yearly ones.", more: "cashflow" },
-  "money:plan:calendar": { text: "<b>Calendar</b> puts your regular items on their due days. Give an item a due day in Regular to place it here.", more: "plan" },
   "money:plan:goals": { text: "<b>Goals</b> are things you're saving for, like a car or a child's education, with how much a month gets you there.", more: "plan" },
   "money:accounts": { text: "<b>Accounts</b> holds your banks, cards, investments, loans and property, and adds them up into your net worth.", more: "accounts" },
-  today: { text: "<b>Today</b> gathers what needs you from every area: bills, medicines, habits, home jobs and renewals.", more: "today" },
-  calendar: { text: "<b>Calendar</b> keeps birthdays, anniversaries and other family days, and reminds you before each one.", more: "calendar" },
+  today: { text: "<b>Dashboard</b> gathers what needs you from every area, your money at a glance, today's habits, your to-do list and what's next.", more: "today" },
+  calendar: { text: "<b>Calendar</b> keeps birthdays, anniversaries and other family days, reminds you before each one, and lists the bills due in the next 30 days.", more: "calendar" },
   household: { text: "<b>Household</b> keeps home jobs that repeat, appliances and warranties, vehicles, and your lists.", more: "household" },
   documents: { text: "<b>Documents</b> keeps every paper with what it belongs to. Tap <b>+</b> and choose what it's for.", more: "documents" },
   health: { text: "<b>Health</b> keeps readings, lab reports, medicines and check-ups for each person. It's a record, not medical advice.", more: "health" },
-  habits: { text: "<b>Habits</b> are the things you want to do every day or some days. Tick them here or on Today.", more: "habits" },
+  habits: { text: "<b>Habits</b> are the things you want to do every day or some days. Tick them here or on the Dashboard.", more: "habits" },
   family: { text: "<b>Family</b> lets you share chosen things with your spouse or family, end-to-end encrypted.", more: "family" },
 };
 /** The tip for a page: the most specific one that exists ("money:plan:regular", else "money:plan", else "money"). */

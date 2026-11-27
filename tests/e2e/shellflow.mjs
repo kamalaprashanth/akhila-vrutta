@@ -56,7 +56,7 @@ for (const [name, vp, touch] of [["phone", { width: 390, height: 844 }, true], [
 
   if (touch) {
     const tb = await p.$$eval("#nav .tab", (l) => l.map((a) => a.textContent.trim()));
-    ok(tb.join(",") === "Today,Money,Household,Health,Menu", `Today's bottom bar has the main sections and the menu (${tb.join(", ")})`);
+    ok(tb.join(",") === "Dashboard,Money,Household,Health,Menu", `The Dashboard's bottom bar has the main sections and the menu (${tb.join(", ")})`);
     await p.click("#navMenu"); await p.waitForTimeout(300);
     ok(await p.evaluate(() => document.body.classList.contains("dopen")), "…Menu there opens the side menu");
     await p.keyboard.press("Escape"); await p.waitForTimeout(300);
@@ -98,10 +98,10 @@ for (const [name, vp, touch] of [["phone", { width: 390, height: 844 }, true], [
   await p.evaluate(() => { location.hash = "#/health"; }); await p.waitForTimeout(400);
   if (touch) {
     const labels = await p.$$eval("#nav .tab", (t) => t.map((x) => x.textContent.trim()));
-    ok(labels.join(",") === "Today,Money,Household,Health,Menu" && await p.getAttribute('#nav [data-sub="main:health"]', "aria-current") === "page", `a section without tabs gets the main bar with itself on (${labels.join(", ")})`);
+    ok(labels.join(",") === "Dashboard,Money,Household,Health,Menu" && await p.getAttribute('#nav [data-sub="main:health"]', "aria-current") === "page", `a section without tabs gets the main bar with itself on (${labels.join(", ")})`);
     await p.evaluate(() => { location.hash = "#/docs"; }); await p.waitForTimeout(400);
     const l2 = await p.$$eval("#nav .tab", (t) => t.map((x) => x.textContent.trim()));
-    ok(l2.join(",") === "Today,Money,Household,Docs,Menu", `…Documents (Docs) takes the fourth place (${l2.join(", ")})`);
+    ok(l2.join(",") === "Dashboard,Money,Household,Docs,Menu", `…Documents (Docs) takes the fourth place (${l2.join(", ")})`);
     await p.evaluate(() => { location.hash = "#/household/due"; }); await p.waitForTimeout(400);
     const l3 = await p.$$eval("#nav .tab", (t) => t.map((x) => x.textContent.trim()));
     ok(l3[l3.length - 1] === "Menu", `…and a section's own tabs end with Menu (${l3.join(", ")})`);

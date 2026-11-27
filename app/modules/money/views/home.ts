@@ -10,7 +10,7 @@ import { num, type Loan, type MoneyData, type Paise, type Rec } from "../calc/da
 import { balances, cardInfo, countsAcc, dueOf, expMonth, histCovered, openDateOf, stmtFor, type Account } from "../calc/accounts.ts";
 import { accName, catName, catTop, cemiDue, paidMap, planFor } from "../calc/plan.ts";
 import { forecast, mainAcc, type ForecastRow } from "../calc/forecast.ts";
-import { bigBills, isAutoItem, itemDate, obligations, payTue, readiness, reserveState, resvPaid, resvPlanned } from "../calc/reserve.ts";
+import { bigBills, isAutoItem, itemDate, obligations, payTue, readiness, reserveBack, reserveState, resvPaid, resvPlanned } from "../calc/reserve.ts";
 import { reserveAcc } from "../calc/properties.ts";
 import { catLbl, feeCat, invChg, monthFigures, offBook, type MonthFigures } from "../calc/insights.ts";
 import { kindOf, schedule } from "../calc/loans.ts";
@@ -59,14 +59,14 @@ function payTueCard(d: MoneyData, st: HomeState): string {
   const bill = (o: typeof O[number]): boolean => o.type !== "income" && o.type !== "investment" && !o.budget;
   const pay = O.filter((o) => !o.auto && bill(o) && o.date <= end), auto = O.filter((o) => o.auto && bill(o) && o.date >= td && o.date <= end);
   const next = O.filter((o) => !o.auto && bill(o) && o.date > end && o.date <= addDays(end, 7)), nextT = addDays(T, 7), nextSum = next.reduce((x, o) => x + o.amount, 0);
-  const moves = Rd.filter((s) => s.from && s.by! <= end);
+  const moves = Rd.filter((s) => s.from && s.by! <= end), backs = reserveBack(d);
   const asides: { k: string; name: string; amt: Paise; wrap?: boolean; sub: string }[] = [];
   if (rst.a && rst.B.length && !rst.doneThis && rst.setAside > 50) asides.push({ k: "reserve", name: "Big-bills reserve", amt: rst.setAside, wrap: rst.capped, sub: rst.capped ? `${money(rst.setAsideFull)} due · ${rst.spareFrom!.name} can spare ${money(rst.setAside)} · the rest is spread over the next months` : `${rst.B.length} big bill${rst.B.length === 1 ? "" : "s"} · into ${(rst.a as Account).name}` });
   for (const f of rst.funds) if (!f.done && f.monthly > 50) asides.push({ k: "prop:" + f.p.id, name: `${f.p.name} fund`, amt: f.monthly, sub: `${short(f.need)} by ${mShort(f.by)}` });
-  if (!pay.length && !moves.length && !asides.length && !auto.length && !next.length) return "";
+  if (!pay.length && !moves.length && !backs.length && !asides.length && !auto.length && !next.length) return "";
   const nextLine = next.length ? `<button type="button" class="ptnext" data-ptnext="1" aria-expanded="${!!st.ptNext}"><span>Next Tue ${dLabel(nextT)} · ${next.length} to pay · ${rs0(nextSum)}</span><span aria-hidden="true">${st.ptNext ? "▴" : "›"}</span></button>
     ${st.ptNext ? `<div class="ptnl">${next.map((o) => `<div><span>${esc(o.name)}</span><b>${rs0(o.amount)}</b></div>`).join("")}</div>` : ""}` : "";
-  if (!pay.length && !moves.length && !asides.length)
+  if (!pay.length && !moves.length && !backs.length && !asides.length)
     return `<div class="ptcard done slim"><div class="ptone">✓ Nothing to pay till Tue ${dLabel(isTue ? nextT : T)}</div>${nextLine}</div>`;
   const tot = pay.reduce((x, o) => x + o.amount, 0), n = pay.length;
   const split = (o: typeof O[number]): [string, string] => { const i = o.name.indexOf(" · "); return (o.src as string) === "pp" && i > 0 ? [o.name.slice(i + 3), o.name.slice(0, i)] : [o.name, ""]; };
@@ -74,13 +74,15 @@ function payTueCard(d: MoneyData, st: HomeState): string {
   const row = (main: string, sub: string, amt: string, btn: string): string => `<div class="ptrow"><div class="main"><div class="t">${main}</div><div class="s">${sub}</div></div><div class="amt">${amt}</div>${btn}</div>`;
   const payRows = pay.map((o) => { const [m, pre] = split(o); return row(`${o.date < td ? "⚠ " : ""}${esc(m)}`, `${pre ? esc(pre) + " · " : ""}${when(o)}`, rs0(o.amount), `<button class="btn sm pri" type="button" data-ptpay="${esc(o.key)}">Pay</button>`); }).join("");
   const moveRows = moves.map((s) => row(`${esc(s.from!.name)} → ${esc(s.acc.name)}`, `for ${esc(s.item.name)} · ${dShort(s.date)}`, rs0(s.need), `<button class="btn sm pri" type="button" data-ptmove="${esc(s.acc.id)}|${esc(s.from!.id)}|${s.need / 100}|${esc(s.item.name)}">Move</button>`)).join("");
+  // reserve bills paid by card or another account: the money goes back out of the reserve's account (27 Nov 2026)
+  const backRows = backs.map((b) => row(`${esc(b.from.name)} → ${esc(b.to.name)} <button type="button" class="ii" data-term="reserveback" aria-label="Why move this?">i</button>`, `Paid from the reserve: ${esc(b.names.slice(-3).join(", "))}`, rs0(b.amt), `<button class="btn sm pri" type="button" data-ptback="${esc(b.to.id)}|${esc(b.from.id)}|${b.amt / 100}">Move</button>`)).join("");
   const asideRows = asides.map((x) => row(esc(x.name), x.wrap ? `<span class="swrap">${esc(x.sub)}</span>` : esc(x.sub), rs0(x.amt), `<button class="btn sm pri" type="button" data-ptaside="${esc(x.k)}|${Math.round(x.amt / 100)}">Done</button>`)).join("");
   const autoLine = auto.length ? `<div class="ptauto">Auto · ${auto.map((o) => { const sh = Rd.find((x) => x.item.key === o.key); return `${esc(o.name)} ${rs0(o.amount)} ${wd(o.date)} ${+o.date.slice(8)} ${sh ? '<span class="ccbad">short</span>' : "✓"}`; }).join(" · ")}</div>` : "";
   return `<div class="ptcard">
     <div class="pth"><div><button type="button" class="ptt" data-ptgo="cashflow">${isTue ? "Pay today" : "Pay by Tuesday"} <span aria-hidden="true">›</span></button><div class="pts">${dLabel(T)} · ${isTue ? "today" : dd === 1 ? "tomorrow" : `in ${dd} days`}</div></div>
       ${n ? `<div class="ptr"><b>${rs0(tot)}</b><span>${n} to pay</span></div>` : ""}</div>
     ${n ? `<div class="ptsec">Pay</div>${payRows}` : `<div class="ptnone">✓ No bills to pay till Tue ${dLabel(nextT)}</div>`}
-    ${moves.length ? `<div class="ptsec">Move money</div>${moveRows}` : ""}
+    ${moves.length || backs.length ? `<div class="ptsec">Move money</div>${moveRows}${backRows}` : ""}
     ${asides.length ? `<div class="ptsec">Set aside</div>${asideRows}` : ""}
     ${autoLine || nextLine ? `<div class="ptbot">${autoLine}${nextLine}</div>` : ""}</div>`;
 }
@@ -227,16 +229,33 @@ function insightCards(d: MoneyData, st: HomeState, h: PageHost): string {
   return `<div class="sh"><h3>Insights</h3><button class="lnk" type="button" data-insopen="1">Hide</button><button class="lnk" type="button" data-go="advisor">Ask your advisor ›</button></div><div class="icards">${I.map((x) => `<button class="icard ${x.cls}" type="button" ${x.at}><span class="ii">${IC[x.ic]}</span><span><span class="itag">${x.tag}</span><div class="it">${x.t}</div><div class="is">${x.s}</div></span></button>`).join("")}</div>`;
 }
 
+/** The main account today and at month-end: what's still coming in and going out this month. */
+export function mainFigures(d: MoneyData): { name: string; cb: Paise; inS: Paise; outS: Paise; end: Paise } | null {
+  const m = mainAcc(d);
+  if (!m) return null;
+  const cur = forecast(d, 1).months[0]!, bal = balances(d);
+  const on = (id?: string | null): boolean => !id || id === m.id, isIn = (r: Row): boolean => r.type === "income" || (r.type === "transfer" && r.toAccountId === m.id);
+  const pend = (cur.rows as Row[]).filter((r) => !r.paid && (r.type === "transfer" ? (r.accountId === m.id) !== (r.toAccountId === m.id) && (r.accountId === m.id || r.toAccountId === m.id) : on(r.accountId))), cb = bal.get(m.id) || 0;
+  const ra = reserveAcc(d), sa = ra ? reserveState(d).setAside : 0, saOut = ra && ra.id !== m.id ? sa : 0, saIn = ra && ra.id === m.id ? sa : 0;
+  const inS = pend.filter(isIn).reduce((x, r) => x + num(r.amount), 0) + saIn, outS = pend.filter((r) => !isIn(r)).reduce((x, r) => x + num(r.amount), 0) + saOut;
+  return { name: String(m.name), cb, inS, outS, end: cb + inS - outS };
+}
+/** For the Dashboard: the main account, month-end, what to pay by Tuesday, and this month's spending. */
+export function moneySummary(d: MoneyData): { name: string; cb: Paise; end: Paise; tue: Day; isTue: boolean; n: number; tot: Paise; spent: Paise } | null {
+  const f = mainFigures(d);
+  if (!f) return null;
+  const td = d.today, T = payTue(d), end = addDays(T, 6);
+  const pay = obligations(d, 21).filter((o) => !o.auto && o.type !== "income" && o.type !== "investment" && !o.budget && o.date <= end);
+  return { name: f.name, cb: f.cb, end: f.end, tue: T, isTue: T === td, n: pay.length, tot: pay.reduce((x, o) => x + o.amount, 0), spent: d.live<Tx & { hist?: boolean }>("txns").filter((t) => t.type === "expense" && !t.hist && ymOf(t.date ?? "") === ymOf(td)).reduce((x, t) => x + num(t.amount), 0) };
+}
+
 /** The whole page. */
 export function homeParts(d: MoneyData, st: HomeState, h: PageHost): Record<"first" | "adv" | "pay" | "short" | "invest" | "renew" | "hero" | "needs" | "ins" | "recent", string> {
   const now = ymOf(d.today), cur = forecast(d, 1).months[0]!, m = mainAcc(d), bal = balances(d);
   const first = !d.live("txns").length && !d.live("recurring").length && !d.live("loans").length;
   let hero = "";
   if (m) {
-    const on = (id?: string | null): boolean => !id || id === m.id, isIn = (r: Row): boolean => r.type === "income" || (r.type === "transfer" && r.toAccountId === m.id);
-    const pend = (cur.rows as Row[]).filter((r) => !r.paid && (r.type === "transfer" ? (r.accountId === m.id) !== (r.toAccountId === m.id) && (r.accountId === m.id || r.toAccountId === m.id) : on(r.accountId))), cb = bal.get(m.id) || 0;
-    const ra = reserveAcc(d), sa = ra ? reserveState(d).setAside : 0, saOut = ra && ra.id !== m.id ? sa : 0, saIn = ra && ra.id === m.id ? sa : 0;
-    const inS = pend.filter(isIn).reduce((x, r) => x + num(r.amount), 0) + saIn, outS = pend.filter((r) => !isIn(r)).reduce((x, r) => x + num(r.amount), 0) + saOut, end = cb + inS - outS;
+    const { cb, inS, outS, end } = mainFigures(d)!;
     hero = `<div class="hero"><div class="lbl">${esc(m.name)} balance today</div><div class="big">${money(cb)}</div>
       <div class="hrow"><div><div class="k">Month-end balance</div><div class="hv">${money(end)}</div>${end < -50 ? `<span class="tagx">Short by ${money(-end)}</span>` : `<span class="tagx">On track</span>`}</div>
       <div class="flow">+${money(inS)} coming in<br>−${money(outS)} still due<br><button class="chg" type="button" id="pickMain">Change account</button></div></div></div>`;

@@ -10,6 +10,9 @@ import type { Rec } from "../../core/store.ts";
 import { scheduleReminders, setReminderSource } from "../../core/reminders.ts";
 import { askConfirm, closeModal, ensureLayer, field, openSheet, toast, val } from "../../core/ui.ts";
 import { MONTHS, PLACE, TITHIS, addDays, panchang } from "./panchang.ts";
+import { moneyNow, startMoney } from "../money/index.ts";
+import { obligations } from "../money/calc/reserve.ts";
+import { formatINR } from "../../core/money.ts";
 import { famDays, famTitle, KINDS, occurrences, tithiLabel, upcoming, type FamDay, type Kind, type Occ } from "./data.ts";
 
 export const ICON = "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4M12 13.5l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z";
@@ -31,6 +34,14 @@ export function famItems(from: string, days: number): (Occ & { sub: string })[] 
 
 /* ---------- the page ---------- */
 let rootEl: HTMLElement | null = null;
+/** Bills, EMIs, card bills and SIPs in the next 30 days, from Money (moved here from Plan › Calendar, 27 Nov 2026). */
+function billsHtml(t: string): string {
+  let L: ReturnType<typeof obligations> = [];
+  try { startMoney(); L = obligations(moneyNow(), 30).filter((o) => o.type !== "income" && !o.anyDay); } catch { return ""; }
+  if (!L.length) return "";
+  const wd = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return html`<h2>Bills and payments · next 30 days</h2><div class="list">${raw(L.map((o) => { const dt = new Date(`${o.date}T00:00`); return html`<a class="row tap" href="#/money/plan"><span class="dbday"><small>${o.date === t ? "Today" : wd[dt.getDay()]!}</small><b>${String(dt.getDate())}</b><small>${dt.toLocaleString("en-IN", { month: "short" })}</small></span><div class="main"><div class="t">${o.name}</div><div class="s">${o.auto ? "Auto-debit" : o.type === "investment" ? "Investment" : o.budget ? "Budget" : "To pay"}${o.date < t ? " · was due" : ""}</div></div><span class="amt">${formatINR(o.amount)}</span></a>`; }).join(""))}</div>`;
+}
 function draw(root: HTMLElement): void {
   if (!ctx.store) { root.innerHTML = html`<section class="card"><h2>Calendar</h2><p>Family days open once the app is unlocked.</p></section>`; return; }
   const r = reader(), t = today(), all = famDays(r), byId = new Map(all.map((f) => [f.id, f]));
@@ -48,6 +59,7 @@ function draw(root: HTMLElement): void {
     <p class="note">Birthdays, anniversaries and other days come round on their date; a shraddha on its tithi (the one at sunrise in ${PLACE.name}). You're reminded on the day.</p>
     ${raw(all.length ? html`<h2>Next 60 days</h2>${raw(soon.length ? html`<div class="list">${raw(soon.map(row).join(""))}</div>` : html`<p class="note">Nothing in the next 60 days.</p>`)}
     <h2>All family days</h2><div class="list">${raw(all.slice().sort((a, b) => famTitle(a).localeCompare(famTitle(b))).map(line).join(""))}</div>` : html`<div class="empty">Add birthdays, anniversaries and shraddha with + below.</div>`)}
+    ${raw(billsHtml(t))}
   </div></div>
   <button class="fab" type="button" id="calAdd" aria-label="Add a family day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`;
 }

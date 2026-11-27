@@ -249,3 +249,68 @@
 .mv.frv .frcats span{font:600 12.5px var(--body);border:1px solid var(--line);border-radius:9px;padding:5px 9px}
 .mv.frv .frerr{color:var(--warn,#a3321f);min-height:1em}
 .mv.frv input{width:100%;box-sizing:border-box}
+/* Overview: every card stands apart (27 Nov 2026): nothing sits flush against the card above */
+.mv .hero{margin-bottom:14px}
+.mv .list + .rnsoon,.mv .list + .ptcard,.mv .need + .rnsoon{margin-top:14px}
+/* Add transaction (27 Nov 2026): yes/no options on one line with (i), the calculator, borrowed money folded */
+.mv .swl{background:var(--sunk);border-radius:14px;padding:2px 14px;margin:4px 0 14px}
+.mv .swrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+.mv .swrow:first-child{border-top:0}
+.mv .swrow[hidden]{display:none}
+.mv .swt{flex:1 1 auto;min-width:0;font-weight:600;font-size:14.5px;cursor:pointer;margin:0;color:var(--ink);text-transform:none;letter-spacing:0}
+.mv .swi{width:26px;height:26px;flex:none;border-radius:50%;border:1.5px solid var(--muted);background:transparent;color:var(--muted);font:700 13px/1 var(--body);font-style:italic;cursor:pointer;padding:0;position:relative}
+.mv .swi::after{content:"";position:absolute;inset:-9px}
+.mv .swi[aria-expanded="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.mv input.swck{appearance:none;-webkit-appearance:none;width:46px;height:28px;flex:none;border-radius:14px;background:var(--line);position:relative;cursor:pointer;margin:0 0 0 auto;transition:background .2s}
+.mv input.swck::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s}
+.mv input.swck:checked{background:var(--accent)}
+.mv input.swck:checked::after{left:21px}
+.mv input.swck:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mv .swwhy{flex-basis:100%;margin:2px 0 0;font-size:13px;line-height:1.5;color:var(--muted)}
+.mv .calcbtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.mv .calcbtn[aria-expanded="true"]{background:var(--accent-soft);color:var(--accent)}
+.mv .calcp{background:var(--sunk);border-radius:14px;padding:12px;margin:-4px 0 14px}
+.mv .calcp[hidden]{display:none}
+.mv .calcd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;background:var(--surface);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.mv .calcd b{color:var(--accent);font-size:15px;white-space:nowrap}
+.mv .calck{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.mv .calck button{min-height:46px;border-radius:12px;border:0;background:var(--surface);font:600 19px var(--body);color:var(--ink);cursor:pointer}
+.mv .calck button.op{background:var(--accent-soft);color:var(--accent)}
+.mv .calcp .btns{margin:0}
+.mv details.txmore{margin:0 0 14px}
+.mv details.txmore[hidden]{display:none}
+.mv details.txmore>summary{cursor:pointer;font-weight:700;font-size:13.5px;color:var(--accent);padding:6px 0;list-style:none}
+.mv details.txmore>summary::-webkit-details-marker{display:none}
+.mv details.txmore>summary::after{content:" ›"}
+.mv details.txmore[open]>summary::after{content:" ⌄"}
+/* Plan › Regular: a filter and folded groups; Plan › Cash flow: a line per part (27 Nov 2026) */
+.mv .rgf{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
+.mv .rgf .chipbtn{font-size:12.5px;padding:7px 12px}
+.mv .rgf .chipbtn[aria-pressed="true"]{background:var(--accent);color:var(--on-accent,#fff)}
+.mv .rgrp{margin-top:10px}
+.mv .rgrp[hidden]{display:none}
+.mv .rgh{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:0 16px;border:0;border-radius:var(--r);background:var(--surface);box-shadow:var(--sh1);font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+.mv .rgh[aria-expanded="true"]{border-radius:var(--r) var(--r) 0 0}
+.mv .rgt{flex:1;min-width:0;font-weight:700;font-size:15px}
+.mv .rgn{color:var(--muted);font-size:13px;font-weight:600}
+.mv .rga{font-weight:700;font-size:15px;white-space:nowrap}
+.mv .rga small{font-weight:600;color:var(--muted);font-size:11.5px}
+.mv .rgc{color:var(--muted);width:14px;text-align:center}
+.mv .rgl{border-radius:0 0 var(--r) var(--r)!important;border-top:1px solid var(--line)}
+.mv .rgall{display:block;width:100%;padding:12px 16px;text-align:left;border-top:1px solid var(--line)}
+.mv .cfl{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.mv .cff{background:var(--surface);border-radius:var(--r);box-shadow:var(--sh1);overflow:hidden}
+.mv .cfh{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:10px 16px;border:0;background:transparent;font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+.mv .cfdot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--good,#2e8b57)}
+.mv .cfdot.warn{background:#d08a00}
+.mv .cft{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.mv .cft b{font-size:15px}
+.mv .cft span{font-size:12.5px;color:var(--muted);font-weight:500}
+.mv .cfc{font:700 12.5px var(--body);color:var(--accent);white-space:nowrap}
+.mv .cfb{padding:0 12px 14px;border-top:1px solid var(--line)}
+.mv .cfb[hidden]{display:none}
+.mv .cfb>.list,.mv .cfb>.card{box-shadow:none;background:var(--sunk)}
+.mv .cfb>.sh:first-child{margin-top:12px}
+.mv .cfwhat{margin:10px 4px 0;font-size:13px;color:var(--accent);font-weight:600}
+.mv .ii{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--muted);background:transparent;color:var(--muted);font:700 11px/1 var(--body);font-style:italic;cursor:pointer;padding:0;margin-left:4px;vertical-align:1px;position:relative}
+.mv .ii::after{content:"";position:absolute;inset:-12px}

@@ -155,11 +155,21 @@ const report = await f.evaluate(() => {
     .replace(/\n  <h2>My profile for the advisor[\s\S]*?A reminder to review it shows every April\.<\/p>/, "");
   // Sheets: the new ones against the planner's, as drawn (markup, values, pickers, balances).
   const sheetHtml = (sel) => document.querySelector(sel)?.innerHTML ?? "(none)";
+  // Add transaction (27 Nov 2026): the reserve and "already in my balances" options as one-line switches with (i), the
+  // calculator, borrowed money folded. Those parts are taken out of both sides; everything else must match.
+  const txnorm = (h) => typeof h !== "string" ? h : h
+    .replace(/<label class="opt" id="w_pot"[^>]*><input type="checkbox" id="f_pot"[^>]*><div><b>Paid from the big-bills reserve<\/b>[\s\S]*?<\/label>/, "")
+    .replace(/<label class="opt" style="margin-bottom:12px"><input type="checkbox" id="f_hist"[\s\S]*?<\/label>/, "")
+    .replace(/<div class="swl">(?:<div class="swrow"[\s\S]*?<\/p><\/div>){2}<\/div>/, "")
+    .replace(/<button type="button" class="btn negbtn calcbtn"[\s\S]*?<\/svg><\/button>/, "")
+    .replace(/<div class="calcp" id="calcPad"[\s\S]*?id="calcUse"[^>]*>Use it<\/button><\/div><\/div>/, "")
+    .replace(/<details class="txmore"[^>]*><summary>[^<]*<\/summary>([\s\S]*?)<\/details>/, "$1")
+    .replace(/>\s+</g, "><");
   const cmpSheet = (label, openOld, openNew) => {
     n++;
     const kid = (h) => h.replace(/data-kidid="([^"]+)"/g, (m, v) => (knownIds.has(v) ? m : 'data-kidid="NEW"'));
-    openOld(); const a = moved(kid(sheetHtml("#modal"))); closeModal();
-    openNew(); const b = kid(sheetHtml("#mvLayer #modal")); N.kit.closeModal();
+    openOld(); const a = txnorm(moved(kid(sheetHtml("#modal")))); closeModal();
+    openNew(); const b = txnorm(kid(sheetHtml("#mvLayer #modal"))); N.kit.closeModal();
     if (a !== b) {
       let i = 0; while (i < a.length && a[i] === b[i]) i++;
       out.push(`sheet ${label}: differs at ${i}\n    old …${a.slice(Math.max(0, i - 100), i + 120)}\n    new …${b.slice(Math.max(0, i - 100), i + 120)}`);
@@ -234,7 +244,7 @@ const report = await f.evaluate(() => {
     const host = { pref: (k, v) => prefGet(k, v) }, nowM = ymOf(today());
     const run = (label, st, pf = {}) => {
       for (const [k, v] of Object.entries(pf)) prefSet(k, v);
-      page(`${tag} plan ${label}`, () => { Object.assign(S, { planTab: undefined, fcH: 12, bcM: undefined, bcD: undefined }, st); return vPlan(); }, () => N.plan.planHtml(dx, { fcH: 12, ...st }, host));
+      page(`${tag} plan ${label}`, () => { Object.assign(S, { planTab: undefined, fcH: 12, bcM: undefined, bcD: undefined }, st); return vPlan(); }, () => N.plan.planHtml(dx, { fcH: 12, classic: true, ...st }, host));
       for (const k of Object.keys(pf)) localStorage.removeItem("kpmp.ui." + k);
     };
     for (const t of ["month", "regular", "goals", undefined, "ready"]) run(`tab ${t}`, { planTab: t });

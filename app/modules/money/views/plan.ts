@@ -44,7 +44,13 @@ const wd = (d: Day): string => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const dShort = (d: Day): string => `${wd(d)} ${dLabel(d)}`;
 export const dFull = (d: Day): string => `${+d.slice(8, 10)} ${MN[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}`;
 
-export interface PlanState { planTab?: string; fcH?: number; bcM?: YM; bcD?: string; view?: string; accTab?: string }
+export interface PlanState {
+  planTab?: string; fcH?: number; bcM?: YM; bcD?: string; view?: string; accTab?: string;
+  /** the planner's own layout, unfolded and with its Calendar tab (the parity tests compare against it) */
+  classic?: boolean;
+  /** Regular (27 Nov 2026): the filter, the groups opened, the groups showing all */
+  regF?: string; regOpen?: string[]; regAll?: string[];
+}
 type Row = ForecastRow & { budget?: Paise; spent?: Paise; paidC?: boolean; canMiss?: boolean; ends?: boolean; sub?: string; day?: number | null };
 
 /** One planned item: Paid / Received / Missed buttons for this month's items. */
@@ -170,7 +176,12 @@ function forecastPanel(d: MoneyData, st: PlanState, h: PageHost): string {
     <span class="sub">In ${money(m.inc)} · Out ${money(m.out + m.inv)}</span><span class="bal">closing</span></summary>
     <div class="items">${m.rows.length ? m.rows.map((r) => plannedRow(d, r as Row, i === 0)).join("") : '<div class="empty">Nothing planned.</div>'}</div></details>`).join("")}`;
 }
+const EM_CUT = "\u0000em\u0000";
 function readyTab(d: MoneyData, st: PlanState, h: PageHost): string {
+  const p = readyParts(d, st, h);
+  return p.rd + p.rs + p.em + p.renew + p.big + `<div style="height:6px"></div>` + p.fc + p.holi;
+}
+function readyParts(d: MoneyData, st: PlanState, h: PageHost) {
   const Rd = readiness(d, 45), rst = reserveState(d), m0 = mainAcc(d);
   const acc = (a: unknown): Rec & { name: string; minBal?: Paise; emTarget?: Paise } => a as Rec & { name: string; minBal?: Paise; emTarget?: Paise };
   const rd = `<div class="sh"><h3>${term("readiness")} · next 45 days</h3></div>
@@ -191,7 +202,7 @@ function readyTab(d: MoneyData, st: PlanState, h: PageHost): string {
       <div class="btns" style="margin-top:12px">${rst.doneThis || rst.setAside <= 50 ? "" : `<button class="btn pri" type="button" data-ptaside="reserve|${Math.round(rst.setAside / 100)}">Put aside ${money(rst.setAside)}</button>`}<button class="btn" type="button" data-ptaside="reserve|extra">Add extra money</button></div></div>
     <div class="list" style="margin-top:12px">${rst.B.map((x) => { const r = x.r as Recurring & { provider?: string }; return `<div class="row tap" data-rec="${esc(r.id)}" role="button" tabindex="0"><div class="main"><div class="t">${esc(r.name)}${r.provider ? ` <span class="chip mute">${esc(r.provider)}</span>` : ""}</div><div class="s">${money(x.amt)} due ${dFull(itemDate({ day: r.day || 1 }, x.next)!)} · ${num(x.have) >= x.amt - 50 ? "fully set aside ✓" : `${money(num(x.have))} set aside`}${num(x.ask) > 50 ? ` · ${x.months} month${x.months === 1 ? "" : "s"} to go` : ""}</div></div><div class="amt">${num(x.ask) > 50 ? `${money(num(x.ask))}<div class="s mut" style="font-size:12px;font-weight:400">a month</div>` : "✓"}</div></div>`; }).join("") || '<div class="empty">No bills every 3 months or longer yet. Add them in Regular, with how often they come.</div>'}</div>
     <p class="note">Each bill's amount is spread over the months left before it's due, counting from when you start. If you skip a month, the gap is spread over the months that remain. Extra money goes to the bills due soonest and lowers what's asked in later months. Pay big bills from ${esc(a.name)} with "Paid from the big-bills reserve" ticked.</p>
-    ${rst.funds.map((f) => `<div class="sh"><h3>${esc(f.p.name)} fund</h3></div><div class="card"><div class="kv" style="margin-top:0"><span>Needed by ${mLabel(f.by)}</span><b>${money(f.need)}</b><span>Set aside so far</span><b>${money(f.have)}</b><span class="tot">Each month</span><b class="tot">${money(f.monthly)}</b></div><p class="cnote">Your share of the price still to pay, the TDS, loan charges and registration costs from the property's Expected tab. Change the date in the property's Expected tab.</p></div>`).join("")}
+    ${EM_CUT}${rst.funds.map((f) => `<div class="sh"><h3>${esc(f.p.name)} fund</h3></div><div class="card"><div class="kv" style="margin-top:0"><span>Needed by ${mLabel(f.by)}</span><b>${money(f.need)}</b><span>Set aside so far</span><b>${money(f.have)}</b><span class="tot">Each month</span><b class="tot">${money(f.monthly)}</b></div><p class="cnote">Your share of the price still to pay, the TDS, loan charges and registration costs from the property's Expected tab. Change the date in the property's Expected tab.</p></div>`).join("")}
     <div class="sh"><h3>${term("emergency")} · in ${esc(a.name)}</h3></div>
     <div class="card"><div class="kv" style="margin-top:0"><span>${esc(a.name)} balance</span><b>${money(rst.bal)}</b><span>Less the reserve${rst.funds.length ? " and funds" : ""}</span><b>−${money(rst.bal - rst.emergency)}</b><span class="tot">Emergency fund</span><b class="tot ${rst.emergency < 0 ? "neg" : ""}">${money(rst.emergency)}</b>
       <span>Target${num(a.emTarget) > 0 ? " (yours)" : ` (${emMonths(d)} months)`}</span><b>${money(rst.emTarget)}</b></div>
@@ -200,7 +211,33 @@ function readyTab(d: MoneyData, st: PlanState, h: PageHost): string {
       <table class="emtab">${(() => { const ex = emExcluded(d); return [...spendByCat(d)].filter(([, v]) => v >= 100).sort((x, y) => y[1] - x[1]).map(([k, v]) => `<tr class="tap ${ex.has(k) ? "off" : ""}" data-emcat="${esc(k)}"><td>${esc(catLbl(d, k))}</td><td>${money(v)}</td></tr>`).join(""); })()}<tr><td><b>Monthly spending counted</b></td><td><b>${money(rst.avg)}</b></td></tr></table>
       <div class="btns" style="margin-top:10px"><button class="btn sm" type="button" id="emSet">Months to cover or own target ›</button></div></div>`;
   }
-  return rd + rs + renewalsList(d) + bigMonths(d) + `<div style="height:6px"></div>` + forecastPanel(d, st, h) + `<p class="note" style="margin-top:16px">Items set to "move to the next trading day" skip weekends and NSE holidays. <button class="lnk" type="button" data-holi="1">Market holidays ›</button></p>`;
+  const [rs1, em = ""] = rs.split(EM_CUT);
+  return { Rd, rst, rd, rs: rs1!, em, renew: renewalsList(d), big: bigMonths(d), fc: forecastPanel(d, st, h),
+    holi: `<p class="note" style="margin-top:16px">Items set to "move to the next trading day" skip weekends and NSE holidays. <button class="lnk" type="button" data-holi="1">Market holidays ›</button></p>` };
+}
+
+/** Plan › Cash flow (approved design, 27 Nov 2026): one line per part with a green or amber dot; Readiness and the
+ *  reserve start open, the rest folded; each can be opened or minimised (remembered on this device). */
+const CF_OPEN: Record<string, boolean> = { ready: true, reserve: true };
+function cashFolded(d: MoneyData, st: PlanState, h: PageHost): string {
+  const p = readyParts(d, st, h), o = h.pref<Record<string, boolean>>("cfOpen", {}), rst = p.rst;
+  const cut = (x: string): string => x.replace(/^\s*<div class="sh">[\s\S]*?<\/div>/, "");
+  const WHAT: Record<string, string> = { ready: "readiness", reserve: "reserve", emergency: "emergency" };
+  const fold = (k: string, title: string, sum: string, ok: boolean, body: string): string => {
+    if (!body.trim()) return "";
+    const on = o[k] ?? CF_OPEN[k] ?? false;
+    return `<section class="cff"><button type="button" class="cfh" data-cf="${k}" aria-expanded="${on}"><span class="cfdot ${ok ? "ok" : "warn"}" aria-hidden="true"></span><span class="cft"><b>${title}</b><span>${sum}</span></span><span class="cfc">${on ? "Minimise" : "›"}</span></button><div class="cfb" ${on ? "" : "hidden"}>${WHAT[k] ? `<p class="cfwhat">${term(WHAT[k]!, `What is ${title.replace(/ · .*/, "").toLowerCase()}?`)}</p>` : ""}${cut(body)}</div></section>`;
+  };
+  const a = rst.a as (Rec & { name?: string }) | null, emPct = rst.emTarget > 0 ? Math.round(Math.max(0, Math.min(1, rst.emergency / rst.emTarget)) * 100) : 0;
+  const B = bigBills(d), yr = B.reduce((x, b) => x + num(b.amt) * 12 / Math.max(1, FREQ[String(b.r.freq)] || 12), 0);
+  return `<div class="cfl">
+    ${fold("ready", "Readiness", p.Rd.length ? `${p.Rd.length} time${p.Rd.length === 1 ? "" : "s"} an account runs short in the next 45 days` : "Every account has enough for the next 45 days", !p.Rd.length, p.rd)}
+    ${fold("reserve", `Big-bills reserve${a ? ` · ${esc(a.name)}` : ""}`, !a ? "Choose the account that holds it" : `${money(rst.held)} of ${money(rst.target)} · ${rst.doneThis ? "done this month ✓" : rst.setAside > 50 ? `put aside ${money(rst.setAside)} this month` : "nothing to put aside this month"}`, !a ? false : rst.doneThis || rst.setAside <= 50, p.rs)}
+    ${a ? fold("emergency", "Emergency fund", `${money(rst.emergency)} of ${money(rst.emTarget)} (${emPct}%)${rst.funds.length ? ` · ${rst.funds.length} property fund${rst.funds.length === 1 ? "" : "s"}` : ""}`, emPct >= 100, p.em) : ""}
+    ${fold("renew", "Renewals", B.length ? `${B.length} · ${money(yr)} a year` : "None yet", true, p.renew)}
+    ${fold("big", "Big months", "The heavy months in the next 12", true, p.big)}
+    ${fold("months", "Month by month", "The months ahead, in and out", true, p.fc)}
+  </div>${p.holi}`;
 }
 
 /* ---------- calendar ---------- */
@@ -322,7 +359,10 @@ export function planHtml(d: MoneyData, st: PlanState, h: PageHost): string {
   const now = ymOf(d.today), tab = st.planTab || "month", rec = d.live<Recurring>("recurring");
   const active = rec.filter((r) => !r.end || r.end >= now), past = rec.filter((r) => r.end && r.end < now);
   const monthly = (r: Recurring): number => (r.freq === "once" ? 0 : num(r.amount) / (FREQ[String(r.freq)] || 1));
-  const seg = `<div class="seg accseg planseg" role="group" aria-label="Plan" style="margin-top:4px">${[["month", "Month"], ["regular", "Regular"], ["cashflow", "Cash flow"], ["calendar", "Calendar"], ["goals", "Goals"]].map(([k, l]) => `<button type="button" data-pt="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</div>`;
+  // Calendar moved to the Calendar page (27 Nov 2026); the planner's layout keeps it
+  const tabs = [["month", "Month"], ["regular", "Regular"], ["cashflow", "Cash flow"], ...(st.classic ? [["calendar", "Calendar"]] : []), ["goals", "Goals"]];
+  if (tab === "calendar" && !st.classic) return planHtml(d, { ...st, planTab: "month" }, h);
+  const seg = `<div class="seg accseg planseg" role="group" aria-label="Plan" style="margin-top:4px">${tabs.map(([k, l]) => `<button type="button" data-pt="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</div>`;
   if (tab === "month") {
     const cur = forecast(d, 1).months[0]!, out = cur.rows.filter((r) => r.type !== "income") as Row[], inc = cur.rows.filter((r) => r.type === "income") as Row[];
     const amt = (r: Row): number => (r.src === "b" ? num(r.budget) : num(r.amount));
@@ -343,7 +383,7 @@ export function planHtml(d: MoneyData, st: PlanState, h: PageHost): string {
     <p class="note" style="margin-top:14px">This list comes from your regular items, loans and card bills. To change what appears here, edit them in Regular, or the loan in Accounts › Loans.</p>`;
   }
   if (tab === "calendar") return seg + `<div style="height:12px"></div>` + billsCalendar(d, st);
-  if (tab === "cashflow") return seg + `<div style="height:4px"></div>` + readyTab(d, st, h);
+  if (tab === "cashflow") return seg + `<div style="height:4px"></div>` + (st.classic ? readyTab(d, st, h) : cashFolded(d, st, h));
   if (tab === "goals") return seg + goalsTab(d);
   const th = (n: number): string => ([11, 12, 13].includes(n) ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] || "th");
   const rline = (r: Recurring & { invType?: string }): string => `<div class="row tap" data-rec="${esc(r.id)}" role="button" tabindex="0"><div class="main"><div class="t">${esc(r.name)}</div><div class="s">${r.freq === "once" ? `Once · ${mLabel(r.start)}` : `${FREQ_LBL[String(r.freq)]}${(FREQ[String(r.freq)] || 1) >= 2 ? ` · next ${recNextLbl(d, r)}` : r.day ? ` on the ${r.day}${th(r.day)}` : ""}${r.end ? ` · until ${mShort(r.end)}` : ""}`}${r.type === "investment" && r.invType ? ` · ${esc(r.invType)}` : ""}${r.accountId ? ` · ${esc(accName(d, r.accountId))}` : ""}</div></div><div class="amt ${r.type === "income" ? "in" : ""}">${money(num(r.amount))}</div></div>`;
@@ -353,13 +393,39 @@ export function planHtml(d: MoneyData, st: PlanState, h: PageHost): string {
     [term("budget", "Budgets"), "Amounts set aside; spends you tag reduce them", active.filter((r) => r.type === "expense" && r.budget)],
     ["SIPs & investments", "Money you invest on a schedule", active.filter((r) => r.type === "investment")],
   ];
-  return `${seg}
+  if (st.classic) return `${seg}
   <div class="btns" style="margin-top:12px"><button class="btn pri" type="button" id="addRec">+ Add regular item</button></div><input class="lsearch" type="search" data-lsearch placeholder="Search by name" aria-label="Search this list" autocomplete="off">
   <p class="note">Set these up once. Each one appears in Plan › Month on its schedule, in Cash flow, and in Insights.</p>
   ${active.length ? "" : startersHtml()}${repeatsSection(d, h)}
   ${groups.map(([ttl, hint, list]) => `<div class="sh"><h3>${ttl}</h3>${list.reduce((x, r) => x + monthly(r), 0) > 50 ? `<span class="note" style="margin:0">${money(list.reduce((x, r) => x + monthly(r), 0))} a month</span>` : ""}</div>
     <div class="list">${list.length ? list.sort((a, b) => num(b.amount) - num(a.amount)).map(rline).join("") : `<div class="empty" style="padding:12px 14px">${hint}. None yet.</div>`}</div>`).join("")}
   ${past.length ? `<details class="fm" style="margin-top:20px"><summary><span class="mn">Ended</span><span class="sub" style="text-align:right">${past.length}</span></summary><div class="list" style="border-radius:0">${past.map(rline).join("")}</div></details>` : ""}`;
+  return regularFolded(d, st, seg, active, past, monthly, rline, groups, h);
+}
+
+/** Plan › Regular (approved design, 27 Nov 2026): a filter, then each group folded to its count and monthly total;
+ *  an open group shows its five biggest, then "Show all". Searching opens what matches. */
+function regularFolded(d: MoneyData, st: PlanState, seg: string, active: Recurring[], past: Recurring[], monthly: (r: Recurring) => number,
+  rline: (r: Recurring) => string, groups0: [string, string, Recurring[]][], h: PageHost): string {
+  const F = st.regF || "all", oneOff = (r: Recurring): boolean => r.freq === "once", isMo = (r: Recurring): boolean => r.freq === "monthly" || !r.freq;
+  const fOk = (r: Recurring): boolean => F === "all" || (F === "monthly" ? isMo(r) : F === "longer" ? !isMo(r) && !oneOff(r) : F === "once" ? oneOff(r) : false);
+  const chips: [string, string, number][] = [["all", "All", active.length], ["monthly", "Monthly", active.filter(isMo).length], ["longer", "Quarterly & yearly", active.filter((r) => !isMo(r) && !oneOff(r)).length], ["once", "Once", active.filter(oneOff).length], ["ended", "Ended", past.length]];
+  const chipHtml = `<div class="rgf" role="group" aria-label="Show">${chips.filter(([k, , n]) => n || k === "all" || k === F).map(([k, l, n]) => `<button type="button" class="chip chipbtn" data-rgf="${k}" aria-pressed="${F === k}">${l} ${n}</button>`).join("")}</div>`;
+  const transfers = active.filter((r) => r.type === "transfer");
+  const groups: [string, string, string, Recurring[]][] = [...groups0.map(([t, hnt, L], i) => [["inc", "bill", "bud", "inv"][i]!, t, hnt, L] as [string, string, string, Recurring[]]), ...(transfers.length ? [["tr", "Transfers", "Money moved between your accounts", transfers] as [string, string, string, Recurring[]]] : [])];
+  const open = new Set(st.regOpen ?? []), all = new Set(st.regAll ?? []);
+  const groupHtml = ([k, ttl, hint, L0]: [string, string, string, Recurring[]]): string => {
+    const L = L0.filter(fOk).sort((a, b) => num(b.amount) - num(a.amount)), on = open.has(k), mo = L.reduce((x, r) => x + monthly(r), 0);
+    if (!L.length && F !== "all") return "";
+    const rows = L.map((r, i) => { const x = rline(r); return i >= 5 && !all.has(k) ? x.replace('<div class="row tap"', '<div class="row tap rmore" hidden') : x; }).join("");
+    return `<div class="rgrp"><button type="button" class="rgh" data-rgo="${k}" aria-expanded="${on}"><span class="rgt">${ttl.replace(/<[^>]+>/g, "")}</span><span class="rgn">${L.length}</span><span class="rga">${mo > 50 ? `${money(mo)}<small>/mo</small>` : ""}</span><span class="rgc" aria-hidden="true">${on ? "⌄" : "›"}</span></button>
+      <div class="list rgl" data-fold="${on ? "0" : "1"}" ${on ? "" : "hidden"}>${L.length ? rows : `<div class="empty" style="padding:12px 14px">${hint}. None yet.</div>`}${L.length > 5 && on ? `<button type="button" class="lnk rgall" data-rgall="${k}">${all.has(k) ? "Show fewer" : `Show all ${L.length}`}</button>` : ""}</div></div>`;
+  };
+  const body = F === "ended" ? `<div class="list">${past.map(rline).join("") || '<div class="empty">Nothing has ended.</div>'}</div>` : groups.map(groupHtml).join("");
+  return `${seg}
+  <div class="btns" style="margin-top:12px"><button class="btn pri" type="button" id="addRec">+ Add regular item</button></div><input class="lsearch" type="search" data-lsearch placeholder="Search by name" aria-label="Search this list" autocomplete="off">
+  ${active.length ? "" : startersHtml()}${repeatsSection(d, h)}
+  ${active.length + past.length ? chipHtml : ""}${body}`;
 }
 
 /** The page in the app. */
@@ -373,6 +439,12 @@ export const planPage: Page = {
   act(el, h, redraw) {
     const S = h.state() as unknown as PlanState, x = el.dataset;
     if (x.pt !== undefined) { S.planTab = x.pt; return redraw(); }
+    // Regular's filter, its folded groups, "Show all"; Cash flow's parts (27 Nov 2026)
+    if (x.rgf !== undefined) { S.regF = x.rgf; return redraw(); }
+    const flip = (L: string[] | undefined, k: string): string[] => (L ?? []).includes(k) ? (L ?? []).filter((y) => y !== k) : [...(L ?? []), k];
+    if (x.rgo !== undefined) { S.regOpen = flip(S.regOpen, x.rgo); return redraw(); }
+    if (x.rgall !== undefined) { S.regAll = flip(S.regAll, x.rgall); return redraw(); }
+    if (x.cf !== undefined) { const o = h.pref<Record<string, boolean>>("cfOpen", {}); o[x.cf] = !(o[x.cf] ?? CF_OPEN[x.cf] ?? false); h.prefSet("cfOpen", o); return redraw(); }
     if (x.h !== undefined) { S.fcH = +x.h; return redraw(); }
     if (x.bcm !== undefined) { S.bcM = addM(S.bcM || ymOf(h.data().today), +x.bcm); S.bcD = ""; return redraw(); }
     if (x.bcd !== undefined) { S.bcD = S.bcD === x.bcd ? "" : x.bcd; return redraw(); }
@@ -385,10 +457,12 @@ export const planPage: Page = {
     root.querySelectorAll<HTMLElement>(".list").forEach((L) => {
       if (!(t.compareDocumentPosition(L) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
       let any = false;
-      L.querySelectorAll<HTMLElement>(":scope > .row").forEach((r) => { const ok = !q || r.textContent!.toLowerCase().includes(q); r.hidden = !ok; if (ok) any = true; });
-      L.hidden = !any && !!q;
+      // folded groups (Regular) open while searching and fold again when the search is cleared
+      L.querySelectorAll<HTMLElement>(":scope > .row").forEach((r) => { const ok = !q || r.textContent!.toLowerCase().includes(q); r.hidden = q ? !ok : r.classList.contains("rmore"); if (ok) any = true; });
+      L.hidden = q ? !any : L.dataset.fold === "1";
+      const g = L.closest<HTMLElement>(".rgrp"); if (g) g.hidden = !!q && !any;
       const hd = L.previousElementSibling as HTMLElement | null;
-      if (hd && hd.classList.contains("sh")) hd.hidden = L.hidden;
+      if (hd && hd.classList.contains("sh")) hd.hidden = !!q && !any;
     });
   },
   change(t, h, redraw) {

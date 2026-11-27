@@ -39,7 +39,8 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   const settle = () => p.waitForTimeout(450);
   const tab = () => p.$eval(`${V} .planseg [aria-pressed="true"]`, (e) => e.dataset.pt);
   ok(!(await frameShown()), "Plan is drawn by the app");
-  for (const t of ["regular", "cashflow", "calendar", "goals", "month"]) { await p.click(`${V} [data-pt="${t}"]`); await settle(); ok((await tab()) === t, `tab ${t}`); }
+  ok(!(await p.$(`${V} [data-pt="calendar"]`)), "no Calendar tab (bills are on the Calendar page now)");
+  for (const t of ["regular", "cashflow", "goals", "month"]) { await p.click(`${V} [data-pt="${t}"]`); await settle(); ok((await tab()) === t, `tab ${t}`); }
   ok(await f.evaluate(() => S.planTab === "month"), "the tab is the planner's shared state");
 
   // Mark an item paid: the planner records it; the page redraws with it done.
@@ -70,26 +71,21 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click("#mvLayer #modal #sv"); await p.waitForTimeout(900);
   const sip = await f.evaluate(() => S.data.recurring.find((r) => r.name === "Flow SIP"));
   ok(sip && sip.amount === 2500 && sip.type === "investment" && sip.invType === "Mutual Fund" && sip.day === 5, "…a ₹2,500 SIP on the 5th is saved");
+  ok(!(await p.$eval(`${V} [data-rec="${sip?.id}"]`, (e) => !!e.offsetParent).catch(() => false)), "…its group starts folded");
+  await p.click(`${V} [data-rgo="inv"]`); await settle();
   await p.click(`${V} [data-rec="${sip?.id}"]`); await settle();
   ok(/Edit planned item/.test(await p.textContent("#mvLayer #modal h3")) && (await p.inputValue("#mvLayer #f_amount")) === "2,500", "a regular item opens its form with its amount");
   await p.click("#mvLayer #modal #cx"); await settle();
 
   // Cash flow: forecast length and the keep-at-least line.
   await p.click(`${V} [data-pt="cashflow"]`); await settle();
+  ok(await p.$eval(`${V} [data-cf="ready"]`, (e) => e.getAttribute("aria-expanded") === "true") && await p.$eval(`${V} [data-cf="months"]`, (e) => e.getAttribute("aria-expanded") === "false"), "Cash flow: Readiness open, Month by month folded");
+  await p.click(`${V} [data-cf="months"]`); await settle();
   await p.click(`${V} [data-h="24"]`); await settle();
   ok(await p.$eval(`${V} [data-h="24"]`, (e) => e.getAttribute("aria-pressed") === "true") && (await p.$$(`${V} details.fm`)).length >= 24, "24-month forecast");
   await p.fill(`${V} #fcMin`, "500000"); await p.press(`${V} #fcMin`, "Tab"); await settle();
   ok(await p.$eval(V, (e) => /keep ≥ 5L|below ₹5,00,000|above ₹5,00,000/.test(e.textContent)), "the keep-at-least line is drawn");
   await p.fill(`${V} #fcMin`, ""); await p.press(`${V} #fcMin`, "Tab"); await settle();
-
-  // Calendar: months and days.
-  await p.click(`${V} [data-pt="calendar"]`); await settle();
-  const m0 = await p.textContent(`${V} .monthbar .m`);
-  await p.click(`${V} [data-bcm="1"]`); await settle();
-  ok((await p.textContent(`${V} .monthbar .m`)) !== m0, "next month in the calendar");
-  await p.click(`${V} [data-bcm="-1"]`); await settle();
-  await p.click(`${V} .bcal .bd[data-bcd]:not(.x) >> nth=4`); await settle();
-  ok(await p.$eval(`${V} .sh h3`, (e) => /^\d+ \w{3}$/.test(e.textContent)), "tapping a day lists that day");
 
   // Goals: + Add goal opens the app's form; changing the kind redraws it for that kind.
   await p.click(`${V} [data-pt="goals"]`); await settle();

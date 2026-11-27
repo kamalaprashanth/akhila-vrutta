@@ -354,3 +354,27 @@ body.hlppub{padding:0}
 .hlptitle{flex:1;color:var(--muted);font-weight:700}
 .hlpfoot{margin:32px 4px 0}
 .mv .wrap h2.hlph{font:600 24px/1.25 var(--serif);text-transform:none;letter-spacing:normal;color:var(--ink);margin:6px 4px 4px}
+/* the Dashboard (27 Nov 2026) */
+.dbmoney{display:flex;flex-direction:column;gap:6px;background:var(--accent);color:var(--on-accent);border-radius:18px;padding:14px 16px;text-decoration:none}
+.dbh{display:flex;justify-content:space-between;font:700 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+.dbh span:last-child{text-transform:none;letter-spacing:0;font-size:13px}
+.dbm2{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:14px}
+.dbm2 span{opacity:.82}
+.dbbig{font:600 28px/1.1 var(--serif)}
+.dbline{border-top:1px solid color-mix(in srgb,var(--on-accent) 22%,transparent);padding-top:8px;margin-top:2px}
+.dbline span{opacity:.85}
+.dbh2{display:flex;justify-content:space-between;align-items:baseline}
+.dbh2 a{font:700 13px var(--sans);color:var(--accent);text-decoration:none}
+.dbtodo{display:flex;align-items:center;gap:12px;min-height:44px;border-bottom:1px solid var(--line);font-size:15px}
+.dbtodo:last-of-type{border-bottom:0}
+.dbtodo small{color:var(--muted);font-size:12.5px;margin-left:4px}
+.dbtodo small.late{color:#a3321f}
+.dbbox{width:24px;height:24px;flex:none;border-radius:7px;border:2px solid var(--muted);background:transparent;cursor:pointer;padding:0;position:relative}
+.dbbox::after{content:"";position:absolute;inset:-10px}
+.dbmore{display:block;padding:8px 0 12px;font:700 13px var(--sans);color:var(--accent);text-decoration:none}
+.dbnext{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);color:var(--ink);text-decoration:none;min-height:48px}
+.dbnext:last-child{border-bottom:0}
+.dbnext .tdt{flex:1}
+.dbday{width:48px;flex:none;display:flex;flex-direction:column;align-items:center;background:var(--accent-soft);border-radius:12px;padding:4px 0;color:var(--accent);line-height:1.1}
+.dbday b{font:600 20px/1.1 var(--serif)}
+.dbday small{font:700 10.5px var(--sans);text-transform:uppercase;letter-spacing:.04em}

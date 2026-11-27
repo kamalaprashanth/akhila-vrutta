@@ -14,6 +14,7 @@ import { holdingFor, UNIT_TYPES as _U } from "../calc/invest.ts";
 import { bankOf, kindOf } from "../calc/loans.ts";
 import type { Loan } from "../calc/data.ts";
 import { allTags, money, payers, type Tx } from "../views/txlist.ts";
+import { calcValue } from "../calc/expr.ts";
 import { $, $$, accOpts, askConfirm, attachPickers, catOpts, closeModal, field, openSheet, paiseOf, rs, toast, val, inrFmt } from "./kit.ts";
 import { E, del, uid, upsert } from "./env.ts";
 void _U;
@@ -149,6 +150,14 @@ function noteSuggest(d: MoneyData, sheet: HTMLElement): void {
   inp.addEventListener("blur", () => window.setTimeout(close, 120));
 }
 
+/** A yes/no option on one line, its explanation behind (i) (27 Nov 2026). */
+const swRow = (k: string, on: boolean, title: string, why: string, hide = false): string =>
+  `<div class="swrow" id="w_${k}" ${hide ? "hidden" : ""}><label class="swt" for="f_${k}">${esc(title)}</label><button type="button" class="swi" data-swi="${k}" aria-expanded="false" aria-controls="why_${k}" aria-label="What is ${esc(title)}?">i</button><input type="checkbox" role="switch" class="swck" id="f_${k}" ${on ? "checked" : ""}><p class="swwhy" id="why_${k}" hidden>${esc(why)}</p></div>`;
+
+/** The calculator under the amount (27 Nov 2026): optional, for adding up a bill; "Use" puts the answer in. */
+const CALC_KEYS = ["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", "0", ".", "⌫", "+"];
+const calcPad = (): string => `<div class="calcp" id="calcPad" hidden><div class="calcd"><span id="calcEx">0</span><b id="calcEq"></b></div><div class="calck">${CALC_KEYS.map((k) => `<button type="button" data-ck="${k}" class="${/\d|\./.test(k) ? "" : "op"}">${k}</button>`).join("")}</div><div class="btns"><button type="button" class="btn" data-ck="C">Clear</button><button type="button" class="btn pri" id="calcUse" disabled>Use it</button></div></div>`;
+
 /* ---------- the transaction form ---------- */
 interface TxIn extends Partial<Tx> { pot?: string; invType?: string; units?: number }
 export function txnForm(t0: TxIn = {}, preset: TxIn = {}): void {
@@ -160,10 +169,11 @@ export function txnForm(t0: TxIn = {}, preset: TxIn = {}): void {
   const body = `
     <div class="seg" role="group" aria-label="Type" id="tseg">${["expense", "income", "transfer", "investment"].map((k) => `<button type="button" data-k="${k}" aria-pressed="${t.type === k}">${TYPE_LBL[k]}</button>`).join("")}</div><div style="height:12px"></div>
     ${field(["amount", "Amount (₹)", "number", { value: rs(t.amount), step: "0.01", ph: "0.00", neg: 1, hint: "A negative expense, e.g. -500, is a refund or cashback: it reduces that category's spending and adds back to the account." }])}
+    ${calcPad()}
     <div class="grid2">${field(["date", "Date", "date", { value: t.date }])}${field(["accountId", "From account", "select", { value: t.paidBy ? "@" + t.paidBy : t.fromLoan ? "~" + t.fromLoan : t.accountId, options: [...accOpts(d, "", t.accountId), ...P.map((p) => ["@" + p.id, p.name] as [string, string]), ...legacyLoanOpt(d, t.fromLoan), ...(t.paidBy && !P.some((p) => p.id === t.paidBy) ? [["@" + t.paidBy, payerLbl(d, t as Tx)] as [string, string]] : [])] }])}</div>
     <p class="note spnote" id="spNote" hidden></p>
-    ${fundsBox()}
-    <label class="opt" id="w_pot" hidden><input type="checkbox" id="f_pot" ${t.pot === "reserve" ? "checked" : ""}><div><b>Paid from the big-bills reserve</b><span>Takes it out of the reserve pot, not your emergency fund.</span></div></label>
+    <details class="txmore" id="w_more" ${t.funds?.length ? "open" : ""}><summary>Paid with borrowed money?</summary>${fundsBox()}</details>
+
     ${field(["toAccountId", "To account", "select", { value: t.toAccountId, options: accOpts(d, "", t.toAccountId), hint: "Use transfers for card bill payments, moving money to savings, or withdrawing cash. They don't count as spending." }])}
     ${field(["categoryId", "Category", "select", { value: t.categoryId, options: catOpts(d, "expense") }])}
     ${field(["budgetId", "Counts toward budget", "select", { value: t.budgetId || "", options: [] }])}
@@ -173,7 +183,7 @@ export function txnForm(t0: TxIn = {}, preset: TxIn = {}): void {
     ${field(["charges", "Charges (₹)", "number", { value: rs(t.charges), step: "0.01", ph: "0.00", hint: "Part of the amount that didn't go into the investment: stamp duty, platform or broker charges. Counted as Fees & Charges; the rest is invested." }])}
     ${field(["note", "Note", "text", { value: t.note, ph: "Optional" }])}
     <div class="f" id="w_tags"><label>Tags</label><div class="tagbox"></div><div class="hint">Tap to tag, e.g. Home, Office, Trip. Use as many as you like.</div></div>
-    <label class="opt" style="margin-bottom:12px"><input type="checkbox" id="f_hist" ${t.hist ? "checked" : ""}><div><b>Already in my balances</b><span>For a past entry you're adding late, when your account balances already include it. It shows in Insights and reports but doesn't change any balance, card bill or loan.</span></div></label>
+    <div class="swl">${swRow("pot", t.pot === "reserve", "Paid from the big-bills reserve", "Takes it out of the reserve pot, not your emergency fund. If it went on a card or another account, Pay by Tuesday reminds you to move the money back from the reserve account.", true)}${swRow("hist", !!t.hist, "Already in my balances", "For a past entry you're adding late, when your account balances already include it. It shows in Insights and reports but doesn't change any balance, card bill or loan.")}</div>
     <div class="btns"><button class="btn pri" id="sv" type="button">${isNew ? "Add" : "Save"}</button><button class="btn" id="spl" type="button">Split</button>${isNew ? "" : '<button class="btn danger" id="dl" type="button">Delete</button>'}<button class="btn" id="cx" type="button">Cancel</button></div>`;
   openSheet(isNew ? "Add transaction" : "Edit transaction", body, (s) => {
     const getTags = tagPicker(d, s, t.tags);
@@ -182,6 +192,28 @@ export function txnForm(t0: TxIn = {}, preset: TxIn = {}): void {
     const CUR = t.categoryId;
     const FU = fundsUI(d, $("#mvLayer #w_funds")!, t.fromLoan ? [] : fundsOf(t as Tx), () => parseFloat(val("amount")) || 0);
     const el = <T extends HTMLElement = HTMLElement>(id: string): T => s.querySelector<T>("#" + id)!;
+    // (i): the option's explanation, shown and hidden in place
+    s.querySelectorAll<HTMLElement>("[data-swi]").forEach((b) => { b.onclick = () => { const w = el("why_" + b.dataset.swi), open = w.hidden; w.hidden = !open; b.setAttribute("aria-expanded", String(open)); }; });
+    // the calculator: a key beside the amount opens it
+    {
+      const amt = el<HTMLInputElement>("f_amount"), pad = el("calcPad"), ex = el("calcEx"), eq = el("calcEq"), use = el<HTMLButtonElement>("calcUse");
+      const cb = document.createElement("button");
+      cb.type = "button"; cb.className = "btn negbtn calcbtn"; cb.id = "calcBtn"; cb.setAttribute("aria-label", "Calculator"); cb.setAttribute("aria-expanded", "false");
+      cb.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6zM9 7h6M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01"/></svg>';
+      (amt.closest(".negwrap") ?? amt).append(cb);
+      let e = "";
+      const show = (): void => { ex.textContent = e || "0"; const v = /[-+×÷−]/.test(e.slice(1)) ? calcValue(e) : null; eq.textContent = v === null ? "" : `= ₹${v.toLocaleString("en-IN")}`; use.disabled = calcValue(e) === null; };
+      cb.onclick = () => { const open = pad.hidden; pad.hidden = !open; cb.setAttribute("aria-expanded", String(open)); if (open) { e = val("amount").replace(/^-/, ""); show(); } };
+      pad.addEventListener("click", (ev) => {
+        const k = (ev.target as HTMLElement).closest<HTMLElement>("[data-ck]")?.dataset.ck;
+        if (!k) return;
+        if (k === "C") e = ""; else if (k === "⌫") e = e.slice(0, -1);
+        else if (/[-+×÷−]/.test(k)) e = e && /[-+×÷−]$/.test(e) ? e.slice(0, -1) + k : e ? e + k : e;
+        else e += k;
+        show();
+      });
+      use.onclick = () => { const v = calcValue(e); if (v === null) return; amt.value = inrFmt(String(v)); amt.dispatchEvent(new Event("input", { bubbles: true })); pad.hidden = true; cb.setAttribute("aria-expanded", "false"); };
+    }
     /* mutual funds: fill the 0.005% stamp duty until you type your own charges */
     let chgTouched = t.charges != null && (t.charges as unknown) !== "";
     const chgAuto = (): void => {
@@ -206,9 +238,12 @@ export function txnForm(t0: TxIn = {}, preset: TxIn = {}): void {
       }
       chgAuto();
       {
-        const ym = ymOf(val("date") || todayOf()), bs = activeBudgets(d, ym), bsel = el<HTMLSelectElement>("f_budgetId"), keep = bsel.value || t.budgetId || "";
+        const ym = ymOf(val("date") || todayOf()), bs0 = activeBudgets(d, ym), bsel = el<HTMLSelectElement>("f_budgetId"), keep = bsel.value || t.budgetId || "";
+        const leftOf = (r: Recurring): number => num(r.amount) - budgetSpent(d, r.id, ym) + (t.budgetId === r.id && ymOf(t.date || "") === ym ? num(t.amount) : 0);
+        // a used-up budget isn't offered (27 Nov 2026), unless this entry already counts toward it
+        const bs = bs0.filter((r) => leftOf(r) > 50 || r.id === keep);
         bsel.innerHTML = [["", "None"], ...bs.map((r: Recurring) => {
-          const left = num(r.amount) - budgetSpent(d, r.id, ym) + (t.budgetId === r.id && ymOf(t.date || "") === ym ? num(t.amount) : 0);
+          const left = leftOf(r);
           return [r.id, `${r.name} · ${left >= 0 ? money(left) + " left" : "over by " + money(-left)}`];
         })].map(([v, l]) => `<option value="${esc(v)}" ${v === keep ? "selected" : ""}>${esc(l)}</option>`).join("");
         el("w_budgetId").hidden = !(type === "expense" || type === "transfer") || !bs.length;
@@ -218,6 +253,7 @@ export function txnForm(t0: TxIn = {}, preset: TxIn = {}): void {
       el("w_pot").hidden = !(type === "expense" && reserveAcc(d));
       const asel = el<HTMLSelectElement>("f_accountId");
       el("w_funds").hidden = type !== "expense" || asel.value.startsWith("~") || asel.value.startsWith("@");
+      el("w_more").hidden = el("w_funds").hidden;
       FU.refresh();
       {
         const has = asel.querySelector('option[value^="@"]');

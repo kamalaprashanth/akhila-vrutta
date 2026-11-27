@@ -449,9 +449,9 @@ try {
   check(/Only you can read it/.test(await lockText(X.page)) && /Terms/.test(await lockText(X.page)), "a new account sees the welcome: what the app is, privacy, Terms and Privacy policy");
   await signInAndSetup(X.page, { create: true, pass: "lantern ochre walrus fifteen quilt", newSk: true });
   await X.page.waitForSelector(".tdy", { timeout: 30000 });
-  ok("another Google account sets up its own home and opens Today");
+  ok("another Google account sets up its own home and opens the Dashboard");
   // Help: a new account's pages explain themselves (the note on top), until hidden
-  check(/Today\s+gathers what needs you/.test(await X.page.innerText(".avtip").catch(() => "")), "a new account sees the note on top of Today");
+  check(/Dashboard\s+gathers what needs you/.test(await X.page.innerText(".avtip").catch(() => "")), "a new account sees the note on top of the Dashboard");
   await shot(X.page, "second-account");
   // a new user's Money: set up with the main account and the starting categories (no planner import)
   await X.page.goto(`${BASE}/#/money`);
