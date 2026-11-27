@@ -18,4 +18,4 @@ export { docs };
 
 export { today };
 /** In the side menu's order. */
-export const MODULES: Module[] = [today, calendar, money, household, health, habits, docs, profile, help, settings, search, family];
+export const MODULES: Module[] = [today, money, household, health, habits, docs, calendar, profile, help, settings, search, family];   // Calendar just above Profile (27 Nov 2026)

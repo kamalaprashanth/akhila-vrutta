@@ -11,14 +11,15 @@ import { connectDrive, filesOf, needsDriveTap } from "../../core/files.ts";
 import { familyOpen, memberName, myUid, sharerOf } from "../../core/family.ts";
 import { shareItem, unshareItem } from "../../core/famshare.ts";
 import { setReminderSource, scheduleReminders } from "../../core/reminders.ts";
-import { ensureLayer, toast } from "../../core/ui.ts";
+import { askConfirm, closeModal, ensureLayer, field, openSheet, toast, val } from "../../core/ui.ts";
 import { startMoney } from "../money/index.ts";
 import { setVehicleDocs } from "../household/vehforms.ts";
-import { attention, checklist, docNotes, docsOf, fyLabel, groups, keyScore, ownerInfo, prefId, recentFys, search, taxRemind, typeOf, TYPES, type Doc, type DocOwner, type DocPref, type Owner, type OwnerInfo, type Reader } from "./data.ts";
+import { attention, checklist, loadMyTypes, maskNum, myTypes, TYPES_PREF, typesOf, type MyType, type TypePref, docNotes, docsOf, fyLabel, groups, keyScore, ownerInfo, prefId, recentFys, search, taxRemind, typeOf, TYPES, type Doc, type DocOwner, type DocPref, type Owner, type OwnerInfo, type Reader } from "./data.ts";
 import { addPicker, docForm, ownerForm, setNotNeeded } from "./forms.ts";
 
 export const ICON = "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6";
-export const reader = (): Reader => ({ all: (c) => ctx.store?.all(c) ?? [], get: (c, id) => ctx.store?.get(c, id) });
+/** (Also reads your own document types.) */
+export const reader = (): Reader => { const r: Reader = { all: (c) => ctx.store?.all(c) ?? [], get: (c, id) => ctx.store?.get(c, id) }; loadMyTypes(r); return r; };
 const pad = (n: number): string => String(n).padStart(2, "0");
 export const today = (): string => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 
@@ -37,12 +38,20 @@ const pageOwner = (): Owner | null => { const m = location.hash.match(/^#\/docs\
 export const ownerHash = (o: Owner): string => `#/docs/o/${encodeURIComponent(o.c)}/${encodeURIComponent(o.id)}`;
 const nFiles = (docId: string): number => filesOf({ c: "docs", id: docId }).length;
 const dayLbl = (d: string): string => new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-const docLine = (d: Doc, kind: OwnerInfo["kind"]): string => [d.year ? fyLabel(d.year) : "", d.validTo ? `valid till ${dayLbl(d.validTo)}` : "", d.num4 ? `…${d.num4}` : "", nFiles(d.id) ? `${nFiles(d.id)} file${nFiles(d.id) === 1 ? "" : "s"}` : "no file", d.note ?? ""].filter(Boolean).join(" · ") || typeOf(kind, d.type).label;
+// a number shows hidden (last 4) until 👁 shows it for 30 seconds
+const shown = new Map<string, number>();
+const numText = (d: Doc): string => (d.num ? ((shown.get(d.id) ?? 0) > Date.now() ? d.num : maskNum(d.num)) : d.num4 ? `…${d.num4}` : "");
+const fileWord = (id: string): string => { const fs = filesOf({ c: "docs", id }); if (!fs.length) return "no file"; const named = fs.map((f) => (f as { label?: string }).label).filter(Boolean); return `${fs.length} file${fs.length === 1 ? "" : "s"}${named.length ? `: ${named.join(", ")}` : ""}`; };
+const docLine = (d: Doc, kind: OwnerInfo["kind"]): string => [numText(d), d.year ? fyLabel(d.year) : "", d.validTo ? `valid till ${dayLbl(d.validTo)}` : "", fileWord(d.id), d.note ?? ""].filter(Boolean).join(" · ") || typeOf(kind, d.type).label;
+const EYE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>';
+const COPY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v12H9zM5 15V3h10"/></svg>';
+/** 👁 and copy for a document's number (copy works without showing it). */
+const numBtns = (d: Doc): string => d.num ? html`<span class="dnumb">${raw(maskNum(d.num) !== d.num ? html`<button type="button" class="dnb" data-shownum="${d.id}" aria-label="Show the number">${raw(EYE)}</button>` : "")}<button type="button" class="dnb" data-cpnum="${d.id}" aria-label="Copy the number">${raw(COPY)}</button></span>` : "";
 
 /* ---------- the Documents page ---------- */
 function mainPage(r: Reader, t: string): string {
   const att = attention(r, t);
-  const hits = query ? search(r, query, (id) => filesOf({ c: "docs", id }).map((f) => f.name)) : [];
+  const hits = query ? search(r, query, (id) => filesOf({ c: "docs", id }).map((f) => [f.name, (f as { label?: string }).label ?? ""].join(" "))) : [];
   const summary = (o: OwnerInfo): [string, string] => {
     const ds = docsOf(r, o.owner).filter((d) => !d.na);
     if (o.kind === "property") { const k = keyScore(checklist(r, o.owner, t)); return [ds.length ? [...new Set(ds.map((d) => typeOf(o.kind, d.type).label.split(" (")[0]!.split(" /")[0]!))].slice(0, 4).join(", ") : "No documents yet", html`<span class="dpill ${k.have < k.of ? "w" : ""}">${String(k.have)} of ${String(k.of)}</span>`]; }
@@ -65,7 +74,21 @@ function mainPage(r: Reader, t: string): string {
   return html`<div class="dsearch"><input id="dq" type="search" placeholder="Search: khata, passport, RC, 2025…" value="${query}" aria-label="Search documents" autocomplete="off"></div>
     ${raw(query ? html`<div class="sh"><h3>${hits.length ? `${hits.length} found` : "Nothing found"}</h3></div>${raw(hits.length ? html`<div class="list">${raw(hits.map((h) => html`<div class="row tap" data-doc="${h.doc.id}" role="button" tabindex="0"><span class="dico">${h.info.icon}</span><div class="main"><div class="t">${h.label}</div><div class="s">${h.info.name} · ${docLine(h.doc, h.info.kind)}</div></div></div>`).join(""))}</div>` : "")}` : html`
     ${raw(att.length ? html`<div class="sh"><h3>Needs attention</h3></div><div class="datt">${raw(att.map((a) => html`<button type="button" class="card" ${raw(a.docId ? `data-doc="${a.docId}"` : `data-owner="${a.owner.c}/${a.owner.id}"`)}><b>${a.title}</b><span class="${a.level}">${a.sub}</span></button>`).join(""))}</div>` : "")}
-    ${raw(groupHtml)}`)}`;
+    ${raw(groupHtml)}
+    ${raw(myTypesHtml(r))}`)}`;
+}
+/** Your own document types: rename, or remove one no document uses. */
+function myTypesHtml(r: Reader): string {
+  const L = myTypes();
+  if (!L.length) return "";
+  const KIND: Record<string, string> = { property: "Property", vehicle: "Vehicle", person: "People", appliance: "Appliance", insurance: "Insurance", account: "Loans and accounts", other: "Other" };
+  const used = (k: string): number => r.all<Doc>("docs").filter((d) => !d.deleted && d.type === k).length;
+  return html`<div class="sh"><h3>Your document types</h3></div><div class="list">${raw(L.map((x) => html`<div class="row"><div class="main"><div class="t">${x.label}</div><div class="s">${KIND[x.kind] ?? x.kind} · ${String(used(x.k))} document${used(x.k) === 1 ? "" : "s"}</div></div><button class="btn sm" type="button" data-mtren="${x.k}">Rename</button>${raw(used(x.k) ? "" : html`<button class="btn sm ghost" type="button" data-mtdel="${x.k}">Remove</button>`)}</div>`).join(""))}</div>`;
+}
+function setMyType(k: string, change: (x: MyType) => MyType): void {
+  const pref = reader().get<TypePref>("docPrefs", TYPES_PREF);
+  if (!pref) return;
+  docWrite([{ c: "docPrefs", r: { ...pref, list: (pref.list ?? []).map((x) => (x.k === k ? change(x) : x)) } as TypePref }]);
 }
 
 /* ---------- an owner's page ---------- */
@@ -79,11 +102,11 @@ function ownerPage(r: Reader, o: Owner, t: string): string {
     const sub = x.na ? "Not needed" : x.years ? "" : x.docs.length ? docLine(x.docs[0]!, info.kind) + (x.docs.length > 1 ? ` · +${x.docs.length - 1} more` : "") : "Not added yet";
     const years = x.years && !x.na ? html`<div class="dyears">${raw(x.years.map((y) => { const d = x.docs.find((z) => z.year === y.fy); return html`<button type="button" class="${y.have ? "" : "no"}" ${raw(d ? `data-doc="${d.id}"` : `data-add="${x.type.k}" data-year="${y.fy}"`)}>${fyLabel(y.fy)}${y.have ? "" : " ＋"}</button>`; }).join(""))}</div>` : "";
     const act = x.na ? html`<button type="button" class="btn sm" data-need="${x.type.k}">Needed</button>` : ok || x.years ? "" : html`<button type="button" class="btn sm ghost" data-na="${x.type.k}">Not needed</button>`;
-    return html`<div class="row dchk ${ok || x.years ? "tap" : ""}" ${raw(!x.years && x.docs[0] ? `data-doc="${x.docs[0].id}" role="button" tabindex="0"` : !x.years && !x.na ? `data-add="${x.type.k}" role="button" tabindex="0"` : "")}>${raw(dot)}<div class="main"><div class="t">${x.type.label}</div>${raw(sub ? html`<div class="s">${sub}</div>` : "")}${raw(years)}</div>${raw(act)}</div>`;
+    return html`<div class="row dchk ${ok || x.years ? "tap" : ""}" ${raw(!x.years && x.docs[0] ? `data-doc="${x.docs[0].id}" role="button" tabindex="0"` : !x.years && !x.na ? `data-add="${x.type.k}" role="button" tabindex="0"` : "")}>${raw(dot)}<div class="main"><div class="t">${x.type.label}</div>${raw(sub ? html`<div class="s">${sub}</div>` : "")}${raw(years)}</div>${raw(!x.years && !x.na && x.docs[0] ? numBtns(x.docs[0]) : "")}${raw(act)}</div>`;
   }).join(""))}</div>` : "";
   const keyTypes = new Set(rows.map((x) => x.type.k));
   const rest = ds.filter((d) => !keyTypes.has(d.type)).sort((a, b) => (b.year ?? b.validTo ?? b.added).localeCompare(a.year ?? a.validTo ?? a.added));
-  const list = (l: Doc[]): string => html`<div class="list">${raw(l.map((d) => html`<div class="row tap" data-doc="${d.id}" role="button" tabindex="0"><div class="main"><div class="t">${typeOf(info.kind, d.type).label}</div><div class="s">${docLine(d, info.kind)}</div></div></div>`).join(""))}</div>`;
+  const list = (l: Doc[]): string => html`<div class="list">${raw(l.map((d) => html`<div class="row tap" data-doc="${d.id}" role="button" tabindex="0"><div class="main"><div class="t">${typeOf(info.kind, d.type).label}</div><div class="s">${docLine(d, info.kind)}</div></div>${raw(numBtns(d))}</div>`).join(""))}</div>`;
   const pt = (d: Doc) => (info.kind === "person" ? typeOf("person", d.type) : null);
   const edu = rest.filter((d) => pt(d)?.edu), tax = rest.filter((d) => pt(d)?.tax), med = rest.filter((d) => pt(d)?.med);
   const id = rest.filter((d) => !pt(d)?.edu && !pt(d)?.tax && !pt(d)?.med && !(info.kind === "property" && d.type === "tax"));
@@ -93,7 +116,7 @@ function ownerPage(r: Reader, o: Owner, t: string): string {
   const yearly = taxT ? html`<div class="sh"><h3>Yearly, optional</h3></div><div class="list"><div class="row dchk"><div class="main"><div class="t">${taxT.label}</div><div class="dyears">${raw(recentFys(t).map((fy) => { const d = taxDocs.find((z) => z.year === fy); return html`<button type="button" class="${d ? "" : "no"}" ${raw(d ? `data-doc="${d.id}"` : `data-add="tax" data-year="${fy}"`)}>${fyLabel(fy)}${d ? "" : " ＋"}</button>`; }).join(""))}</div></div></div>
     <label class="row dchk"><div class="main"><div class="t">Remind me each April</div><div class="s">${remind ? "On: reminded on 10 and 25 April until this year's receipt is added" : "Off: no warnings, no reminders"}</div></div><input type="checkbox" id="dTaxRemind" ${remind ? "checked" : ""} aria-label="Remind me each April"></label></div>` : "";
   const applFiles = info.kind === "appliance" ? filesOf(o) : [];
-  const suggest = TYPES[info.kind].filter((x) => !x.key && x.k !== "other" && !(info.kind === "property" && x.k === "tax") && !ds.some((d) => d.type === x.k)).slice(0, 6);
+  const suggest = typesOf(info.kind).filter((x) => !x.key && x.k !== "other" && !(info.kind === "property" && x.k === "tax") && !ds.some((d) => d.type === x.k)).slice(0, 6);
   // the family space: share this item (and its papers and files), or who shared it
   const by = familyOpen() ? sharerOf(o) : undefined;
   const share = !familyOpen() ? "" : by && by !== myUid() ? html`<div class="list"><div class="row"><div class="main"><div class="t">Shared by ${memberName(by)}</div><div class="s">You can see it and add papers; only they can stop sharing it.</div></div></div></div>`
@@ -121,6 +144,24 @@ function draw(root: HTMLElement): void {
 }
 
 function onTap(e: Event): void {
+  const nb = (e.target as HTMLElement).closest<HTMLElement>("[data-cpnum],[data-shownum]");
+  if (nb && rootEl?.contains(nb)) {
+    e.stopPropagation();
+    const d = reader().get<Doc>("docs", nb.dataset.cpnum ?? nb.dataset.shownum ?? "");
+    if (!d?.num) return;
+    if (nb.dataset.cpnum) { void navigator.clipboard.writeText(d.num.replace(/\s/g, "")).then(() => toast("Number copied"), () => toast(`Couldn't copy. The number is ${d.num}`)); return; }
+    shown.set(d.id, Date.now() + 30e3); redraw(); setTimeout(redraw, 30e3 + 50); return;
+  }
+  const mt = (e.target as HTMLElement).closest<HTMLElement>("[data-mtren],[data-mtdel]");
+  if (mt && rootEl?.contains(mt)) {
+    const k = mt.dataset.mtren ?? mt.dataset.mtdel!, x = myTypes().find((y) => y.k === k);
+    if (!x) return;
+    if (mt.dataset.mtdel) return askConfirm(`Remove the type "${x.label}"?`, "Remove", () => setMyType(k, (y) => ({ ...y, deleted: true })));
+    return openSheet("Rename type", html`${raw(field(["mtname", "Name", "text", { value: x.label }]))}<div class="btns"><button class="btn pri" type="button" id="sv">Save</button><button class="btn" type="button" id="cx">Cancel</button></div>`, (sh) => {
+      sh.querySelector<HTMLElement>("#cx")!.onclick = closeModal;
+      sh.querySelector<HTMLElement>("#sv")!.onclick = () => { const n = val("mtname"); if (!n) return toast("Give it a name."); closeModal(); setMyType(k, (y) => ({ ...y, label: n })); };
+    });
+  }
   const el = (e.target as HTMLElement).closest<HTMLElement>("[data-owner],[data-doc],[data-add],[data-na],[data-need],[data-addowner],[data-appl],#addDoc,#dBack,#dAddHere,#dEditOwner");
   if (!el || !rootEl?.contains(el) || document.body.dataset.mod !== "docs") return;
   const d = el.dataset, o = pageOwner();

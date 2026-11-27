@@ -95,10 +95,15 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   ok(await p.inputValue(`${L} #f_dtype`) === "sale_deed", "tapping Sale deed opens Add document for it");
   await p.setInputFiles(`${L} #dPick`, "test-results/sale-deed.png");
   await p.waitForSelector(`${L} [data-file]`);
-  await p.fill(`${L} #f_dnum`, "1234 5678"); await p.fill(`${L} #f_dnote`, "Registered at Jayanagar");
+  ok(!(await p.isVisible(`${L} #f_dnum`)) && !(await p.isVisible(`${L} #f_dvalid`)), "a sale deed asks for no number and no Valid till");
+  await p.fill(`${L} #f_dnote`, "Registered at Jayanagar");
+  // "Name it": the file's own name
+  await p.click(`${L} [data-fname]`); await p.fill(`${L} .dfin`, "All pages"); await p.press(`${L} .dfin`, "Enter"); await settle();
+  ok((await recs("files")).some((f) => f.label === "All pages") && /All pages/.test(await p.innerText(`${L} #dFiles`)), "Name it: the file is called All pages");
   await p.click(`${L} #sv`); await settle();
   const sale = (await recs("docs")).find((d) => d.type === "sale_deed");
-  ok(sale?.num4 === "5678", "only the last 4 of the number are kept (…5678)");
+  ok(sale?.note === "Registered at Jayanagar" && !sale.num && !sale.num4, "the sale deed is saved with its note");
+  ok(/1 file: All pages/.test(await p.innerText("#dView")), "…its line says 1 file: All pages");
   ok(/1 of 12 key documents/.test(await p.innerText("#dView")) && /1 file/.test(await p.innerText("#dView")), "…sale deed ticked, with its file");
   // this year's tax
   await p.click('#dView .dyears [data-year="2026-27"]'); await settle();
@@ -120,8 +125,36 @@ for (const [name, vp] of [["phone", { width: 390, height: 844 }], ["laptop", { w
   await p.click(`${L} #sv`); await settle();
   await p.click('#dView [data-add="passport"]'); await settle();
   await p.fill(`${L} #f_dvalid`, "2027-03-01"); await p.click(`${L} #sv`); await settle();
+  // Aadhaar: the full number, hidden until 👁, copy; no note, no Valid till (27 Nov 2026)
+  await p.click('#dView [data-add="aadhaar"]'); await settle();
+  ok(/Aadhaar number/.test(await p.innerText(`${L} #w_dnum`)) && !(await p.isVisible(`${L} #f_dnote`)) && !(await p.isVisible(`${L} #f_dvalid`)), "Aadhaar asks for the Aadhaar number, with no note and no Valid till");
+  await p.fill(`${L} #f_dnum`, "1234 5678 9012"); await p.click(`${L} #sv`); await settle();
+  const aad = (await recs("docs")).find((d) => d.type === "aadhaar");
+  ok(aad?.num === "1234 5678 9012", "the full number is kept (encrypted, like everything else)");
+  let kv = await p.innerText("#dView");
+  ok(/•••• •••• 9012/.test(kv) && !/1234 5678 9012/.test(kv), "…and shows hidden: •••• •••• 9012");
+  await p.click(`#dView [data-shownum="${aad.id}"]`); await settle();
+  ok(/1234 5678 9012/.test(await p.innerText("#dView")), "👁 shows it");
+  await p.context().grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});
+  await p.click(`#dView [data-cpnum="${aad.id}"]`); await settle();
+  ok((await p.evaluate(() => navigator.clipboard.readText().catch(() => ""))) === "123456789012", "copy puts the number on the clipboard, without spaces");
+  // your own type, kept for every person
+  await p.click("#dView #dAddHere"); await settle();
+  await p.selectOption(`${L} #f_dtype`, "__new"); await settle();
+  ok(await p.isVisible(`${L} #f_dtnew`), "+ Add your own type… asks for its name");
+  await p.fill(`${L} #f_dtnew`, "Gym membership"); await p.click(`${L} #sv`); await settle();
+  const mt = (await recs("docPrefs")).find((x) => x.id === "types");
+  const gym = (await recs("docs")).find((d) => mt?.list?.some((y) => y.k === d.type && y.label === "Gym membership"));
+  ok(!!gym && /Gym membership/.test(await p.innerText("#dView")), "the document is saved as Gym membership");
+  await p.click("#dView #dAddHere"); await settle();
+  ok((await p.$$eval(`${L} #f_dtype optgroup[label="Your types"] option`, (l) => l.map((o) => o.textContent))).includes("Gym membership"), "…and Gym membership is offered under Your types next time");
+  await p.click(`${L} #cx`); await settle();
   await p.click("#dView #dBack"); await settle();
   ok(/Passport · KP[\s\S]*Expires in 95 days/.test(await p.innerText("#dView")), "needs attention: KP's passport expires in 95 days");
+  ok(/Your document types/i.test(await p.innerText("#dView")) && /Gym membership[\s\S]*1 document/.test(await p.innerText("#dView")), "Your document types lists it, with 1 document");
+  await p.fill("#dView #dq", "gym"); await settle();
+  ok(/1 found/i.test(await p.innerText("#dView")), "search finds it by its type's name");
+  await p.fill("#dView #dq", ""); await settle();
   // + : what it's for, whose, then the document form with the right type
   await p.click("#addDoc"); await settle();
   ok((await p.$$(`${L} [data-cat]`)).length === 12, "+ asks what the document is for (12 choices)");

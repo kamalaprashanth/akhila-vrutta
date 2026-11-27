@@ -12,13 +12,14 @@ import type { Rec } from "../../core/store.ts";
 export type Day = string;
 export type Kind = "property" | "vehicle" | "person" | "appliance" | "insurance" | "account" | "other";
 export interface Owner { c: string; id: string }
-export interface Doc extends Rec { owner: Owner; type: string; year?: string; validTo?: Day; num4?: string; note?: string; na?: boolean; added: Day; deleted?: boolean }
+export interface Doc extends Rec { owner: Owner; type: string; year?: string; validTo?: Day; num?: string; num4?: string; note?: string; na?: boolean; added: Day; deleted?: boolean }
 export interface DocOwner extends Rec { group: "people" | "insurance" | "other"; name: string; rel?: string; kind?: string; insurer?: string; deleted?: boolean }
 export interface Reader { all<T extends Rec = Rec>(c: string): T[]; get<T extends Rec = Rec>(c: string, id: string): T | undefined }
 const live = <T extends Rec>(r: Reader, c: string): T[] => r.all<T>(c).filter((x) => !(x as { deleted?: boolean }).deleted);
 
 /* ---------- document types ---------- */
-export interface DocType { k: string; label: string; key?: boolean; yearly?: boolean; expires?: number; edu?: boolean; tax?: boolean; med?: boolean }
+/** num: the number's name, when the paper has one; id: an ID card (a number, no note); custom: a type you made. */
+export interface DocType { k: string; label: string; key?: boolean; yearly?: boolean; expires?: number; edu?: boolean; tax?: boolean; med?: boolean; num?: string; id?: boolean; custom?: boolean }
 const OTHER: DocType = { k: "other", label: "Other document" };
 export const TYPES: Record<Kind, DocType[]> = {
   property: [
@@ -38,8 +39,8 @@ export const TYPES: Record<Kind, DocType[]> = {
     OTHER,
   ],
   vehicle: [
-    { k: "rc", label: "Registration certificate (RC)", key: true, expires: 60 },
-    { k: "insurance", label: "Insurance policy", key: true, expires: 15 },
+    { k: "rc", label: "Registration certificate (RC)", key: true, expires: 60, num: "Registration number", id: true },
+    { k: "insurance", label: "Insurance policy", key: true, expires: 15, num: "Policy number" },
     { k: "puc", label: "PUC certificate", key: true, expires: 7 },
     { k: "fastag", label: "FASTag" },
     { k: "permit", label: "Permit", expires: 15 },
@@ -49,14 +50,19 @@ export const TYPES: Record<Kind, DocType[]> = {
     OTHER,
   ],
   person: [
-    { k: "aadhaar", label: "Aadhaar", key: true },
-    { k: "pan", label: "PAN card", key: true },
-    { k: "passport", label: "Passport", expires: 180 },
-    { k: "dl", label: "Driving licence", expires: 60 },
-    { k: "voter", label: "Voter ID" },
+    { k: "aadhaar", label: "Aadhaar", key: true, num: "Aadhaar number", id: true },
+    { k: "pan", label: "PAN card", key: true, num: "PAN", id: true },
+    { k: "passport", label: "Passport", expires: 180, num: "Passport number", id: true },
+    { k: "dl", label: "Driving licence", expires: 60, num: "Licence number", id: true },
+    { k: "voter", label: "Voter ID", num: "EPIC number", id: true },
+    { k: "pran", label: "PRAN card (NPS)", num: "PRAN", id: true },
+    { k: "uan", label: "UAN (EPF)", num: "UAN", id: true },
+    { k: "abha", label: "ABHA health ID", num: "ABHA number", id: true },
+    { k: "esic", label: "ESIC card", num: "Insurance number", id: true },
+    { k: "empid", label: "Employee ID card", num: "Employee ID", id: true },
     { k: "birth", label: "Birth certificate" },
     { k: "marriage", label: "Marriage certificate" },
-    { k: "ration", label: "Ration card" },
+    { k: "ration", label: "Ration card", num: "Ration card number", id: true },
     { k: "degree", label: "Degree certificate", edu: true },
     { k: "marks", label: "Mark sheets", edu: true },
     { k: "offer", label: "Offer / appointment letter", edu: true },
@@ -83,7 +89,7 @@ export const TYPES: Record<Kind, DocType[]> = {
     OTHER,
   ],
   insurance: [
-    { k: "policy", label: "Policy document", key: true, expires: 30 },
+    { k: "policy", label: "Policy document", key: true, expires: 30, num: "Policy number" },
     { k: "premium", label: "Premium receipt", yearly: true },
     { k: "claim", label: "Claim papers" },
     OTHER,
@@ -98,7 +104,24 @@ export const TYPES: Record<Kind, DocType[]> = {
   ],
   other: [OTHER],
 };
-export const typeOf = (kind: Kind, k: string): DocType => TYPES[kind].find((t) => t.k === k) ?? OTHER;
+/* ---------- your own types (approved 27 Nov 2026) ---------- */
+// docPrefs { id: "types", list: [{ k: "c_<id>", label, kind }] }: kept for every owner of that kind
+export interface MyType { k: string; label: string; kind: Kind; deleted?: boolean }
+export interface TypePref extends Rec { list?: MyType[] }
+export const TYPES_PREF = "types";
+let mine: MyType[] = [];
+/** Reads your own types (call before using typesOf/typeOf on a page or form). */
+export const loadMyTypes = (r: Reader): void => { mine = (r.get<TypePref>("docPrefs", TYPES_PREF)?.list ?? []).filter((x) => !x.deleted); };
+export const myTypes = (kind?: Kind): MyType[] => mine.filter((x) => !kind || x.kind === kind);
+const asType = (x: MyType): DocType => ({ k: x.k, label: x.label, custom: true });
+/** The types for a kind: the usual ones, then yours, then Other. */
+export const typesOf = (kind: Kind): DocType[] => [...TYPES[kind].filter((t) => t !== OTHER), ...myTypes(kind).map(asType), OTHER];
+export const typeOf = (kind: Kind, k: string): DocType => {
+  const t = TYPES[kind].find((x) => x.k === k);
+  if (t) return t;
+  const m = mine.find((x) => x.k === k);
+  return m ? asType(m) : OTHER;
+};
 
 /* ---------- owners ---------- */
 export interface OwnerInfo { owner: Owner; kind: Kind; name: string; icon: string; sub?: string }
@@ -234,11 +257,15 @@ export function search(r: Reader, q: string, fileNames: (docId: string) => strin
     if (d.na) continue;
     const info = ownerInfo(r, d.owner); if (!info) continue;
     const label = typeOf(info.kind, d.type).label;
-    const hay = [label, info.name, info.sub, d.note, d.year ? fyLabel(d.year) : "", d.num4, ...fileNames(d.id)].filter(Boolean).join(" ").toLowerCase();
+    const hay = [label, info.name, info.sub, d.note, d.year ? fyLabel(d.year) : "", d.num, d.num ? d.num.replace(/\s/g, "") : "", d.num4, ...fileNames(d.id)].filter(Boolean).join(" ").toLowerCase();
     if (words.every((w) => hay.includes(w))) out.push({ doc: d, info, label });
   }
   return out.sort((a, b) => a.info.name.localeCompare(b.info.name) || a.label.localeCompare(b.label));
 }
 
-/** The last 4 characters of a number (the rest is never kept). */
+/** The last 4 characters of a number (older documents kept only these). */
 export const last4 = (s: string): string => s.replace(/[\s-]/g, "").slice(-4).toUpperCase();
+/** A number tidied for keeping: capitals, single spaces (since 27 Nov 2026 the full number is kept, encrypted). */
+export const cleanNum = (s: string): string => s.trim().replace(/\s+/g, " ").toUpperCase();
+/** A number with all but the last 4 hidden: "•••• •••• 9012". */
+export const maskNum = (s: string): string => { const t = s.replace(/\s/g, ""); return t.length <= 4 ? t : "•".repeat(Math.min(8, t.length - 4)).replace(/(.{4})(?=.)/g, "$1 ") + " " + t.slice(-4); };

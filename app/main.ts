@@ -33,7 +33,8 @@ function renderDrawer(mod: Module): string {
   const cur = mod.sub?.() ?? "";
   const item = (m: Module): string => {
     const on = m.id === mod.id, n = m.id === "today" ? todayCount() : 0;
-    const subs = on ? [...(m.subs?.() ?? []), ...(m.more?.() ?? [])] : [];
+    // the Dashboard's bar is only shortcuts to other sections: not repeated under it (27 Nov 2026)
+    const subs = on && m.id !== "today" ? [...(m.subs?.() ?? []), ...(m.more?.() ?? [])] : [];
     return html`<a href="#/${m.id}" class="dit${on ? " on" : ""}" ${raw(on ? 'aria-current="page"' : "")}>${raw(svg(m.icon))}<span>${m.label}</span>${raw(n ? html`<i>${String(n)}</i>` : "")}</a>
       ${raw(subs.length ? html`<div class="dsub">${raw(subs.map((x) => html`<a href="${x.href}" data-sub="${m.id}:${x.id}" class="${x.id === cur ? "on" : ""}" ${raw(x.id === cur ? 'aria-current="page"' : "")}>${x.label}</a>`).join(""))}</div>` : "")}`;
   };

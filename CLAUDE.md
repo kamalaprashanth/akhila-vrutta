@@ -2,7 +2,8 @@
 
 - **Show it first.** Before building any feature or visual change, show the owner a design or
   screenshots and get a yes. Ask instead of assuming.
-- Never paste or commit API keys. Never store PAN, account numbers, PRAN or folio numbers (last 4 only).
+- Never paste or commit API keys. Never store bank account or folio numbers (last 4 only). ID numbers in Documents
+  (Aadhaar, PAN, PRAN, passport…) are kept in full, encrypted, hidden until tapped (owner's decision, 27 Nov 2026).
   Never show the owner's email in the UI; show the UID only when needed.
 - Money is paise (`app/core/money.ts`). Format with `formatINR` / `formatShort` (Indian grouping).
 - All HTML goes through the `html` tagged template (escapes by default); use `raw()` only for markup you built.

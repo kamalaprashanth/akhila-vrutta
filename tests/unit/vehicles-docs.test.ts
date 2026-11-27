@@ -81,3 +81,24 @@ test("search finds by type, owner, year, note and file name", () => {
   assert.deepEqual(search(r, "online", f).map((h) => h.doc.id), ["2"]);
   assert.deepEqual(search(r, "scan", f).map((h) => h.doc.id), ["3"]);
 });
+
+// ID numbers (27 Nov 2026): kept in full, shown hidden but the last 4
+import { cleanNum, maskNum, typeOf as tOf, loadMyTypes, typesOf } from "../../app/modules/documents/data.ts";
+test("a number is tidied, and shown hidden but the last 4", () => {
+  assert.equal(cleanNum("  1234  5678 9012 "), "1234 5678 9012");
+  assert.equal(cleanNum("abcde1234f"), "ABCDE1234F");
+  assert.equal(maskNum("1234 5678 9012"), "•••• •••• 9012");
+  assert.equal(maskNum("Z1234567"), "•••• 4567");
+  assert.equal(maskNum("123"), "123");
+});
+test("your own types: offered for their kind, before Other", () => {
+  const r = { all: () => [], get: (c: string, id: string) => (c === "docPrefs" && id === "types" ? { id, list: [{ k: "c_1", label: "Possession letter", kind: "property" }, { k: "c_2", label: "Gone", kind: "property", deleted: true }] } : undefined) } as never;
+  loadMyTypes(r);
+  const L = typesOf("property");
+  assert.equal(L.at(-1)!.k, "other");
+  assert.equal(L.at(-2)!.label, "Possession letter");
+  assert.ok(!L.some((x) => x.label === "Gone"));
+  assert.equal(tOf("property", "c_1").label, "Possession letter");
+  assert.equal(tOf("vehicle", "c_1").label, "Possession letter");   // a document keeps its type's name wherever it sits
+  assert.equal(tOf("person", "aadhaar").num, "Aadhaar number");
+});

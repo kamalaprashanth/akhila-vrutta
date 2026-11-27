@@ -383,3 +383,13 @@ body.hlppub{padding:0}
 .dbday{width:48px;flex:none;display:flex;flex-direction:column;align-items:center;background:var(--accent-soft);border-radius:12px;padding:4px 0;color:var(--accent);line-height:1.1}
 .dbday b{font:600 20px/1.1 var(--serif)}
 .dbday small{font:700 10.5px var(--sans);text-transform:uppercase;letter-spacing:.04em}
+/* Documents: a number's 👁 and copy, named files (27 Nov 2026) */
+.mv .dnumb{display:flex;gap:6px;flex:none;align-items:center}
+.mv .dnb{width:36px;height:36px;flex:none;display:grid;place-items:center;border:0;border-radius:10px;background:var(--accent-soft);color:var(--accent);cursor:pointer;padding:0}
+.mv .dnb svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mv .dnumw{display:flex;gap:8px;align-items:center}
+.mv .dnumw input{flex:1;min-width:0;letter-spacing:.04em}
+.mv .dnumw .dnb{width:44px;height:44px}
+.mv .dfw{display:inline-flex;flex-direction:column;gap:4px;align-items:stretch}
+.mv .dfname{border:0;background:none;color:var(--accent);font:700 12px var(--body);cursor:pointer;padding:4px 2px;min-height:28px}
+.mv .dfin{width:100%;box-sizing:border-box;min-height:32px;font-size:13px;padding:4px 8px;border-radius:8px;border:1px solid var(--accent)}

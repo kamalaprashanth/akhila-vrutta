@@ -289,9 +289,11 @@ try {
   await A.page.fill("#mvLayer #f_dnum", "1234 5678 9012");
   await tap("#mvLayer #sv");
   await A.page.waitForTimeout(3000);
+  // the full number is kept (owner's decision, 27 Nov 2026), shown hidden until 👁, and only as ciphertext in the cloud
+  { const v = await A.page.innerText("#dView"); check(/•••• •••• 9012/.test(v) && !/1234 5678 9012/.test(v), "the Aadhaar number shows hidden: •••• •••• 9012"); }
   const dcDocs = [];
   for (const c of ["hhVehicles", "docs", "docOwners"]) dcDocs.push(...((await api(`${FS}/homes/${home}/${c}?pageSize=50`)).body.documents ?? []));
-  const dcPlain = dcDocs.filter((d) => ["Cloud car", "Cloud person", "aadhaar", "9012"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
+  const dcPlain = dcDocs.filter((d) => ["Cloud car", "Cloud person", "aadhaar", "9012", "123456789012", "1234 5678"].some((t) => Buffer.from(d.fields.ct?.stringValue ?? "", "base64").toString("latin1").includes(t))).length;
   check(dcDocs.length >= 3 && dcPlain === 0 && dcDocs.every((d) => Object.keys(d.fields).every((k) => allowed.has(k))), `a vehicle, a person and their Aadhaar are in the cloud as ciphertext only (${dcDocs.length} records)`);
   /* Health: a reading and a medicine for the person added above, saved encrypted */
   await A.page.goto(`${BASE}/#/health`);

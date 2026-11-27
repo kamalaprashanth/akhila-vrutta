@@ -5,7 +5,7 @@ import { ctx } from "../../core/app.ts";
 import { formatINR } from "../../core/money.ts";
 import type { FileRec } from "../../core/files.ts";
 import { FILES } from "../../core/store.ts";
-import { search as docSearch, fyLabel } from "../documents/data.ts";
+import { search as docSearch, fyLabel, loadMyTypes, maskNum } from "../documents/data.ts";
 import { ownerHash } from "../documents/index.ts";
 import { docForm } from "../documents/forms.ts";
 import { moneyNow, startMoney } from "../money/index.ts";
@@ -14,7 +14,8 @@ import { txnForm } from "../money/ui/txform.ts";
 import { ensureLayer } from "../../core/ui.ts";
 import { AREAS, grouped, parse, searchAll, type Area, type Hit, type Reader } from "./data.ts";
 
-const reader = (): Reader => ({ all: (c) => ctx.store?.all(c) ?? [], get: (c, id) => ctx.store?.get(c, id) });
+/** (Also reads your own document types.) */
+const reader = (): Reader => { const r: Reader = { all: (c) => ctx.store?.all(c) ?? [], get: (c, id) => ctx.store?.get(c, id) }; loadMyTypes(r); return r; };
 let q = "", area: Area | "All" = "All";
 /** This session only: recent searches are never saved anywhere. */
 const recent: string[] = [];
@@ -41,7 +42,7 @@ function allHits(): Hit[] {
   const fileNames = (c: string, id: string): string[] => r.all<FileRec>(FILES).filter((f) => !f.deleted && f.owner?.c === c && f.owner?.id === id).map((f) => f.name);
   const hits = searchAll(r, q, { catName: d ? (id) => catName(d!, id) : undefined, fileNames });
   for (const h of docSearch(r as never, q, (docId) => fileNames("docs", docId))) {
-    hits.push({ area: "Papers", key: `d:${h.doc.id}`, title: h.label, sub: [h.info.name, h.doc.validTo ? `valid till ${h.doc.validTo}` : "", h.doc.year ? fyLabel(h.doc.year) : "", h.doc.num4 ? `…${h.doc.num4}` : ""].filter(Boolean).join(" · "), href: ownerHash(h.info.owner), open: { c: "docs", id: h.doc.id } });
+    hits.push({ area: "Papers", key: `d:${h.doc.id}`, title: h.label, sub: [h.info.name, h.doc.validTo ? `valid till ${h.doc.validTo}` : "", h.doc.year ? fyLabel(h.doc.year) : "", h.doc.num ? maskNum(h.doc.num) : h.doc.num4 ? `…${h.doc.num4}` : ""].filter(Boolean).join(" · "), href: ownerHash(h.info.owner), open: { c: "docs", id: h.doc.id } });
   }
   return hits;
 }
