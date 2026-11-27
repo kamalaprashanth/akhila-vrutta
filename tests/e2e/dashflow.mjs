@@ -94,14 +94,18 @@ await p.click("#mvLayer #sv"); await p.waitForTimeout(900);
 const tx = await p.evaluate(() => FAKE.all("txns").find((t) => t.note === "Hotstar"));
 ok(tx && tx.pot === "reserve" && tx.amount === 69000, "the card spend is saved, paid from the reserve");
 
-console.log("Pay by Tuesday: move it back from the reserve");
-await p.evaluate(() => go("home")); await settle();
+console.log("Pay by Tuesday: move it back from the reserve, in the week the card bill is due");
+// the card's bill for today's spend is due next month: nothing to move yet
+await p.evaluate(() => { const c = FAKE.all("accounts").find((a) => a.name === "Test Card"), day = new Date().getDate(); FAKE.writeMany([{ c: "accounts", id: c.id, r: { ...c, stmtDay: day, dueDay: day } }]); go("home"); }); await settle();
+ok(!/Savings → Test Bank/.test(await p.innerText(`${V} .ptcard`).catch(() => "")), "not shown while the card bill is weeks away");
+// a card without bill dates: the bill is due straight away
+await p.evaluate(() => { const c = FAKE.all("accounts").find((a) => a.name === "Test Card"); const { stmtDay, dueDay, ...rest } = c; FAKE.writeMany([{ c: "accounts", id: c.id, r: rest }]); go("home"); }); await settle();
 const card = await p.innerText(`${V} .ptcard`).catch(() => "");
-ok(/Savings → Test Bank/.test(card) && /690/.test(card) && /Hotstar/.test(card), "Move money: Savings → Test Bank ₹690, for Hotstar");
-await p.click(`${V} .ptcard [data-term="reserveback"]`); await settle();
-ok(/Moving reserve money back/.test(await p.textContent("#mvLayer #modal h3")), "(i) says why");
-await p.click("#mvLayer #cx"); await settle();
-await p.click(`${V} [data-ptback]`); await settle();
+ok(/Savings → Test Bank/.test(card) && /690/.test(card) && /1 reserve bill · Test Card/.test(card) && !/Hotstar/.test(card), "in the card bill's week: Savings → Test Bank ₹690 · 1 reserve bill · Test Card (names in the ⓘ)");
+await p.click(`${V} .ptcard [data-rback]`); await settle();
+const sh = await p.innerText("#mvLayer #modal .sheet").catch(() => "");
+ok(/Savings → Test Bank/.test(sh) && /Test Card/.test(sh) && /Hotstar/.test(sh) && /690/.test(sh), "ⓘ lists the bills by card bill, and why");
+await p.click("#mvLayer #bkMove"); await settle();
 ok((await p.inputValue("#mvLayer #f_amount")) === "690", "Move opens the transfer for ₹690");
 await p.click("#mvLayer #sv"); await p.waitForTimeout(900);
 const back = await p.evaluate(() => FAKE.all("txns").find((t) => t.back === "reserve"));

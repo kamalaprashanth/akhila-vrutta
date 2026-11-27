@@ -9,7 +9,7 @@ import { num, type MoneyData, type Paise, type Rec, type Txn } from "../calc/dat
 import { balances, cardInfo, type Account } from "../calc/accounts.ts";
 import { accName, catName, fmtD, FREQ, NSE_HOL, paidMap, planned, type PlanItem, type Recurring } from "../calc/plan.ts";
 import { forecast, mainAcc } from "../calc/forecast.ts";
-import { isAutoItem, isBigItem, obligations } from "../calc/reserve.ts";
+import { isAutoItem, isBigItem, obligations, payTue, reserveBack } from "../calc/reserve.ts";
 import { reserveAcc } from "../calc/properties.ts";
 import { holdingSum, type Holding } from "../calc/invest.ts";
 import { loanSum } from "../calc/loans.ts";
@@ -209,6 +209,19 @@ function ptLinkSheet(o: { key: string; name: string; date: Day; amount: Paise })
 /** Move money in for something due (from Pay by Tuesday's readiness check). */
 export function ptMove(acc: string, from: string, amt: string, why: string): void { txnForm({}, { type: "transfer", amount: Math.round(+amt * 100), accountId: from, toAccountId: acc, note: `For ${why}` } as never); }
 /** Put money aside into the reserve or a property's fund. */
+/** ⓘ on Pay by Tuesday's move back from the reserve: which bills, on which card bill, and why (approved 27 Nov 2026). */
+export function backSheet(toId: string): void {
+  const d = E().data(), b = reserveBack(d, addDays(payTue(d), 6)).find((x) => x.to.id === toId);
+  if (!b) return;
+  const dt = (x: Day): string => `${+x.slice(8, 10)} ${MN[+x.slice(5, 7) - 1]}`, card = b.groups.some((g) => g.acc !== b.to.name);
+  openSheet(`${b.from.name} → ${b.to.name} · ${money(b.amt)}`, `
+    <p class="note" style="margin:0 0 12px;font-size:14px;color:var(--ink)">These big bills were paid ${card ? "by card " : ""}from the reserve, so their money is still in ${esc(b.from.name)}. Move it to ${esc(b.to.name)}${card ? ", which pays the card bills" : ""}.</p>
+    ${b.groups.map((g) => `<div class="bkg"><div class="bkh"><span>${esc(g.acc)}${g.acc !== b.to.name ? ` bill · due ${dt(g.due)}` : ""}</span><b>${money(g.amt)}</b></div>${g.items.map((it) => `<div class="bkr"><span>${esc(it.name)} · ${dt(it.date)}</span><span>${money(it.amt)}</span></div>`).join("")}</div>`).join("")}
+    <div class="btns"><button class="btn pri" type="button" id="bkMove">Move ${money(b.amt)}</button><button class="btn" type="button" id="cx">Close</button></div>`, (s) => {
+    s.querySelector<HTMLElement>("#cx")!.onclick = closeModal;
+    s.querySelector<HTMLElement>("#bkMove")!.onclick = () => { closeModal(); txnForm({}, { type: "transfer", amount: b.amt, accountId: b.from.id, toAccountId: b.to.id, note: "Back from the reserve: big bills paid by card", back: "reserve" } as never); };
+  });
+}
 export function ptAside(k: string, amt: string): void {
   const d = E().data(), a = reserveAcc(d), m = mainAcc(d); if (!a) { toast("Mark an account as the reserve first (edit the account)."); return; }
   const extra = amt === "extra";
@@ -285,6 +298,7 @@ export function planAct(d: MoneyData, x: DOMStringMap, id: string): boolean {
   if (x.invall !== undefined) { investAll(); return true; }
   if (x.holi !== undefined) { holidaySheet(); return true; }
   if (x.ptpay !== undefined) return ptPaySheet(x.ptpay);
+  if (x.rback !== undefined) { backSheet(x.rback); return true; }
   if (x.ptback !== undefined) { const [to, from, n] = x.ptback.split("|") as [string, string, string]; txnForm({}, { type: "transfer", amount: Math.round(+n * 100), accountId: from, toAccountId: to, note: "Back from the reserve: big bills paid by card", back: "reserve" } as never); return true; }
   if (x.ptmove !== undefined) { const [a, f, n, w] = x.ptmove.split("|") as [string, string, string, string]; ptMove(a, f, n, w); return true; }
   if (x.ptaside !== undefined) { const [k, n] = x.ptaside.split("|") as [string, string]; ptAside(k, n); return true; }

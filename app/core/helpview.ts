@@ -61,3 +61,6 @@ export function wordSheet(w: Word, link: Link): string {
 
 /** A word you can tap, for pages to use: <button class="term" data-term="reserve">Big-bills reserve</button>. */
 export const term = (id: string, label?: string): string => html`<button type="button" class="term" data-term="${id}">${label ?? WORDS[id]?.word ?? id}</button>`;
+
+/** The drawn ⓘ (as on the help notes), for "what is this?" buttons. */
+export const INFO_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" class="infoic"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';

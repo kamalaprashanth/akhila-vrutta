@@ -3,8 +3,8 @@
  * Same rules as KP Money Planner, in paise.
  */
 import { addDays, addM, dayDiff, dayIn, diffM, lastDay, ymOf, type Day, type YM } from "./dates.ts";
-import { num, type Loan, type MoneyData, type Paise, type Txn } from "./data.ts";
-import { balances, countsAcc, type Account } from "./accounts.ts";
+import { num, type Loan, type MoneyData, type Paise, type Rec, type Txn } from "./data.ts";
+import { balances, countsAcc, dueOf, stmtFor, type Account } from "./accounts.ts";
 import { kindOf } from "./loans.ts";
 import { FREQ, paidMap, type PlanItem, type Recurring } from "./plan.ts";
 import { forecast, mainAcc, type ForecastRow } from "./forecast.ts";
@@ -238,32 +238,51 @@ export function readiness(d: MoneyData, days = 45): Shortfall[] & { lows: Low[] 
 }
 
 /**
- * Big bills paid from the reserve, but with a card or another account (27 Nov 2026): the money is still in the
- * reserve's account, so Pay by Tuesday asks to move it back. For a card it goes to the main account (the one that
- * pays the card bill), otherwise to the account the bill was paid from. A transfer out of the reserve's account
- * marked back: "reserve" counts against it.
+ * Big bills paid from the reserve, but with a card or another account (approved 27 Nov 2026): the money is still in
+ * the reserve's account, so Pay by Tuesday asks to move it back, in the week it's needed: for a card spend, the
+ * week its card bill is due (it goes to the main account, which pays the card bill); for another account, the
+ * week it was paid (back to that account). Transfers out of the reserve's account marked back: "reserve" settle
+ * the oldest first. One line per account it goes to, with the spends grouped by card bill.
  */
-export interface ReserveBack { from: Account; to: Account; amt: Paise; names: string[] }
-export function reserveBack(d: MoneyData): ReserveBack[] {
-  return d.memo("rback", () => {
+export interface BackItem { id: string; name: string; date: Day; amt: Paise }
+export interface BackGroup { acc: string; due: Day; amt: Paise; items: BackItem[] }
+export interface ReserveBack { from: Account; to: Account; amt: Paise; groups: BackGroup[] }
+export function reserveBack(d: MoneyData, until: Day): ReserveBack[] {
+  return d.memo(`rback:${until}`, () => {
     const from = reserveAcc(d);
     if (!from) return [];
     const accs = new Map(d.live<Account>("accounts").map((a) => [a.id, a])), main = mainAcc(d);
-    const owed = new Map<string, { amt: Paise; names: string[] }>();
+    const cats = new Map(d.live<Rec & { name?: string }>("categories").map((c) => [c.id, c.name]));
+    // every reserve spend paid elsewhere: where its money goes back to, and when it's needed
+    const owed = new Map<string, (BackItem & { acc: string; due: Day; left: Paise })[]>();
     for (const t of d.live<PotTxn & { hist?: boolean; note?: string; categoryId?: string }>("txns")) {
-      if (t.type !== "expense" || t.pot !== "reserve" || t.hist || !t.accountId || t.accountId === from.id) continue;
+      if (t.type !== "expense" || t.pot !== "reserve" || t.hist || !t.accountId || t.accountId === from.id || num(t.amount) <= 0) continue;
       const a = accs.get(t.accountId);
       if (!a) continue;
-      const to = a.type === "card" ? (main && main.id !== from.id ? main : null) : a;
+      const card = a.type === "card", to = card ? (main && main.id !== from.id ? main : null) : a;
       if (!to) continue;
-      const o = owed.get(to.id) ?? { amt: 0, names: [] };
-      o.amt += num(t.amount);
-      o.names.push(String(t.note || "a big bill"));
-      owed.set(to.id, o);
+      const day = String(t.date ?? d.today), due = card && num(a.stmtDay) ? dueOf(a, stmtFor(a, day)) : day;
+      const L = owed.get(to.id) ?? [];
+      L.push({ id: t.id, name: String(t.note || (t.categoryId && cats.get(t.categoryId)) || "A big bill"), date: day, amt: num(t.amount), acc: String(a.name ?? ""), due, left: num(t.amount) });
+      owed.set(to.id, L);
     }
-    for (const t of d.live<PotTxn & { back?: string }>("txns")) {
-      if (t.type === "transfer" && t.back === "reserve" && t.accountId === from.id && t.toAccountId && owed.has(t.toAccountId)) owed.get(t.toAccountId)!.amt -= num(t.amount);
+    // what's been moved back already settles the oldest first
+    for (const [toId, L] of owed) {
+      let moved = d.live<PotTxn & { back?: string }>("txns").filter((t) => t.type === "transfer" && t.back === "reserve" && t.accountId === from.id && t.toAccountId === toId).reduce((x, t) => x + num(t.amount), 0);
+      for (const it of L.sort((x, y) => x.due.localeCompare(y.due) || x.date.localeCompare(y.date))) { const k = Math.min(moved, it.left); it.left -= k; moved -= k; }
     }
-    return [...owed].filter(([, o]) => o.amt > 50).map(([id, o]) => ({ from, to: accs.get(id)!, amt: o.amt, names: o.names }));
+    const out: ReserveBack[] = [];
+    for (const [toId, L] of owed) {
+      const due = L.filter((it) => it.left > 50 && it.due <= until);
+      if (!due.length) continue;
+      const groups = new Map<string, BackGroup>();
+      for (const it of due) {
+        const k = `${it.acc}|${it.due}`, g = groups.get(k) ?? { acc: it.acc, due: it.due, amt: 0, items: [] };
+        g.amt += it.left; g.items.push({ id: it.id, name: it.name, date: it.date, amt: it.left }); groups.set(k, g);
+      }
+      const G = [...groups.values()].sort((x, y) => x.due.localeCompare(y.due));
+      out.push({ from, to: accs.get(toId)!, amt: G.reduce((x, g) => x + g.amt, 0), groups: G });
+    }
+    return out;
   });
 }

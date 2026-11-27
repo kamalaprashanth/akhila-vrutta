@@ -15,6 +15,7 @@ import { bankOf, kindOf } from "../calc/loans.ts";
 import type { Loan } from "../calc/data.ts";
 import { allTags, money, payers, type Tx } from "../views/txlist.ts";
 import { calcValue } from "../calc/expr.ts";
+import { INFO_ICON } from "../../../core/helpview.ts";
 import { $, $$, accOpts, askConfirm, attachPickers, catOpts, closeModal, field, openSheet, paiseOf, rs, toast, val, inrFmt } from "./kit.ts";
 import { E, del, uid, upsert } from "./env.ts";
 void _U;
@@ -152,7 +153,7 @@ function noteSuggest(d: MoneyData, sheet: HTMLElement): void {
 
 /** A yes/no option on one line, its explanation behind (i) (27 Nov 2026). */
 const swRow = (k: string, on: boolean, title: string, why: string, hide = false): string =>
-  `<div class="swrow" id="w_${k}" ${hide ? "hidden" : ""}><label class="swt" for="f_${k}">${esc(title)}</label><button type="button" class="swi" data-swi="${k}" aria-expanded="false" aria-controls="why_${k}" aria-label="What is ${esc(title)}?">i</button><input type="checkbox" role="switch" class="swck" id="f_${k}" ${on ? "checked" : ""}><p class="swwhy" id="why_${k}" hidden>${esc(why)}</p></div>`;
+  `<div class="swrow" id="w_${k}" ${hide ? "hidden" : ""}><label class="swt" for="f_${k}">${esc(title)}</label><button type="button" class="swi" data-swi="${k}" aria-expanded="false" aria-controls="why_${k}" aria-label="What is ${esc(title)}?">${INFO_ICON}</button><input type="checkbox" role="switch" class="swck" id="f_${k}" ${on ? "checked" : ""}><p class="swwhy" id="why_${k}" hidden>${esc(why)}</p></div>`;
 
 /** The calculator under the amount (27 Nov 2026): optional, for adding up a bill; "Use" puts the answer in. */
 const CALC_KEYS = ["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", "0", ".", "⌫", "+"];
@@ -183,7 +184,7 @@ export function txnForm(t0: TxIn = {}, preset: TxIn = {}): void {
     ${field(["charges", "Charges (₹)", "number", { value: rs(t.charges), step: "0.01", ph: "0.00", hint: "Part of the amount that didn't go into the investment: stamp duty, platform or broker charges. Counted as Fees & Charges; the rest is invested." }])}
     ${field(["note", "Note", "text", { value: t.note, ph: "Optional" }])}
     <div class="f" id="w_tags"><label>Tags</label><div class="tagbox"></div><div class="hint">Tap to tag, e.g. Home, Office, Trip. Use as many as you like.</div></div>
-    <div class="swl">${swRow("pot", t.pot === "reserve", "Paid from the big-bills reserve", "Takes it out of the reserve pot, not your emergency fund. If it went on a card or another account, Pay by Tuesday reminds you to move the money back from the reserve account.", true)}${swRow("hist", !!t.hist, "Already in my balances", "For a past entry you're adding late, when your account balances already include it. It shows in Insights and reports but doesn't change any balance, card bill or loan.")}</div>
+    <div class="swl">${swRow("pot", t.pot === "reserve", "Paid from the big-bills reserve", "The reserve pays for this bill (not your emergency fund). Paid by card or from another account? Pay by Tuesday will ask you to move it from the reserve account in the week the card bill is due.", true)}${swRow("hist", !!t.hist, "Already in my balances", "For a past entry you're adding late, when your account balances already include it. It shows in Insights and reports but doesn't change any balance, card bill or loan.")}</div>
     <div class="btns"><button class="btn pri" id="sv" type="button">${isNew ? "Add" : "Save"}</button><button class="btn" id="spl" type="button">Split</button>${isNew ? "" : '<button class="btn danger" id="dl" type="button">Delete</button>'}<button class="btn" id="cx" type="button">Cancel</button></div>`;
   openSheet(isNew ? "Add transaction" : "Edit transaction", body, (s) => {
     const getTags = tagPicker(d, s, t.tags);

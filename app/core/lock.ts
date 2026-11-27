@@ -26,8 +26,9 @@ function show(inner: string): HTMLElement {
     el.setAttribute("aria-label", "Unlock Akhila Vrutta");
     document.body.appendChild(el);
   }
-  el.innerHTML = html`<div class="lockhero"><svg class="lockrings" viewBox="0 0 400 400" aria-hidden="true"><circle cx="200" cy="200" r="110"/><circle cx="200" cy="200" r="160"/><circle cx="200" cy="200" r="210"/><circle cx="200" cy="200" r="260"/></svg>${raw(lotus(120, "onDark", true, "Akhila Vrutta"))}<h2 class="lockt">Akhila Vrutta</h2><p class="locktag">Your whole life, in one private place</p></div>
-    <div class="lockc">${raw(inner)}<p class="locksec"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v9H5zM8 11V8a4 4 0 0 1 8 0v3"/></svg>End-to-end encrypted · zero-knowledge</p></div>`;
+  el.innerHTML = html`<div class="lockhero"><svg class="lockrings" viewBox="-80 -80 560 560" aria-hidden="true"><circle cx="200" cy="200" r="110"/><circle cx="200" cy="200" r="160"/><circle cx="200" cy="200" r="210"/><circle cx="200" cy="200" r="260"/></svg>${raw(lotus(120, "onDark", true, "Akhila Vrutta"))}<h2 class="lockt">Akhila Vrutta</h2><p class="locktag">Your whole life, in one private place</p></div>
+    <div class="lockc">${raw(inner)}<p class="locksec"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v9H5zM8 11V8a4 4 0 0 1 8 0v3"/></svg>End-to-end encrypted · zero-knowledge</p>
+      <nav class="lockfoot" aria-label="About the app"><a href="/help" target="_blank" rel="noopener">Help</a><a href="/privacy" target="_blank" rel="noopener">Privacy</a><a href="/terms" target="_blank" rel="noopener">Terms</a></nav></div>`;
   const f = el.querySelector("input:not([hidden])") as HTMLInputElement | null;
   if (f) setTimeout(() => f.focus(), 60);
   return el;
@@ -67,7 +68,9 @@ function askPassphrase<T>(title: string, note: string, o: AskOpts<T>): Promise<T
       ${raw(o.create ? "" : skField())}
       <p class="lockm err" id="lk_e" hidden></p>
       <button class="btn pri" type="submit" data-lbl="${btn}">${btn}</button></form>
-      ${raw(o.create ? html`<p class="lockm small">Tip: 5 or more unrelated words, like <i>mango kite river seventy lamp</i>. Write it down and keep it at home: nobody can recover it for you.</p>` : "")}`);
+      ${raw(o.create ? html`<p class="lockm small">Tip: 5 or more unrelated words, like <i>mango kite river seventy lamp</i>. Write it down and keep it at home: nobody can recover it for you.</p>`
+        : html`<div class="lockmore"><a href="/help#q-forgot" target="_blank" rel="noopener">Forgot your passphrase?</a><button type="button" class="lockalt" id="lk_out">Use another Google account</button></div>`)}`);
+    e.querySelector("#lk_out")?.addEventListener("click", async () => { await signOutNow().catch(() => {}); location.reload(); });
     const err = e.querySelector<HTMLElement>("#lk_e")!;
     const pass = e.querySelector<HTMLInputElement>("#lk_p")!, go = e.querySelector<HTMLButtonElement>(".btn.pri")!;
     const fail = (t: string) => { err.hidden = false; err.textContent = t; };

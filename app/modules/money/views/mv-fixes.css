@@ -257,10 +257,10 @@
 .mv .swrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
 .mv .swrow:first-child{border-top:0}
 .mv .swrow[hidden]{display:none}
-.mv .swt{flex:1 1 auto;min-width:0;font-weight:600;font-size:14.5px;cursor:pointer;margin:0;color:var(--ink);text-transform:none;letter-spacing:0}
-.mv .swi{width:26px;height:26px;flex:none;border-radius:50%;border:1.5px solid var(--muted);background:transparent;color:var(--muted);font:700 13px/1 var(--body);font-style:italic;cursor:pointer;padding:0;position:relative}
+.mv .swt{flex:0 1 auto;min-width:0;font-weight:600;font-size:14.5px;cursor:pointer;margin:0;color:var(--ink);text-transform:none;letter-spacing:0}
+.mv .swi{width:28px;height:28px;flex:none;display:grid;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--accent);cursor:pointer;padding:0;position:relative}
 .mv .swi::after{content:"";position:absolute;inset:-9px}
-.mv .swi[aria-expanded="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.mv .swi[aria-expanded="true"]{background:var(--accent-soft)}
 .mv input.swck{appearance:none;-webkit-appearance:none;width:46px;height:28px;flex:none;border-radius:14px;background:var(--line);position:relative;cursor:pointer;margin:0 0 0 auto;transition:background .2s}
 .mv input.swck::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s}
 .mv input.swck:checked{background:var(--accent)}
@@ -312,5 +312,11 @@
 .mv .cfb>.list,.mv .cfb>.card{box-shadow:none;background:var(--sunk)}
 .mv .cfb>.sh:first-child{margin-top:12px}
 .mv .cfwhat{margin:10px 4px 0;font-size:13px;color:var(--accent);font-weight:600}
-.mv .ii{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--muted);background:transparent;color:var(--muted);font:700 11px/1 var(--body);font-style:italic;cursor:pointer;padding:0;margin-left:4px;vertical-align:1px;position:relative}
+.mv .ii{display:inline-grid;place-items:center;width:26px;height:26px;border:0;border-radius:50%;background:transparent;color:var(--accent);cursor:pointer;padding:0;margin:-4px 0 -4px 4px;vertical-align:middle;position:relative}
 .mv .ii::after{content:"";position:absolute;inset:-12px}
+.mv .infoic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* ⓘ on a move back from the reserve: the bills, grouped by card bill */
+.mv .bkg{background:var(--sunk);border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:14px}
+.mv .bkh{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.mv .bkh b{color:var(--ink)}
+.mv .bkr{display:flex;justify-content:space-between;gap:10px;padding:3px 0}

@@ -101,18 +101,23 @@ body.dopen .drawer{transform:none}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 
 /* lock screen */
-.lock{position:fixed;inset:0;z-index:50;background:#0b4f40;display:flex;flex-direction:column;overflow:auto;transition:opacity .25s}
+.lock{position:fixed;inset:0;z-index:50;background:#0b4f40;display:flex;flex-direction:column;overflow:auto;overflow-x:hidden;transition:opacity .25s}
 .lock.out{opacity:0;pointer-events:none}
 .lockhero{position:relative;flex:none;min-height:min(44vh,400px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
-  padding:calc(28px + env(safe-area-inset-top)) 24px 36px;overflow:hidden}
-.lockrings{position:absolute;left:50%;top:50%;width:640px;height:640px;transform:translate(-50%,-50%);fill:none;stroke:#fff;stroke-opacity:.06;stroke-width:1.5}
+  padding:calc(28px + env(safe-area-inset-top)) 24px 36px}
+.lockrings{position:absolute;left:50%;top:50%;width:896px;height:896px;pointer-events:none;transform:translate(-50%,-50%);fill:none;stroke:#fff;stroke-opacity:.06;stroke-width:1.5}
 .lockhero .lotus{position:relative}
 .lockt{position:relative;font:600 34px/1.15 var(--serif);margin:0;color:#f7f4ea}
 .locktag{position:relative;margin:0;color:#bfdcd1;font-size:15px}
-.lockc{flex:1;width:100%;display:flex;flex-direction:column;gap:12px;text-align:center;background:var(--bg);border-radius:28px 28px 0 0;
+.lockc{position:relative;z-index:1;flex:1;width:100%;display:flex;flex-direction:column;gap:12px;text-align:center;background:var(--bg);border-radius:28px 28px 0 0;
   padding:26px 24px calc(16px + env(safe-area-inset-bottom))}
 .lockc>*{width:100%;max-width:420px;margin-left:auto;margin-right:auto}
 .locksec{margin-top:auto!important;padding-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:600;color:var(--muted)}
+.lockfoot{display:flex;justify-content:center;gap:4px;margin-top:2px!important}
+.lockfoot a{color:var(--accent);font:700 13px var(--sans);text-decoration:none;padding:8px 10px;min-height:40px;display:inline-flex;align-items:center}
+.lockmore{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px 14px;font-size:13.5px}
+.lockmore a{color:var(--accent);font-weight:700;text-decoration:none;padding:8px 0}
+.lockmore .lockalt{border:0;background:none;font:700 13.5px var(--sans);cursor:pointer;padding:8px 0;min-height:40px}
 .locksec svg{width:16px;height:16px;fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .lockf .btn,.lockopts .btn{min-height:52px;border-radius:14px;font-size:16px}
 .lockf input[type=password]{min-height:52px!important;border-radius:14px!important}

@@ -20,6 +20,7 @@ import { dFull, findRepeats, goalSum } from "./plan.ts";
 import type { Page, PageHost } from "./pages.ts";
 import { advAuto } from "./advisor.ts";
 import { startShown, wasSeen } from "../../../core/helptips.ts";
+import { INFO_ICON } from "../../../core/helpview.ts";
 
 /** A new user's Get started list (approved design, 27 Nov 2026): five steps, each opening its page; gone when all are done. */
 function startList(d: MoneyData): string {
@@ -59,7 +60,7 @@ function payTueCard(d: MoneyData, st: HomeState): string {
   const bill = (o: typeof O[number]): boolean => o.type !== "income" && o.type !== "investment" && !o.budget;
   const pay = O.filter((o) => !o.auto && bill(o) && o.date <= end), auto = O.filter((o) => o.auto && bill(o) && o.date >= td && o.date <= end);
   const next = O.filter((o) => !o.auto && bill(o) && o.date > end && o.date <= addDays(end, 7)), nextT = addDays(T, 7), nextSum = next.reduce((x, o) => x + o.amount, 0);
-  const moves = Rd.filter((s) => s.from && s.by! <= end), backs = reserveBack(d);
+  const moves = Rd.filter((s) => s.from && s.by! <= end), backs = reserveBack(d, end);
   const asides: { k: string; name: string; amt: Paise; wrap?: boolean; sub: string }[] = [];
   if (rst.a && rst.B.length && !rst.doneThis && rst.setAside > 50) asides.push({ k: "reserve", name: "Big-bills reserve", amt: rst.setAside, wrap: rst.capped, sub: rst.capped ? `${money(rst.setAsideFull)} due · ${rst.spareFrom!.name} can spare ${money(rst.setAside)} · the rest is spread over the next months` : `${rst.B.length} big bill${rst.B.length === 1 ? "" : "s"} · into ${(rst.a as Account).name}` });
   for (const f of rst.funds) if (!f.done && f.monthly > 50) asides.push({ k: "prop:" + f.p.id, name: `${f.p.name} fund`, amt: f.monthly, sub: `${short(f.need)} by ${mShort(f.by)}` });
@@ -75,7 +76,8 @@ function payTueCard(d: MoneyData, st: HomeState): string {
   const payRows = pay.map((o) => { const [m, pre] = split(o); return row(`${o.date < td ? "⚠ " : ""}${esc(m)}`, `${pre ? esc(pre) + " · " : ""}${when(o)}`, rs0(o.amount), `<button class="btn sm pri" type="button" data-ptpay="${esc(o.key)}">Pay</button>`); }).join("");
   const moveRows = moves.map((s) => row(`${esc(s.from!.name)} → ${esc(s.acc.name)}`, `for ${esc(s.item.name)} · ${dShort(s.date)}`, rs0(s.need), `<button class="btn sm pri" type="button" data-ptmove="${esc(s.acc.id)}|${esc(s.from!.id)}|${s.need / 100}|${esc(s.item.name)}">Move</button>`)).join("");
   // reserve bills paid by card or another account: the money goes back out of the reserve's account (27 Nov 2026)
-  const backRows = backs.map((b) => row(`${esc(b.from.name)} → ${esc(b.to.name)} <button type="button" class="ii" data-term="reserveback" aria-label="Why move this?">i</button>`, `Paid from the reserve: ${esc(b.names.slice(-3).join(", "))}`, rs0(b.amt), `<button class="btn sm pri" type="button" data-ptback="${esc(b.to.id)}|${esc(b.from.id)}|${b.amt / 100}">Move</button>`)).join("");
+  const backRows = backs.map((b) => { const n = b.groups.reduce((x, g) => x + g.items.length, 0), on = [...new Set(b.groups.map((g) => g.acc))].join(", ");
+    return row(`${esc(b.from.name)} → ${esc(b.to.name)}<button type="button" class="ii" data-rback="${esc(b.to.id)}" aria-label="Which bills, and why">${INFO_ICON}</button>`, `${n} reserve bill${n === 1 ? "" : "s"} · ${esc(on)}`, rs0(b.amt), `<button class="btn sm pri" type="button" data-ptback="${esc(b.to.id)}|${esc(b.from.id)}|${b.amt / 100}">Move</button>`); }).join("");
   const asideRows = asides.map((x) => row(esc(x.name), x.wrap ? `<span class="swrap">${esc(x.sub)}</span>` : esc(x.sub), rs0(x.amt), `<button class="btn sm pri" type="button" data-ptaside="${esc(x.k)}|${Math.round(x.amt / 100)}">Done</button>`)).join("");
   const autoLine = auto.length ? `<div class="ptauto">Auto · ${auto.map((o) => { const sh = Rd.find((x) => x.item.key === o.key); return `${esc(o.name)} ${rs0(o.amount)} ${wd(o.date)} ${+o.date.slice(8)} ${sh ? '<span class="ccbad">short</span>' : "✓"}`; }).join(" · ")}</div>` : "";
   return `<div class="ptcard">
