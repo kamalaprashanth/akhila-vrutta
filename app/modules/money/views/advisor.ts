@@ -40,7 +40,7 @@ const scrub = (s: unknown): string => String(s || "").replace(/\d{6,}/g, "…").
 
 
 /** What the advisor sees: every figure in whole rupees, as the planner sent it. */
-export function advContext(d: MoneyData, nextLbl: (r: Recurring) => string = (r) => recNextLbl(d, r)): string {
+export function advContext(d: MoneyData, nextLbl: (r: Recurring) => string = (r) => recNextLbl(d, r), full = false): string {
   const P = prof(d) as Profile & Record<string, unknown>, now = ymOf(d.today), td = d.today, r0 = (p: unknown): number => Math.round(num(p) / 100), L: string[] = [], wc = P.wifeCat;
   const from = addM(now, -23) + "-01";
   L.push(`TODAY ${td}. All amounts in ₹. Only the user's own finances are planned. ${wc ? `Income in category "${catName(d, wc)}" is money the user's spouse or partner sends occasionally: treat it as a bonus, never rely on it.` : ""}`);
@@ -86,13 +86,52 @@ export function advContext(d: MoneyData, nextLbl: (r: Recurring) => string = (r)
   for (const r of d.live<Recurring & { auto?: boolean }>("recurring").filter((r) => !r.end || r.end >= now)) L.push(`${r.name}: ${r0(r.amount)} ${r.type}${r.budget ? " budget" : ""} ${r.freq}${r.auto ? " auto" : ""}${(FREQ[String(r.freq)] || 1) >= 2 ? `, next ${nextLbl(r)}` : ""}`);
   const Rd = readiness(d, 45);
   if (Rd.length) L.push("", "SHORTFALLS NEXT 45 DAYS: " + Rd.map((s) => `${s.acc.name} short ${r0(s.need)} on ${s.date} (${s.item.name})`).join("; "));
-  L.push("", "TRANSACTIONS, last 24 months (date|type|amount|category|account|note):");
-  const tx = d.live<Tx & { pot?: string }>("txns").filter((t) => (t.date ?? "") >= from && t.type !== "carry").sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  for (const t of tx) {
-    const cat = t.type === "transfer" ? `→ ${accName(d, t.toAccountId)}` : t.type === "investment" ? t.instrument || "" : catName(d, t.categoryId);
-    L.push(`${t.date}|${t.type}|${r0(t.amount)}|${scrub(cat)}|${accName(d, t.accountId)}|${scrub(t.note).slice(0, 50)}${t.pot === "reserve" ? " [from reserve]" : ""}${t.hist ? " [already in balances]" : ""}`);
-  }
+  if (full) {   // every transaction, as the planner sent it (the parity tests compare this form)
+    L.push("", "TRANSACTIONS, last 24 months (date|type|amount|category|account|note):");
+    const tx = d.live<Tx & { pot?: string }>("txns").filter((t) => (t.date ?? "") >= from && t.type !== "carry").sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    for (const t of tx) {
+      const cat = t.type === "transfer" ? `→ ${accName(d, t.toAccountId)}` : t.type === "investment" ? t.instrument || "" : catName(d, t.categoryId);
+      L.push(`${t.date}|${t.type}|${r0(t.amount)}|${scrub(cat)}|${accName(d, t.accountId)}|${scrub(t.note).slice(0, 50)}${t.pot === "reserve" ? " [from reserve]" : ""}${t.hist ? " [already in balances]" : ""}`);
+    }
+  } else L.push(...txSummary(d, from, r0));
   return L.join("\n");
+}
+/**
+ * Transactions in short (27 Nov 2026, to cut the Advisor's cost about tenfold): spending and income by category,
+ * month by month for the last 12 months and as a total for the 12 before; then every big item (₹10,000 or more,
+ * or paid from the reserve), one line each. The Advisor works from patterns; the small spends add up in the totals.
+ */
+const BIG = 1000000;
+function txSummary(d: MoneyData, from: string, r0: (p: unknown) => number): string[] {
+  const now = ymOf(d.today), m12 = addM(now, -11), months = Array.from({ length: 12 }, (_, i) => addM(m12, i));
+  const tx = d.live<Tx & { pot?: string }>("txns").filter((t) => (t.date ?? "") >= from && t.type !== "carry" && !offBook(t));
+  const L: string[] = [];
+  for (const [type, title] of [["expense", "SPENDING"], ["income", "INCOME"]] as const) {
+    const by = new Map<string, { m: Map<string, number>; before: number }>();
+    for (const t of tx) {
+      if (t.type !== type) continue;
+      const k = scrub(catName(d, t.categoryId)) || "Uncategorised", ym = String(t.date).slice(0, 7), o = by.get(k) ?? { m: new Map(), before: 0 };
+      if (ym >= m12) o.m.set(ym, (o.m.get(ym) ?? 0) + num(t.amount)); else o.before += num(t.amount);
+      by.set(k, o);
+    }
+    if (!by.size) continue;
+    L.push("", `${title} BY CATEGORY (₹ per month ${months[0]}…${now} | total of the 12 months before):`);
+    const rows = [...by].map(([k, o]) => ({ k, o, tot: [...o.m.values()].reduce((x, v) => x + v, 0) })).sort((a, b) => b.tot - a.tot);
+    for (const { k, o } of rows) L.push(`${k}: ${months.map((m) => r0(o.m.get(m) ?? 0)).join(",")} | ${r0(o.before)}`);
+  }
+  // investments by instrument, a year at a time
+  const inv = new Map<string, [number, number]>();
+  for (const t of tx) if (t.type === "investment") { const k = scrub(t.instrument) || "Investment", o = inv.get(k) ?? [0, 0]; o[String(t.date).slice(0, 7) >= m12 ? 0 : 1] += num(t.amount); inv.set(k, o); }
+  if (inv.size) { L.push("", "INVESTED (last 12 months | the 12 before):"); for (const [k, [a, b]] of [...inv].sort((x, y) => y[1][0] - x[1][0])) L.push(`${k}: ${r0(a)} | ${r0(b)}`); }
+  // big spends, investments, loans and transfers (card bills left out: the card's spends are counted already;
+  // income is in its monthly totals)
+  const cards = new Set(d.live<Account>("accounts").filter((a) => a.type === "card").map((a) => a.id));
+  L.push("", "BIG ITEMS, last 24 months (₹10,000 or more, or paid from the reserve; card bill payments and income are in the totals above; date|type|amount|category|account|note):");
+  for (const t of tx.filter((x) => (num(x.amount) >= BIG || x.pot === "reserve") && x.type !== "income" && !(x.type === "transfer" && cards.has(String(x.toAccountId)))).sort((a, b) => String(a.date).localeCompare(String(b.date)))) {
+    const cat = t.type === "transfer" ? `→ ${accName(d, t.toAccountId)}` : t.type === "investment" ? t.instrument || "" : catName(d, t.categoryId);
+    L.push(`${t.date}|${t.type}|${r0(t.amount)}|${scrub(cat)}|${accName(d, t.accountId)}|${scrub(t.note).slice(0, 40)}${t.pot === "reserve" ? " [from reserve]" : ""}${t.hist ? " [already in balances]" : ""}`);
+  }
+  return L;
 }
 export const ADV_RULES = (ctx: string): string => `You are the user's personal financial planner in India. Think like a careful, independent (fee-only) certified planner and check every angle that matters for the question:
 cash flow and readiness for upcoming payments; emergency fund; debt (interest rates, prepay vs invest, family loans that are interest-free); insurance adequacy (term cover vs income, dependents and loans; health cover incl. super top-up and parents; accident); investments (asset mix vs risk appetite and goals, concentration, leveraged ETFs, costs, overlap; US assets need Schedule FA in the ITR and LRS/TCS rules); tax (old vs new regime, 80C, 80D, 80CCD(1B), 24(b), using the ₹1.25 lakh yearly LTCG exemption, capital gains); property commitments; goals (retirement, child education, closing loans); estate (nominees, will).

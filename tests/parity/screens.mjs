@@ -291,7 +291,7 @@ const report = await f.evaluate(() => {
     const keep = S.advChat;
     // What Claude is sent: the whole picture, as text.
     n++;
-    const a = moved(ADV_RULES(advContext())) + "\n\nQUESTION: " + ADV_CHECK, b = N.advisor.ADV_RULES(N.advisor.advContext(dx)) + "\n\nQUESTION: " + ADV_CHECK;
+    const a = moved(ADV_RULES(advContext())) + "\n\nQUESTION: " + ADV_CHECK, b = N.advisor.ADV_RULES(N.advisor.advContext(dx, undefined, true)) + "\n\nQUESTION: " + ADV_CHECK;
     const la = a.split("\n"), lb = b.split("\n");
     const near = la.length === lb.length && la.every((x, k) => { const y = lb[k]; if (x === y) return true; const nx = x.match(/\d+/g) || [], ny = y.match(/\d+/g) || []; return x.replace(/\d+/g, "#") === y.replace(/\d+/g, "#") && nx.every((v, j) => Math.abs(+v - +ny[j]) <= 1); });
     if (a !== b && near) estRounding++;

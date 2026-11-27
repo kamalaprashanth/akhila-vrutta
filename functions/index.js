@@ -172,7 +172,7 @@ exports.askClaude = onCall(
         method: "POST",
         headers: { "x-api-key": ANTHROPIC_API_KEY.value(), "anthropic-version": "2023-06-01", "content-type": "application/json" },
         /* the first message carries all the data: mark it for prompt caching so follow-ups re-read it at a tenth of the price */
-        body: JSON.stringify({ model: CLAUDE_MODEL.value(), max_tokens: 8000, messages: messages.map((x, i) => ({ role: x.role, content: i === 0 && x.content.length > 4000 ? [{ type: "text", text: x.content, cache_control: { type: "ephemeral" } }] : x.content })) }),
+        body: JSON.stringify({ model: CLAUDE_MODEL.value(), max_tokens: 3000, messages: messages.map((x, i) => ({ role: x.role, content: i === 0 && x.content.length > 4000 ? [{ type: "text", text: x.content, cache_control: { type: "ephemeral" } }] : x.content })) }),
         signal: AbortSignal.timeout(280000)
       });
     } catch (e) {
